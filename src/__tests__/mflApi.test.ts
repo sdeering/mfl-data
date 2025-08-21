@@ -1,5 +1,5 @@
 import * as fcl from '@onflow/fcl';
-import { searchMFLPlayerById, configureFCL, discoverOwnerAddressForPlayerId } from '@/src/services/mflApi';
+import { searchMFLPlayerById, discoverOwnerAddressForPlayerId } from '@/src/services/mflApi';
 
 jest.mock('@onflow/fcl', () => ({
   config: jest.fn(() => ({ put: jest.fn() })),

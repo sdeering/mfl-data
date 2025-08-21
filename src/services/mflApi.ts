@@ -74,6 +74,7 @@ export async function searchMFLPlayerById(playerId: string): Promise<MFLPlayer> 
     
     const response = await fcl.query({
       cadence: CADENCE_GET_MFL_PLAYER,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       args: (arg: any, t: any) => [arg(playerId, t.UInt64), arg(ownerAddress, t.Address)],
     });
 

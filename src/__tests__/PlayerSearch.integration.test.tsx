@@ -172,7 +172,7 @@ describe('PlayerSearch Integration Tests', () => {
 
   test('user sees proper loading and error states', async () => {
     // Mock a delayed response to test loading state
-    let resolvePromise: (value: any) => void;
+    let resolvePromise: (value: { id: string; name: string; description: string; thumbnail: string; owner: string }) => void;
     const delayedPromise = new Promise((resolve) => {
       resolvePromise = resolve;
     });

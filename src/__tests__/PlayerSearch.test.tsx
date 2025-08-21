@@ -11,7 +11,7 @@ jest.mock('@/src/services/mflApi', () => ({
 
 // Mock the PlayerDetails component
 jest.mock('@/src/components/PlayerDetails', () => {
-  return function MockPlayerDetails(props: any) {
+  return function MockPlayerDetails(props: { isLoading?: boolean; error?: string; player?: { name: string } }) {
     if (props.isLoading) return React.createElement('div', { 'data-testid': 'loading' }, 'Loading...');
     if (props.error) return React.createElement('div', { 'data-testid': 'error' }, props.error);
     if (props.player) return React.createElement('div', { 'data-testid': 'player-details' }, props.player.name);
@@ -75,7 +75,7 @@ describe('PlayerSearch Component', () => {
 
   it('shows loading state during search', async () => {
     // Create a promise that we can control
-    let resolvePromise: (value: any) => void;
+    let resolvePromise: (value: { id: string; name: string; description: string; thumbnail: string; owner: string }) => void;
     const searchPromise = new Promise((resolve) => {
       resolvePromise = resolve;
     });
