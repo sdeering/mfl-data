@@ -28,7 +28,7 @@ const eslintConfig = [
       
       // Relax some other strict rules
       "@typescript-eslint/no-non-null-assertion": "warn",
-      "@typescript-eslint/prefer-const": "warn",
+      "prefer-const": "warn",
       
       // Allow console.log in development
       "no-console": "warn",

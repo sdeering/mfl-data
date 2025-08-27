@@ -6,7 +6,7 @@ import { MFLPosition, PositionWeights } from '../types/positionOvr';
  */
 
 // Position familiarity groups for penalty calculations
-export const FAMILIARITY_GROUPS = {
+export const FAMILIARITY_GROUPS: Record<string, readonly MFLPosition[]> = {
   defense: ['CB', 'LB', 'RB', 'LWB', 'RWB'],
   midfield: ['CDM', 'CM', 'CAM'],
   wideMidfield: ['LM', 'RM', 'LW', 'RW'],
