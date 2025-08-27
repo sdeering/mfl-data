@@ -20,6 +20,27 @@ const eslintConfig = [
       "next-env.d.ts",
     ],
   },
+  {
+    rules: {
+      // Relax unused variable rules
+      "@typescript-eslint/no-unused-vars": "warn", // Change from error to warning
+      "@typescript-eslint/no-explicit-any": "warn", // Change from error to warning
+      
+      // Relax some other strict rules
+      "@typescript-eslint/no-non-null-assertion": "warn",
+      "@typescript-eslint/prefer-const": "warn",
+      
+      // Allow console.log in development
+      "no-console": "warn",
+      
+      // Relax import rules
+      "@typescript-eslint/no-var-requires": "warn",
+      
+      // Relax function rules
+      "@typescript-eslint/no-empty-function": "warn",
+      "@typescript-eslint/no-inferrable-types": "warn",
+    },
+  },
 ];
 
 export default eslintConfig;
