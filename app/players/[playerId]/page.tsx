@@ -12,14 +12,14 @@ async function getPlayerData(playerId: string) {
   try {
     const player = await mflApi.getPlayer(playerId);
     return { player, error: null };
-  } catch (err) {
+  } catch {
     return { player: null, error: 'Player not found' };
   }
 }
 
 export default async function PlayerPage({ params }: PlayerPageProps) {
   const { playerId } = params;
-  const { player } = await getPlayerData(playerId);
+  await getPlayerData(playerId);
 
   return (
     <Suspense fallback={<div>Loading...</div>}>

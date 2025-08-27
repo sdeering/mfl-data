@@ -1,5 +1,4 @@
 import React from 'react';
-import { useTheme } from '../contexts/ThemeContext';
 import { formatHeight } from '@/src/utils/heightConverter';
 import { getCountryFlag } from '@/src/utils/countryFlags';
 import type { MFLPlayer } from '@/src/types/mflApi';
@@ -45,29 +44,19 @@ const getTierColor = (rating: number) => {
   }
 };
 
-
 interface PlayerStatsProps {
   player: MFLPlayer;
-  dataSource?: 'api';
 }
 
 export default function PlayerStats({ player }: PlayerStatsProps) {
-  const { theme } = useTheme();
-  
   const {
     metadata: {
       overall,
       age,
       height,
-      pace,
-      shooting,
-      passing,
-      dribbling,
-      defense,
-      physical,
-      goalkeeping,
       nationalities,
-      preferredFoot
+      preferredFoot,
+      positions
     }
   } = player;
 
@@ -82,11 +71,14 @@ export default function PlayerStats({ player }: PlayerStatsProps) {
     { label: 'Preferred Foot', value: preferredFoot },
     { 
       label: 'Positions', 
-      value: player.metadata.positions && player.metadata.positions.length > 0 
-        ? player.metadata.positions.join(', ')
-        : undefined 
+      value: positions.join(', '), 
+      isPositions: true 
     },
-    { label: 'Agency', value: player.ownedBy.name || (player.ownedBy.walletAddress ? `${player.ownedBy.walletAddress.slice(0, 8)}...${player.ownedBy.walletAddress.slice(-6)}` : undefined), isAgency: true },
+    { 
+      label: 'Agency', 
+      value: player.ownedBy.name || (player.ownedBy.walletAddress ? `${player.ownedBy.walletAddress.slice(0, 8)}...${player.ownedBy.walletAddress.slice(-6)}` : undefined), 
+      isAgency: true 
+    },
     { 
       label: 'Team', 
       value: player.activeContract?.club?.name || (player.activeContract ? 'In development centre' : 'Free Agent'), 
@@ -94,7 +86,7 @@ export default function PlayerStats({ player }: PlayerStatsProps) {
       teamId: player.activeContract?.club?.id,
       isFreeAgent: !player.activeContract,
       isDevCentre: player.activeContract && !player.activeContract.club?.name
-    },
+    }
   ];
 
 
