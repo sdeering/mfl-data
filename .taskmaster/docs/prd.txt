@@ -1,0 +1,93 @@
+# MFL Player Search Tool - UI/UX Enhancement PRD
+
+## Project Overview
+Enhance the existing MFL Player Search Tool with improved user interface, user experience, and functionality. All changes should follow Test-Driven Development (TDD) principles with comprehensive testing before implementation.
+
+## Core Requirements
+
+### 1. Mouse Interaction Improvements
+- **Requirement**: Add proper cursor pointer styles for all interactive elements
+- **Scope**: Buttons, clickable links, and interactive components
+- **Testing**: Visual testing and accessibility compliance
+
+### 2. Search Experience Enhancement
+- **Requirement**: Clear input field after successful player search
+- **Scope**: Search form behavior modification
+- **Testing**: Unit tests for form state management
+
+### 3. UI Label and Button Updates
+- **Requirement**: Remove "🌐 Live API" pill label from player pages
+- **Requirement**: Update button text to "View on MFL.com"
+- **Requirement**: Update login button text to "Login with Dapper Wallet"
+- **Testing**: Component rendering tests
+
+### 4. Navigation Enhancement
+- **Requirement**: Add home icon to topbar before page name
+- **Scope**: Header/navigation component updates
+- **Testing**: Component integration tests
+
+### 5. Height Display Improvement
+- **Requirement**: Display height in both metric and imperial units
+- **Format**: "Height: 171cm / 5' 7'" (rounded up for imperial)
+- **Testing**: Unit tests for conversion logic
+
+### 6. Route Restructuring
+- **Requirement**: Rename route from `/player` to `/players`
+- **Scope**: URL structure and routing updates
+- **Testing**: Navigation and routing tests
+
+### 7. Owner Information Enhancement
+- **Requirement**: Replace "Owner Address" with "Owner Agency"
+- **Requirement**: Display agency name instead of wallet address
+- **Testing**: Data transformation and display tests
+
+### 8. Recent Searches Enhancement
+- **Requirement**: Add player overall rating and positions to recent searches
+- **Scope**: Search history display improvements
+- **Testing**: Data storage and retrieval tests
+
+### 9. Country Flag Display
+- **Requirement**: Add country flag display for players
+- **Scope**: Flag component integration
+- **Testing**: Flag rendering and fallback tests
+
+### 10. Position Ratings Layout
+- **Requirement**: Organize position ratings in column-based layout
+- **Format**: First column (top 5 ratings), second column (next 5), third column (final 5)
+- **Testing**: Layout and sorting tests
+
+### 11. Documentation Updates
+- **Requirement**: Update GitHub documentation with all new functionality
+- **Scope**: README.md and related documentation files
+- **Testing**: Documentation accuracy validation
+
+## Technical Implementation Guidelines
+
+### Testing Strategy
+- Unit tests for all utility functions
+- Component tests for UI changes
+- Integration tests for routing changes
+- E2E tests for user workflows
+
+### Performance Considerations
+- Optimize flag loading and display
+- Efficient height conversion calculations
+- Minimal impact on search performance
+
+### Accessibility Requirements
+- Proper ARIA labels for new interactive elements
+- Keyboard navigation support
+- Screen reader compatibility
+
+## Success Criteria
+- All existing functionality remains intact
+- New features work seamlessly across devices
+- Test coverage remains high (>90%)
+- Documentation is complete and accurate
+- Performance metrics do not degrade
+
+## Dependencies
+- Existing MFL API integration
+- Current component architecture
+- Testing framework (Jest/React Testing Library)
+- Build and deployment pipeline

@@ -14,8 +14,10 @@ module.exports = {
     }],
   },
   transformIgnorePatterns: [
-    'node_modules/(?!(uint8arrays|@walletconnect|@onflow)/)'
+    'node_modules/(?!(uint8arrays|@walletconnect|@walletconnect/utils|@walletconnect/sign-client|@walletconnect/modal)/)'
   ],
+  moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json'],
+  testPathIgnorePatterns: ['/node_modules/', '/.next/'],
 };
 
 

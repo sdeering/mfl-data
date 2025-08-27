@@ -1,26 +1,11 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect } from 'react';
 import type { Theme, ThemeContextValue, ThemeProviderProps } from '../types/theme';
 import { saveThemePreference, getInitialThemePreference } from '../utils/themeStorage';
 
 // Create the context with undefined default (to enforce provider usage)
 const ThemeContext = createContext<ThemeContextValue | undefined>(undefined);
-
-// Custom hook to detect system theme preference
-const useSystemTheme = (): Theme => {
-  try {
-    if (typeof window !== 'undefined' && window.matchMedia) {
-      const darkModeQuery = window.matchMedia('(prefers-color-scheme: dark)');
-      return darkModeQuery.matches ? 'dark' : 'light';
-    }
-  } catch (error) {
-    console.warn('Failed to detect system theme preference:', error);
-  }
-  
-  // Fallback to light theme
-  return 'light';
-};
 
 // Theme Provider component
 export const ThemeProvider: React.FC<ThemeProviderProps> = ({ 

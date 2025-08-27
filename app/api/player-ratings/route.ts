@@ -7,8 +7,22 @@ import path from 'path';
 const CACHE_DIR = path.join(process.cwd(), '.cache', 'player-ratings');
 const CACHE_DURATION = 7 * 24 * 60 * 60 * 1000; // 1 week in milliseconds
 
+// Types for cache data
+interface CacheData {
+  playerId: string;
+  positionRatings: Array<{
+    position: string;
+    familiarity: string;
+    difference: number;
+    rating: number;
+  }>;
+  success: boolean;
+  error?: string;
+  cachedAt: number;
+}
+
 // Ensure cache directory exists
-function ensureCacheDir() {
+function ensureCacheDir(): void {
   if (!fs.existsSync(CACHE_DIR)) {
     fs.mkdirSync(CACHE_DIR, { recursive: true });
   }
@@ -32,13 +46,13 @@ function isCacheValid(playerId: string): boolean {
     const cacheAge = now - stats.mtime.getTime();
     
     return cacheAge < CACHE_DURATION;
-  } catch (error) {
+  } catch {
     return false;
   }
 }
 
 // Read from cache
-function readFromCache(playerId: string): any | null {
+function readFromCache(playerId: string): CacheData | null {
   try {
     const cachePath = getCacheFilePath(playerId);
     if (!fs.existsSync(cachePath)) {
@@ -47,26 +61,31 @@ function readFromCache(playerId: string): any | null {
     
     const cacheData = fs.readFileSync(cachePath, 'utf8');
     return JSON.parse(cacheData);
-  } catch (error) {
+  } catch {
     return null;
   }
 }
 
 // Write to cache
-function writeToCache(playerId: string, data: any): void {
+function writeToCache(playerId: string, data: { positionRatings: unknown[]; success: boolean; error?: string }): void {
   try {
     ensureCacheDir();
     const cachePath = getCacheFilePath(playerId);
-    const cacheData = {
+    const cacheData: CacheData = {
       playerId,
-      positionRatings: data.positionRatings,
+      positionRatings: data.positionRatings as Array<{
+        position: string;
+        familiarity: string;
+        difference: number;
+        rating: number;
+      }>,
       success: data.success,
       error: data.error,
       cachedAt: Date.now()
     };
     
     fs.writeFileSync(cachePath, JSON.stringify(cacheData, null, 2));
-  } catch (error) {
+  } catch {
     // Silently fail if cache write fails
   }
 }
@@ -129,8 +148,13 @@ export async function GET(request: NextRequest) {
     
     // Extract position ratings from the expanded content
     const positionRatings = await page.evaluate(() => {
-      const ratings: any[] = [];
-      const seenPositions = new Set();
+      const ratings: Array<{
+        position: string;
+        familiarity: string;
+        difference: number;
+        rating: number;
+      }> = [];
+      const seenPositions = new Set<string>();
       
       // Look for the expanded ratings section
       const ratingRows = document.querySelectorAll('.divide-border .grid.grid-cols-2');

@@ -3,24 +3,47 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
+  
+  /* Tier colors for player stats */
+  --tier-limited: #ecd17f;
+  --tier-limited-foreground: #000000;
+  --tier-common: #9f9f9f;
+  --tier-common-foreground: #ffffff;
+  --tier-uncommon: #71ff30;
+  --tier-uncommon-foreground: #000000;
+  --tier-epic: #0047ff;
+  --tier-epic-foreground: #ffffff;
+  --tier-legendary: #fa53ff;
+  --tier-legendary-foreground: #ffffff;
+  --tier-ultimate: #87f6f8;
+  --tier-ultimate-foreground: #000000;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: var(--font-titillium-web);
+  --font-mono: var(--font-titillium-web);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+.dark {
+  --background: #0a0a0a;
+  --foreground: #ededed;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-titillium-web), Arial, Helvetica, sans-serif;
+}
+
+/* Ensure theme classes are applied to body */
+.light body {
+  background: #ffffff;
+  color: #171717;
+}
+
+.dark body {
+  background: #121213;
+  color: #ededed;
 }

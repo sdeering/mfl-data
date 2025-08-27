@@ -1,5 +1,4 @@
-import { ScrapedPositionRating, ScrapedPlayerData } from '../types/positionOvr';
-import { calculateAllPositionOVRs } from '../utils/positionOvrCalculator';
+import { ScrapedPlayerData } from '../types/positionOvr';
 
 /**
  * MFL Player Info Service
@@ -38,7 +37,7 @@ export async function scrapePositionRatings(playerId: string): Promise<ScrapedPl
           success: false,
           error: data.error || 'No position ratings available'
         };
-      } catch (calcError) {
+      } catch {
         // Return empty array if both scraping and calculation fail
         return {
           playerId,

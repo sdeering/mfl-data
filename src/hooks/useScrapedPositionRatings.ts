@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
-import { scrapePositionRatings, ScrapedPositionRating } from '../services/mflPlayerInfoScraper';
+import { scrapePositionRatings } from '../services/mflPlayerInfoScraper';
+import type { ScrapedPositionRating } from '../types/positionOvr';
 
 interface UseScrapedPositionRatingsReturn {
   positionRatings: ScrapedPositionRating[];
@@ -8,7 +9,17 @@ interface UseScrapedPositionRatingsReturn {
   refetch: () => void;
 }
 
-export function useScrapedPositionRatings(player: any): UseScrapedPositionRatingsReturn {
+interface Player {
+  id: number;
+  metadata: {
+    firstName: string;
+    lastName: string;
+    overall: number;
+    positions: string[];
+  };
+}
+
+export function useScrapedPositionRatings(player: Player): UseScrapedPositionRatingsReturn {
   const [positionRatings, setPositionRatings] = useState<ScrapedPositionRating[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -31,7 +42,7 @@ export function useScrapedPositionRatings(player: any): UseScrapedPositionRating
           setError(scrapedData.error);
         }
       }
-    } catch (err) {
+    } catch {
       // On any error, just return empty array - no dummy data
       setPositionRatings([]);
       setError('Failed to fetch position ratings');
