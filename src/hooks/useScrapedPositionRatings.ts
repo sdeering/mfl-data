@@ -27,6 +27,21 @@ export function useScrapedPositionRatings(player: Player): UseScrapedPositionRat
   const fetchPositionRatings = useCallback(async () => {
     if (!player?.id) return;
 
+    // Check if this is a goalkeeper (only has GK position)
+    const isGoalkeeper = player.metadata.positions.length === 1 && player.metadata.positions[0] === 'GK';
+    
+    if (isGoalkeeper) {
+      // For goalkeepers, just return their overall rating as GK rating
+      setPositionRatings([{
+        position: 'GK',
+        familiarity: 'PRIMARY',
+        difference: 0,
+        rating: player.metadata.overall
+      }]);
+      setIsLoading(false);
+      return;
+    }
+
     setIsLoading(true);
     setError(null);
 
@@ -49,7 +64,7 @@ export function useScrapedPositionRatings(player: Player): UseScrapedPositionRat
     } finally {
       setIsLoading(false);
     }
-  }, [player?.id]);
+  }, [player?.id, player?.metadata.positions, player?.metadata.overall]);
 
   useEffect(() => {
     fetchPositionRatings();

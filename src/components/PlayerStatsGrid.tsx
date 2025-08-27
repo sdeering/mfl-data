@@ -1,6 +1,5 @@
 import React from 'react';
-import type { MFLPlayer } from '@/src/types/mflApi';
-import { getCountryFlag } from '@/src/utils/countryFlags';
+import type { MFLPlayer } from '../types/mflApi';
 
 interface PlayerStatsGridProps {
   player: MFLPlayer;

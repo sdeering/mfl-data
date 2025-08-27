@@ -1,5 +1,5 @@
 import { mflApi } from '../services/mflApi';
-import { MFLPlayerProgressionsResponse, MFLInterval } from '../types/mflApi';
+import { MFLInterval } from '../types/mflApi';
 
 describe('Player Progression Endpoint - Real API Tests', () => {
   // These tests use real API calls to verify the endpoint works correctly

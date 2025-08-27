@@ -40,10 +40,10 @@ export const getTierColor = (rating: number) => {
 };
 
 // Helper function to get background color based on rating difference
-export const getRatingStyle = (rating: number, overallRating: number) => {
-  if (!overallRating) return 'bg-white dark:bg-gray-800';
+export const getRatingStyle = (rating: number, _overallRating: number) => {
+  if (!_overallRating) return 'bg-white dark:bg-gray-800';
   
-  const difference = rating - overallRating;
+  const difference = rating - _overallRating;
   
   // Bright green for same rating as overall and above
   if (difference >= 0) {

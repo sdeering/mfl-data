@@ -1,9 +1,11 @@
 import React from 'react';
 import { render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom';
+import PlayerImage from '../components/PlayerImage';
 import PlayerStats from '../components/PlayerStats';
+import PlayerStatsGrid from '../components/PlayerStatsGrid';
 import PlayerPositions from '../components/PlayerPositions';
-import type { MFLPlayer } from '../types/player';
+
 
 import type { MFLPlayer as MFLAPIPlayer } from '../types/mflApi';
 

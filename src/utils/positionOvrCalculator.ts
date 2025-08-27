@@ -8,7 +8,7 @@
  * 3. Position-specific modifiers based on attribute relevance
  */
 
-import { MFLPosition, PlayerForOVRCalculation, PositionOVRResult, AllPositionOVRResults, OVRError, OVRCalculationError } from '../types/positionOvr';
+import { MFLPosition, PlayerForOVRCalculation, PositionOVRResult, AllPositionOVRResults, OVRCalculationError } from '../types/positionOvr';
 
 // Position-specific attribute weights (sum to 1.0)
 const POSITION_WEIGHTS: Record<MFLPosition, Record<string, number>> = {
@@ -29,14 +29,14 @@ const POSITION_WEIGHTS: Record<MFLPosition, Record<string, number>> = {
   CB: { DEF: 0.4, PHY: 0.25, PAC: 0.15, PAS: 0.15, DRI: 0.05, SHO: 0.0, GK: 0.0 }
 };
 
-// Position similarity groups
-const POSITION_GROUPS = {
-  'FULLBACK': ['RB', 'LB', 'RWB', 'LWB'],
-  'DEFENSE': ['CB', 'CDM', 'RB', 'LB'],
-  'WIDE_MIDFIELD': ['RW', 'LW', 'RM', 'LM', 'RWB', 'LWB'],
-  'CENTRAL_MIDFIELD': ['CAM', 'CM', 'CDM'],
-  'ATTACKING': ['ST', 'CF', 'CAM', 'RW', 'LW']
-};
+// Position similarity groups (unused)
+// const POSITION_GROUPS = {
+//   'FULLBACK': ['RB', 'LB', 'RWB', 'LWB'],
+//   'DEFENSE': ['CB', 'CDM', 'RB', 'LB'],
+//   'WIDE_MIDFIELD': ['RW', 'LW', 'RM', 'LM', 'RWB', 'LWB'],
+//   'CENTRAL_MIDFIELD': ['CAM', 'CM', 'CDM'],
+//   'ATTACKING': ['ST', 'CF', 'CAM', 'RW', 'LW']
+// };
 
 class MFLOVRCalculator {
   private allPositions: MFLPosition[];
@@ -264,7 +264,7 @@ class MFLOVRCalculator {
    * Check if position is similar to player's positions
    * This function is no longer used - all non-primary/non-secondary positions are UNFAMILIAR
    */
-  private isSimilarPosition(playerPositions: MFLPosition[], targetPosition: MFLPosition): boolean {
+  private isSimilarPosition(_playerPositions: MFLPosition[], _targetPosition: MFLPosition): boolean {
     // Disabled - we want strict position matching only
     return false;
   }
@@ -346,9 +346,9 @@ class MFLOVRCalculator {
       throw new Error('Positions must be a non-empty array');
     }
 
-    for (const pos of player.positions) {
-      if (!this.allPositions.includes(pos)) {
-        throw new Error(`Invalid position: ${pos}`);
+    for (const _pos of player.positions) {
+      if (!this.allPositions.includes(_pos)) {
+        throw new Error(`Invalid position: ${_pos}`);
       }
     }
 

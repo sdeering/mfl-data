@@ -1,47 +1,7 @@
 import React from 'react';
-import type { MFLPlayer, MFLPosition } from '@/src/types/mflApi';
-import { getRatingColors, getRatingStyle, getRatingBarStyle } from '@/src/utils/ratingColors';
-
-// Function to get tier color based on rating value (same as PlayerStatsGrid)
-const getTierColor = (rating: number) => {
-  if (rating >= 95) {
-    return {
-      bg: 'bg-[#87f6f8]',
-      text: 'text-black',
-      border: 'border-[var(--tier-common-foreground)]/15'
-    };
-  } else if (rating >= 85) {
-    return {
-      bg: 'bg-[#fa53ff]',
-      text: 'text-white',
-      border: 'border-[var(--tier-common-foreground)]/15'
-    };
-  } else if (rating >= 75) {
-    return {
-      bg: 'bg-[#0047ff]',
-      text: 'text-white',
-      border: 'border-[var(--tier-common-foreground)]/15'
-    };
-  } else if (rating >= 65) {
-    return {
-      bg: 'bg-[#71ff30]',
-      text: 'text-black',
-      border: 'border-[var(--tier-common-foreground)]/15'
-    };
-  } else if (rating >= 55) {
-    return {
-      bg: 'bg-[#ecd17f]',
-      text: 'text-black',
-      border: 'border-[var(--tier-common-foreground)]/15'
-    };
-  } else {
-    return {
-      bg: 'bg-[#9f9f9f]',
-      text: 'text-white',
-      border: 'border-[var(--tier-common-foreground)]/15'
-    };
-  }
-};
+import { getPositionRating, isPlayerPosition } from '../utils/positionOvrCalculator';
+import { getTierColor, getRatingStyle } from '../utils/ratingUtils';
+import type { MFLPlayer, MFLPosition } from '../types/mflApi';
 
 interface PositionRatingsProps {
   player: MFLPlayer;
@@ -94,10 +54,6 @@ export const PositionRatings: React.FC<PositionRatingsProps> = ({ player }) => {
       borderColor: 'border-red-200'
     }
   ];
-
-  const isPlayerPosition = (position: MFLPosition): boolean => {
-    return player.metadata.positions.includes(position);
-  };
 
   const getPositionRating = (position: MFLPosition): number | undefined => {
     switch (position) {
@@ -213,8 +169,7 @@ export const PositionRatings: React.FC<PositionRatingsProps> = ({ player }) => {
         <div className="grid grid-cols-3 gap-4 text-center">
           <div>
             <div 
-              className="text-lg font-bold"
-              style={getRatingStyle(Math.max(player.metadata.overall, player.metadata.defense, player.metadata.passing, player.metadata.shooting, player.metadata.goalkeeping))}
+              className={`text-lg font-bold ${getRatingStyle(Math.max(player.metadata.overall, player.metadata.defense, player.metadata.passing, player.metadata.shooting, player.metadata.goalkeeping), player.metadata.overall)}`}
             >
               {Math.max(player.metadata.overall, player.metadata.defense, player.metadata.passing, player.metadata.shooting, player.metadata.goalkeeping)}
             </div>
@@ -222,8 +177,7 @@ export const PositionRatings: React.FC<PositionRatingsProps> = ({ player }) => {
           </div>
           <div>
             <div 
-              className="text-lg font-bold"
-              style={getRatingStyle(player.metadata.overall)}
+              className={`text-lg font-bold ${getRatingStyle(player.metadata.overall, player.metadata.overall)}`}
             >
               {player.metadata.overall}
             </div>
@@ -231,8 +185,7 @@ export const PositionRatings: React.FC<PositionRatingsProps> = ({ player }) => {
           </div>
           <div>
             <div 
-              className="text-lg font-bold"
-              style={getRatingStyle(Math.min(player.metadata.overall, player.metadata.defense, player.metadata.passing, player.metadata.shooting, player.metadata.goalkeeping))}
+              className={`text-lg font-bold ${getRatingStyle(Math.min(player.metadata.overall, player.metadata.defense, player.metadata.passing, player.metadata.shooting, player.metadata.goalkeeping), player.metadata.overall)}`}
             >
               {Math.min(player.metadata.overall, player.metadata.defense, player.metadata.passing, player.metadata.shooting, player.metadata.goalkeeping)}
             </div>

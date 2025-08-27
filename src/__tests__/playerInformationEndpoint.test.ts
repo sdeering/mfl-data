@@ -1,5 +1,4 @@
 import { mflApi } from '../services/mflApi';
-import { MFLPlayer } from '../types/mflApi';
 
 describe('Player Information Endpoint - Real API Tests', () => {
   // These tests use real API calls to verify the endpoint works correctly

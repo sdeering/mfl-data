@@ -3,22 +3,50 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { mflApi } from '../services/mflApi';
+import type { MFLPlayer } from '../types/mflApi';
 import PlayerImage from './PlayerImage';
 import PlayerStats from './PlayerStats';
 import PlayerStatsGrid from './PlayerStatsGrid';
 import PositionRatingsDisplay from './PositionRatingsDisplay';
-import type { MFLPlayer } from '../types/mflApi';
 
 interface PlayerResultsPageProps {
   propPlayerId?: string;
 }
+
+// Function to add player to recent searches
+const addToRecentSearches = (player: MFLPlayer) => {
+  try {
+    const recentSearches = JSON.parse(localStorage.getItem('mfl-recent-searches') || '[]');
+    
+    // Create new search entry
+    const newSearch = {
+      id: player.id.toString(),
+      name: `${player.metadata.firstName} ${player.metadata.lastName}`,
+      overall: player.metadata.overall,
+      positions: player.metadata.positions,
+      timestamp: Date.now()
+    };
+    
+    // Remove existing entry if it exists (to avoid duplicates)
+    const filteredSearches = recentSearches.filter((search: any) => search.id !== newSearch.id);
+    
+    // Add new search to the beginning
+    const updatedSearches = [newSearch, ...filteredSearches];
+    
+    // Keep only the last 10 searches
+    const limitedSearches = updatedSearches.slice(0, 10);
+    
+    localStorage.setItem('mfl-recent-searches', JSON.stringify(limitedSearches));
+  } catch (error) {
+    console.error('Failed to save to recent searches:', error);
+  }
+};
 
 const PlayerResultsPage: React.FC<PlayerResultsPageProps> = ({ propPlayerId }) => {
   const searchParams = useSearchParams();
   const [player, setPlayer] = useState<MFLPlayer | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [dataSource, setDataSource] = useState<'api'>('api');
 
   const fetchPlayerData = useCallback(async (playerId: string) => {
     setIsLoading(true);
@@ -27,7 +55,9 @@ const PlayerResultsPage: React.FC<PlayerResultsPageProps> = ({ propPlayerId }) =
     try {
       const player = await mflApi.getPlayer(playerId);
       setPlayer(player);
-      setDataSource('api');
+      
+      // Add player to recent searches when successfully loaded
+      addToRecentSearches(player);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to fetch player data';
       setError(errorMessage);

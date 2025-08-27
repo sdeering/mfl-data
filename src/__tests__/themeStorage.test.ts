@@ -1,5 +1,4 @@
 import { saveThemePreference, loadThemePreference, clearThemePreference } from '../utils/themeStorage';
-import type { Theme } from '../types/theme';
 
 // Mock sessionStorage
 const createMockSessionStorage = () => {

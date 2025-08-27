@@ -12,7 +12,6 @@ import {
   MFLPlayerResponse,
   MFLPlayerProgressionsResponse,
   MFLOwnerPlayersResponse,
-  MFLSaleHistoryResponse,
   MFLExperienceHistoryResponse,
 } from '../types/mflApi';
 

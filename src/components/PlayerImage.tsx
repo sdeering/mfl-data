@@ -27,9 +27,19 @@ const getRatingTextColor = (overall: number): string => {
   return 'url(#v2-text-common)'; // Common
 };
 
-export const PlayerImage: React.FC<PlayerImageProps> = ({ player }) => {
-  const { theme } = useTheme();
-  
+export default function PlayerImage({ player }: PlayerImageProps) {
+  const {
+    metadata: {
+      firstName,
+      lastName,
+      overall,
+      nationalities
+    }
+  } = player;
+
+  const playerName = `${firstName} ${lastName}`;
+  const countryFlag = nationalities?.[0] ? getCountryFlag(nationalities[0]) : null;
+
   if (!player) {
     return (
       <div className="w-40 sm:w-[280px] md:w-[280px] xl:w-[280px] mb-2">
@@ -50,11 +60,8 @@ export const PlayerImage: React.FC<PlayerImageProps> = ({ player }) => {
     );
   }
 
-  const playerName = `${player.metadata.firstName} ${player.metadata.lastName}`;
   const photoUrl = `https://d13e14gtps4iwl.cloudfront.net/players/v2/${player.id}/photo.webp`;
   const backgroundUrl = getBackgroundImage(player.metadata.overall);
-  const nationality = player.metadata.nationalities?.[0];
-  const countryFlag = nationality ? getCountryFlag(nationality) : '🏳️';
   const primaryPosition = player.metadata.positions?.[0] || 'N/A';
   const ratingTextColor = getRatingTextColor(player.metadata.overall);
 
@@ -190,7 +197,7 @@ export const PlayerImage: React.FC<PlayerImageProps> = ({ player }) => {
                   <tspan x="57.94" y="109.5" fontSize="9" fontWeight="500" fill="#FFF" dominantBaseline="middle" textAnchor="middle">{player.metadata.age}</tspan>
                 </text>
               </g>
-              <image href={`https://app.playmfl.com/img/flags/${nationality}.svg`} width="13.3" height="8.8" preserveAspectRatio="none" y="117.7" x="51.2" className="v2-nationality" mask="url(#v2-flag-clip)"></image>
+              <image href={`https://app.playmfl.com/img/flags/${nationalities?.[0]}.svg`} width="13.3" height="8.8" preserveAspectRatio="none" y="117.7" x="51.2" className="v2-nationality" mask="url(#v2-flag-clip)"></image>
             </g>
           </g>
         </g>
@@ -198,10 +205,10 @@ export const PlayerImage: React.FC<PlayerImageProps> = ({ player }) => {
         <g transform="translate(0, 122)">
           <g className="v2-names">
             <text className="v2-fn">
-              <tspan x="64.2" y="0" dominantBaseline="middle" textAnchor="middle" fill="#FFF" fontWeight="400" fontSize="12.3">{player.metadata.firstName}</tspan>
+              <tspan x="64.2" y="0" dominantBaseline="middle" textAnchor="middle" fill="#FFF" fontWeight="400" fontSize="12.3">{firstName}</tspan>
             </text>
             <text className="v2-ln">
-              <tspan x="64.2" y="12.5" dominantBaseline="middle" textAnchor="middle" fill={ratingTextColor} style={{fontWeight: 600, fontSize: 14.2}}>{player.metadata.lastName}</tspan>
+              <tspan x="64.2" y="12.5" dominantBaseline="middle" textAnchor="middle" fill={ratingTextColor} style={{fontWeight: 600, fontSize: 14.2}}>{lastName}</tspan>
             </text>
           </g>
         </g>
@@ -239,5 +246,3 @@ export const PlayerImage: React.FC<PlayerImageProps> = ({ player }) => {
     </div>
   );
 };
-
-export default PlayerImage;

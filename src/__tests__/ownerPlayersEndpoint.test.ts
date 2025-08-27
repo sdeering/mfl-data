@@ -1,5 +1,4 @@
 import { mflApi } from '../services/mflApi';
-import { MFLOwnerPlayersResponse } from '../types/mflApi';
 
 describe('Owner Players Endpoint - Real API Tests', () => {
   // These tests use real API calls to verify the endpoint works correctly

@@ -12,9 +12,9 @@ jest.mock('../utils/ratingColors', () => ({
     barColor: rating && rating >= 85 ? 'bg-purple-500' : rating && rating >= 75 ? 'bg-blue-500' : rating && rating >= 65 ? 'bg-green-500' : rating && rating >= 55 ? 'bg-yellow-500' : 'bg-gray-400',
     rgbColor: rating && rating >= 85 ? 'rgb(250, 83, 255)' : rating && rating >= 75 ? 'rgb(22, 159, 237)' : rating && rating >= 65 ? 'rgb(58, 242, 75)' : rating && rating >= 55 ? 'rgb(255, 204, 0)' : 'rgb(159, 159, 159)'
   }),
-  getRatingStyle: (rating?: number) => ({ color: 'rgb(0, 0, 0)' }),
-  getRatingBgStyle: (rating?: number) => ({ backgroundColor: 'rgba(0, 0, 0, 0.1)' }),
-  getRatingBarStyle: (rating?: number) => ({ backgroundColor: 'rgb(0, 0, 0)' })
+  getRatingStyle: () => ({ color: 'rgb(0, 0, 0)' }),
+  getRatingBgStyle: () => ({ backgroundColor: 'rgba(0, 0, 0, 0.1)' }),
+  getRatingBarStyle: () => ({ backgroundColor: 'rgb(0, 0, 0)' })
 }));
 
 // Mock position OVR results for a non-GK player

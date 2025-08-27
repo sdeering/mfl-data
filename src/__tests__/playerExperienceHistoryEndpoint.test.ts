@@ -1,5 +1,4 @@
 import { mflApi } from '../services/mflApi';
-import { MFLExperienceHistoryResponse } from '../types/mflApi';
 
 describe('Player Experience History Endpoint - Real API Tests', () => {
   // These tests use real API calls to verify the endpoint works correctly
