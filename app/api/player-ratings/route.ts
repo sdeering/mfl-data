@@ -187,9 +187,8 @@ export async function GET(request: NextRequest) {
             let familiarity = 'UNFAMILIAR';
             if (badgeTitle === 'Primary') {
               familiarity = 'PRIMARY';
-            } else if (badgeTitle === 'Secondary' || badgeTitle === 'Fairly Familiar') {
-              familiarity = 'SECONDARY';
             }
+            // Remove the Secondary mapping - only Primary positions should be marked as such
             
             ratings.push({
               position,

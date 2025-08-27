@@ -112,7 +112,7 @@ const PlayerResultsPage: React.FC<PlayerResultsPageProps> = ({ propPlayerId }) =
             <div className="w-full lg:w-[350px] lg:flex-shrink-0 order-3 lg:order-1">
               <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4 hidden">Player Information</h2>
               <div className="w-full bg-white dark:bg-[#121213] p-[5px]">
-                <PlayerStats player={player!} dataSource={dataSource} />
+                <PlayerStats player={player!} />
                 {/* View on MFL.com Button */}
                 {player!.id && (
                   <div className="mt-4 space-y-2">
