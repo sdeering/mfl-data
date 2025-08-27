@@ -1,5 +1,6 @@
 import React from 'react';
 import type { MFLPlayer } from '../types/mflApi';
+import type { MFLPosition } from '../types/positionOvr';
 
 interface PositionRatingsProps {
   player: MFLPlayer;

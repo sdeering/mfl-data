@@ -307,7 +307,7 @@ class MFLOVRCalculator {
     }
 
     return Object.entries(allOVRs.results)
-      .filter(([pos, result]) => result.success && result.ovr > 0)
+      .filter(([_pos, result]) => result.success && result.ovr > 0)
       .sort(([,a], [,b]) => (b as PositionOVRResult).ovr - (a as PositionOVRResult).ovr)
       .slice(0, limit)
       .map(([position, result]) => ({ 
