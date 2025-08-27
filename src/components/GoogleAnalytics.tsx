@@ -5,14 +5,13 @@ import Script from 'next/script';
 declare global {
   interface Window {
     gtag: (...args: unknown[]) => void;
+    dataLayer: unknown[];
   }
 }
 
-interface GoogleAnalyticsProps {
-  GA_MEASUREMENT_ID: string;
-}
+export default function GoogleAnalytics() {
+  const GA_MEASUREMENT_ID = 'G-RMQQLQJKZZ';
 
-export default function GoogleAnalytics({ GA_MEASUREMENT_ID }: GoogleAnalyticsProps) {
   return (
     <>
       <Script
@@ -25,9 +24,7 @@ export default function GoogleAnalytics({ GA_MEASUREMENT_ID }: GoogleAnalyticsPr
         dangerouslySetInnerHTML={{
           __html: `
             window.dataLayer = window.dataLayer || [];
-            function gtag(...args) {
-              window.dataLayer.push(args);
-            }
+            function gtag(){window.dataLayer.push(arguments);}
             gtag('js', new Date());
             gtag('config', '${GA_MEASUREMENT_ID}');
           `,
