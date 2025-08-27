@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import { useScrapedPositionRatings } from '../hooks/useScrapedPositionRatings';
 import type { ScrapedPositionRating } from '../types/positionOvr';
-import { getRatingStyle, getRatingColors } from '../utils/ratingUtils';
+import { getRatingStyle } from '../utils/ratingUtils';
 
 // Function to get tier color based on rating value (same as PlayerStatsGrid)
 const getTierColor = (rating: number) => {

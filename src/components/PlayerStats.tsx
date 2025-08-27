@@ -1,9 +1,8 @@
 import React from 'react';
-import type { MFLPlayer } from '@/src/types/mflApi';
-import { getRatingColors, getRatingStyle, getRatingBarStyle } from '@/src/utils/ratingColors';
+import { useTheme } from '../contexts/ThemeContext';
 import { formatHeight } from '@/src/utils/heightConverter';
 import { getCountryFlag } from '@/src/utils/countryFlags';
-import { useTheme } from '../contexts/ThemeContext';
+import type { MFLPlayer } from '@/src/types/mflApi';
 
 // Function to get tier color based on rating value (same as PlayerStatsGrid)
 const getTierColor = (rating: number) => {
@@ -46,22 +45,41 @@ const getTierColor = (rating: number) => {
   }
 };
 
+
 interface PlayerStatsProps {
   player: MFLPlayer;
   dataSource?: 'api';
 }
 
-export const PlayerStats: React.FC<PlayerStatsProps> = ({ player, dataSource = 'api' }) => {
+export default function PlayerStats({ player }: PlayerStatsProps) {
   const { theme } = useTheme();
-  const overallTierColors = getTierColor(player.metadata.overall);
+  
+  const {
+    metadata: {
+      overall,
+      age,
+      height,
+      pace,
+      shooting,
+      passing,
+      dribbling,
+      defense,
+      physical,
+      goalkeeping,
+      nationalities,
+      preferredFoot
+    }
+  } = player;
+
+  const overallTierColors = getTierColor(overall);
 
   const stats = [
     { label: 'Player ID', value: `#${player.id}` },
-    { label: 'Overall Rating', value: player.metadata.overall, isRating: true },
-    { label: 'Country', value: player.metadata.nationalities?.[0], isCountry: true },
-    { label: 'Age', value: player.metadata.age },
-    { label: 'Height', value: formatHeight(player.metadata.height), isHeight: true },
-    { label: 'Preferred Foot', value: player.metadata.preferredFoot },
+    { label: 'Overall Rating', value: overall, isRating: true },
+    { label: 'Country', value: nationalities?.[0], isCountry: true },
+    { label: 'Age', value: age },
+    { label: 'Height', value: formatHeight(height), isHeight: true },
+    { label: 'Preferred Foot', value: preferredFoot },
     { 
       label: 'Positions', 
       value: player.metadata.positions && player.metadata.positions.length > 0 
@@ -147,5 +165,3 @@ export const PlayerStats: React.FC<PlayerStatsProps> = ({ player, dataSource = '
     </div>
   );
 };
-
-export default PlayerStats;
