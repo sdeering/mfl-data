@@ -123,8 +123,8 @@ export const PositionRatings: React.FC<PositionRatingsProps> = ({ player }) => {
                     key={position.key} 
                     className={`relative px-3 py-2 rounded-lg border transition-all duration-200 ${
                       isPrimaryOrSecondary 
-                        ? `shadow-md ring-2 ring-blue-200 ${getRatingStyle(rating, player.metadata.overall)}` 
-                        : `${getRatingStyle(rating, player.metadata.overall)} hover:bg-white hover:border-gray-300`
+                        ? `shadow-md ring-2 ring-blue-200 ${getRatingStyle(rating || 0, player.metadata.overall)}` 
+                        : `${getRatingStyle(rating || 0, player.metadata.overall)} hover:bg-white hover:border-gray-300`
                     }`}
                   >
                     <div className="flex items-center justify-between mb-2">
