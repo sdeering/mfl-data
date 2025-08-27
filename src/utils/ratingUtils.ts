@@ -73,7 +73,7 @@ export const getRatingStyle = (rating: number, overallRating: number) => {
   return 'bg-red-300';
 };
 
-export const getRatingColors = (rating: number, _overallRating: number) => {
+export const getRatingColors = (rating: number) => {
   const tierColors = getTierColor(rating);
   return `${tierColors.text} ${tierColors.bg} ${tierColors.border}`;
 };

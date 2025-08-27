@@ -1,6 +1,7 @@
 import React from 'react';
 import type { MFLPlayer } from '../types/mflApi';
 import type { MFLPosition } from '../types/positionOvr';
+import { getRatingStyle, getTierColor } from '../utils/ratingUtils';
 
 interface PositionRatingsProps {
   player: MFLPlayer;
@@ -78,6 +79,19 @@ export const PositionRatings: React.FC<PositionRatingsProps> = ({ player }) => {
       default:
         return undefined;
     }
+  };
+
+  const isPlayerPosition = (position: MFLPosition): boolean => {
+    return player.metadata.positions.includes(position);
+  };
+
+  const getRatingBarStyle = (rating: number) => {
+    if (rating >= 95) return { backgroundColor: '#87f6f8' };
+    if (rating >= 85) return { backgroundColor: '#fa53ff' };
+    if (rating >= 75) return { backgroundColor: '#0047ff' };
+    if (rating >= 65) return { backgroundColor: '#71ff30' };
+    if (rating >= 55) return { backgroundColor: '#ecd17f' };
+    return { backgroundColor: '#9f9f9f' };
   };
 
   if (!player.metadata) {

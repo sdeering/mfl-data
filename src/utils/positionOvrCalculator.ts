@@ -341,9 +341,9 @@ class MFLOVRCalculator {
       throw new Error('Positions must be a non-empty array');
     }
 
-    for (const _pos of player.positions) {
-      if (!this.allPositions.includes(_pos)) {
-        throw new Error(`Invalid position: ${_pos}`);
+    for (const pos of player.positions) {
+      if (!this.allPositions.includes(pos)) {
+        throw new Error(`Invalid position: ${pos}`);
       }
     }
 
