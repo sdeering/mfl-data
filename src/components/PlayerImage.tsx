@@ -20,8 +20,17 @@ const PlayerImage: React.FC<PlayerImageProps> = ({ player }) => {
           alt={`${player.metadata.firstName} ${player.metadata.lastName}`}
           className="w-32 h-32 rounded-lg object-cover border-2 border-gray-200 dark:border-gray-700"
           onError={(e) => {
-            // Fallback to a placeholder image if the player image fails to load
-            (e.target as HTMLImageElement).src = 'https://via.placeholder.com/128x128?text=No+Image';
+            // Hide the broken image and show a fallback div instead
+            (e.target as HTMLImageElement).style.display = 'none';
+            const fallbackDiv = document.createElement('div');
+            fallbackDiv.className = 'w-32 h-32 rounded-lg border-2 border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-700 flex items-center justify-center';
+            fallbackDiv.innerHTML = `
+              <div class="text-center">
+                <div class="text-gray-400 dark:text-gray-500 text-4xl mb-2">👤</div>
+                <div class="text-xs text-gray-500 dark:text-gray-400">No Image</div>
+              </div>
+            `;
+            (e.target as HTMLImageElement).parentNode?.appendChild(fallbackDiv);
           }}
         />
       </div>
