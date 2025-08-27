@@ -2,7 +2,6 @@
 
 import React from 'react';
 import type { MFLPlayer } from '@/src/types/mflApi';
-import { getCountryFlag } from '@/src/utils/countryFlags';
 
 interface PlayerImageProps {
   player?: MFLPlayer;
@@ -27,14 +26,6 @@ const getRatingTextColor = (overall: number): string => {
 };
 
 export default function PlayerImage({ player }: PlayerImageProps) {
-  const {
-    metadata: {
-      firstName,
-      lastName,
-      nationalities
-    }
-  } = player;
-
   if (!player) {
     return (
       <div className="w-40 sm:w-[280px] md:w-[280px] xl:w-[280px] mb-2">
@@ -54,6 +45,14 @@ export default function PlayerImage({ player }: PlayerImageProps) {
       </div>
     );
   }
+
+  const {
+    metadata: {
+      firstName,
+      lastName,
+      nationalities
+    }
+  } = player;
 
   const photoUrl = `https://d13e14gtps4iwl.cloudfront.net/players/v2/${player.id}/photo.webp`;
   const backgroundUrl = getBackgroundImage(player.metadata.overall);
