@@ -35,3 +35,5 @@ const PlayerImage: React.FC<PlayerImageProps> = ({ player }) => {
     </div>
   );
 };
+
+export default PlayerImage;
