@@ -1,0 +1,164 @@
+"use client";
+
+import React, { useState, useEffect, useCallback } from 'react';
+import { useSearchParams } from 'next/navigation';
+import { mflApi } from '../services/mflApi';
+import PlayerImage from './PlayerImage';
+import PlayerStats from './PlayerStats';
+import PlayerStatsGrid from './PlayerStatsGrid';
+import PositionRatingsDisplay from './PositionRatingsDisplay';
+import type { MFLPlayer } from '../types/mflApi';
+
+interface PlayerResultsPageProps {
+  propPlayerId?: string;
+}
+
+const PlayerResultsPage: React.FC<PlayerResultsPageProps> = ({ propPlayerId }) => {
+  const searchParams = useSearchParams();
+  const [player, setPlayer] = useState<MFLPlayer | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [dataSource, setDataSource] = useState<'api'>('api');
+
+  const fetchPlayerData = useCallback(async (playerId: string) => {
+    setIsLoading(true);
+    setError(null);
+    
+    try {
+      const player = await mflApi.getPlayer(playerId);
+      setPlayer(player);
+      setDataSource('api');
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to fetch player data';
+      setError(errorMessage);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  // Initialize player data on component mount
+  useEffect(() => {
+    const currentPlayerId = propPlayerId || searchParams.get('playerId');
+    
+    if (currentPlayerId) {
+      fetchPlayerData(currentPlayerId);
+    }
+  }, [propPlayerId, searchParams, fetchPlayerData]);
+
+  // Loading state
+  if (isLoading) {
+    return (
+      <div className="min-h-screen">
+        <div className="p-6 bg-white dark:bg-[#121213]">
+          <div className="flex items-center justify-center h-64">
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+              <p className="text-gray-600">Loading player data...</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Error state
+  if (error) {
+    return (
+      <div className="min-h-screen">
+        <div className="p-6 bg-white dark:bg-[#121213]">
+          <div className="flex items-center justify-center h-64">
+            <div className="text-center">
+              <p className="text-red-600 mb-4">Error: {error}</p>
+              <button
+                onClick={() => window.location.reload()}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                Try Again
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen">
+      {/* Main Content Area - Responsive Layout */}
+      <div className="p-4 lg:p-6 bg-white dark:bg-[#121213]">
+        {player ? (
+          <div key={`player-${player.id}`} className="flex flex-col lg:flex-row gap-6 lg:gap-[30px] h-full">
+            {/* Column 1 - Player Card (Mobile: First, Desktop: Second) */}
+            <div className="w-full lg:w-[375px] lg:flex-shrink-0 flex flex-col order-1 lg:order-2">
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4 text-center hidden">Player Card</h2>
+              <div className="flex flex-col items-center space-y-4 p-[5px]">
+                <PlayerImage player={player!} />
+                {/* Player Stats Grid */}
+                <div className="w-full mt-4">
+                  <PlayerStatsGrid player={player!} />
+                </div>
+              </div>
+            </div>
+
+            {/* Column 2 - Position Ratings (Mobile: Second, Desktop: Third) */}
+            <div className="w-full lg:w-[350px] lg:flex-shrink-0 order-2 lg:order-3">
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4 hidden">Position Ratings</h2>
+              <div className="w-full p-[5px]">
+                <PositionRatingsDisplay player={player} />
+              </div>
+            </div>
+
+            {/* Column 3 - Player Information (Mobile: Third, Desktop: First) */}
+            <div className="w-full lg:w-[350px] lg:flex-shrink-0 order-3 lg:order-1">
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4 hidden">Player Information</h2>
+              <div className="w-full bg-white dark:bg-[#121213] p-[5px]">
+                <PlayerStats player={player!} dataSource={dataSource} />
+                {/* View on MFL.com Button */}
+                {player!.id && (
+                  <div className="mt-4 space-y-2">
+                    <button
+                      onClick={() => window.open(`https://app.playmfl.com/players/${player!.id}`, '_blank')}
+                      className="w-full px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg border border-gray-200 dark:border-gray-600 hover:bg-gray-200 dark:hover:bg-gray-600 hover:text-gray-900 dark:hover:text-white transition-all duration-200 font-medium text-sm flex items-center justify-center space-x-2 cursor-pointer"
+                    >
+                      <span>View on mfl.com</span>
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                      </svg>
+                    </button>
+                    <button
+                      onClick={() => window.open(`https://mflplayer.info/player/${player!.id}`, '_blank')}
+                      className="w-full px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg border border-gray-200 dark:border-gray-600 hover:bg-gray-200 dark:hover:bg-gray-600 hover:text-gray-900 dark:hover:text-white transition-all duration-200 font-medium text-sm flex items-center justify-center space-x-2 cursor-pointer"
+                    >
+                      <span>View on mflplayer.info</span>
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                      </svg>
+                    </button>
+                    <button
+                      onClick={() => window.open(`https://mfl-assistant.com/search?q=${encodeURIComponent(`${player!.metadata.firstName} ${player!.metadata.lastName}`)}`, '_blank')}
+                      className="w-full px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg border border-gray-200 dark:border-gray-600 hover:bg-gray-200 dark:hover:bg-gray-600 hover:text-gray-900 dark:hover:text-white transition-all duration-200 font-medium text-sm flex items-center justify-center space-x-2 cursor-pointer"
+                    >
+                      <span>View on mfl-assistant.com</span>
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                      </svg>
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="flex items-center justify-center h-64">
+            <div className="text-center">
+              <p className="text-gray-600">No player data available</p>
+              <p className="text-sm text-gray-400 mt-2">Debug: player={player ? 'exists' : 'null'}</p>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+export default PlayerResultsPage;
