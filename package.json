@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "test": "jest",
+    "postinstall": "npx puppeteer browsers install chrome",
     "cache:stats": "node scripts/manage-cache.js stats",
     "cache:clear-expired": "node scripts/manage-cache.js clear-expired",
     "cache:clear-all": "node scripts/manage-cache.js clear-all",
