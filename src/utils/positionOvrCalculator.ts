@@ -253,20 +253,15 @@ class MFLOVRCalculator {
     // Only the first position in the array is PRIMARY
     if (player.positions[0] === position) {
       return 'PRIMARY';
-    } else if (player.positions.includes(position)) {
+    }
+    
+    // Check if position is in the positions array (but not first)
+    if (player.positions.includes(position)) {
       return 'SECONDARY';
     }
-    // Everything else is UNFAMILIAR - no similarity checks
+    
+    // All other positions are UNFAMILIAR
     return 'UNFAMILIAR';
-  }
-
-  /**
-   * Check if position is similar to player's positions
-   * This function is no longer used - all non-primary/non-secondary positions are UNFAMILIAR
-   */
-  private isSimilarPosition(_playerPositions: MFLPosition[], _targetPosition: MFLPosition): boolean {
-    // Disabled - we want strict position matching only
-    return false;
   }
 
   /**
@@ -346,9 +341,9 @@ class MFLOVRCalculator {
       throw new Error('Positions must be a non-empty array');
     }
 
-    for (const _pos of player.positions) {
-      if (!this.allPositions.includes(_pos)) {
-        throw new Error(`Invalid position: ${_pos}`);
+    for (const position of player.positions) {
+      if (!this.allPositions.includes(position)) {
+        throw new Error(`Invalid position: ${position}`);
       }
     }
 

@@ -1,7 +1,5 @@
 import React from 'react';
-import { getPositionRating, isPlayerPosition } from '../utils/positionOvrCalculator';
-import { getTierColor, getRatingStyle } from '../utils/ratingUtils';
-import type { MFLPlayer, MFLPosition } from '../types/mflApi';
+import type { MFLPlayer } from '../types/mflApi';
 
 interface PositionRatingsProps {
   player: MFLPlayer;

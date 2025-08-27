@@ -28,7 +28,7 @@ const addToRecentSearches = (player: MFLPlayer) => {
     };
     
     // Remove existing entry if it exists (to avoid duplicates)
-    const filteredSearches = recentSearches.filter((search: any) => search.id !== newSearch.id);
+    const filteredSearches = recentSearches.filter((search: { id: string }) => search.id !== newSearch.id);
     
     // Add new search to the beginning
     const updatedSearches = [newSearch, ...filteredSearches];
