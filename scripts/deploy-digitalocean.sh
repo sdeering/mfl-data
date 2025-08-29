@@ -22,7 +22,7 @@ DROPLET_NAME="ml-api-server"
 REGION="nyc1"
 SIZE="s-2vcpu-4gb"
 IMAGE="docker-20-04"
-SSH_KEY_NAME="your-ssh-key-name"  # Replace with your SSH key name
+SSH_KEY_ID="50328418"  # Using your mfl-deployment SSH key
 
 echo "📋 Configuration:"
 echo "   Droplet Name: $DROPLET_NAME"
@@ -36,7 +36,7 @@ DROPLET_ID=$(doctl compute droplet create $DROPLET_NAME \
     --size $SIZE \
     --image $IMAGE \
     --region $REGION \
-    --ssh-keys $SSH_KEY_NAME \
+    --ssh-keys $SSH_KEY_ID \
     --wait \
     --format ID,Name,PublicIPv4 \
     --no-header | awk '{print $1}')
@@ -65,7 +65,7 @@ sleep 30
 
 # Deploy the ML API
 echo "📦 Deploying ML API..."
-ssh -o StrictHostKeyChecking=no root@$DROPLET_IP << 'EOF'
+ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null root@$DROPLET_IP << 'EOF'
     # Update system
     apt-get update && apt-get upgrade -y
     
@@ -84,15 +84,15 @@ EOF
 
 # Copy files to droplet
 echo "📁 Copying files to droplet..."
-scp -o StrictHostKeyChecking=no scripts/ml_api.py root@$DROPLET_IP:/opt/ml-api/
-scp -o StrictHostKeyChecking=no scripts/requirements.txt root@$DROPLET_IP:/opt/ml-api/
-scp -o StrictHostKeyChecking=no scripts/Dockerfile root@$DROPLET_IP:/opt/ml-api/
-scp -o StrictHostKeyChecking=no scripts/docker-compose.yml root@$DROPLET_IP:/opt/ml-api/
-scp -r -o StrictHostKeyChecking=no scripts/models root@$DROPLET_IP:/opt/ml-api/
+scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ../scripts/ml_api.py root@$DROPLET_IP:/opt/ml-api/
+scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ../scripts/requirements.txt root@$DROPLET_IP:/opt/ml-api/
+scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ../scripts/Dockerfile root@$DROPLET_IP:/opt/ml-api/
+scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ../scripts/docker-compose.yml root@$DROPLET_IP:/opt/ml-api/
+scp -r -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ../scripts/models root@$DROPLET_IP:/opt/ml-api/
 
 # Start the ML API
 echo "🚀 Starting ML API..."
-ssh -o StrictHostKeyChecking=no root@$DROPLET_IP << 'EOF'
+ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null root@$DROPLET_IP << 'EOF'
     cd /opt/ml-api
     docker-compose up -d --build
     

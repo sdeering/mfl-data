@@ -37,7 +37,7 @@ def load_models():
     """Load all trained models and scalers"""
     global models, scalers, positions
     
-    model_dir = os.path.join(os.path.dirname(__file__), "..", "models")
+    model_dir = os.path.join(os.path.dirname(__file__), "models")
     
     # Load metadata
     with open(os.path.join(model_dir, "metadata.json"), 'r') as f:
