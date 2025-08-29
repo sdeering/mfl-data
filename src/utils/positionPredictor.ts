@@ -41,9 +41,12 @@ export async function predictAllPositionRatings(
   overall?: number
 ): Promise<PredictionResult> {
   try {
+    // Always request all 15 positions for complete analysis
+    const allPositions = ['LB', 'CB', 'RB', 'LWB', 'RWB', 'CDM', 'CM', 'CAM', 'LM', 'RM', 'CF', 'ST', 'LW', 'RW', 'GK'];
+    
     const requestBody: PredictionRequest = {
       attributes,
-      positions: playerPositions
+      positions: allPositions
     };
     
     if (overall !== undefined) {
