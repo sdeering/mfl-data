@@ -98,8 +98,9 @@ def prepare_training_data(excel_path):
 def create_engineered_features(X):
     """
     Create domain-specific features based on football knowledge
+    Improved for MFL position requirements
     """
-    print("Creating engineered features...")
+    print("Creating enhanced engineered features for MFL...")
     features = []
     
     for row in X:
@@ -108,30 +109,56 @@ def create_engineered_features(X):
         # Original attributes
         base_features = list(row)
         
-        # Attacking combinations
+        # Enhanced attacking combinations
         attacking_score = (sho + dri + pac) / 3
         finishing_score = (sho + dri) / 2
+        goal_scoring_potential = (sho * 0.6 + pac * 0.3 + dri * 0.1)
         
-        # Defensive combinations
+        # Enhanced defensive combinations
         defensive_score = (def_ + phy) / 2
         marking_score = (def_ + pac) / 2
+        center_back_potential = (def_ * 0.7 + phy * 0.2 + pas * 0.1)
+        full_back_potential = (pac * 0.3 + def_ * 0.3 + pas * 0.25 + dri * 0.15)
         
-        # Midfield combinations
+        # Enhanced midfield combinations
         playmaking_score = (pas + dri) / 2
         box_to_box_score = (pas + def_ + phy) / 3
+        central_midfield_potential = (pas * 0.4 + dri * 0.25 + def_ * 0.2 + pac * 0.15)
         
-        # Wing play combinations
+        # Enhanced wing play combinations
         wing_score = (pac + dri) / 2
         crossing_score = (pas + pac) / 2
+        wing_back_potential = (pac * 0.35 + pas * 0.25 + dri * 0.25 + def_ * 0.15)
+        winger_potential = (pac * 0.3 + dri * 0.3 + sho * 0.2 + pas * 0.2)
         
-        # Physical dominance
+        # Enhanced physical and aerial combinations
         aerial_score = (phy + def_) / 2
+        physical_dominance = (phy * 0.6 + def_ * 0.4)
+        speed_potential = (pac * 0.8 + dri * 0.2)
         
-        # Add all engineered features
+        # Position-specific combinations for MFL
+        # LWB/RWB specific features
+        wing_back_offensive = (pac * 0.3 + pas * 0.3 + dri * 0.25 + sho * 0.15)
+        wing_back_defensive = (def_ * 0.4 + pac * 0.3 + pas * 0.2 + phy * 0.1)
+        
+        # CB specific features
+        center_back_defensive = (def_ * 0.6 + phy * 0.25 + pas * 0.15)
+        center_back_aerial = (phy * 0.5 + def_ * 0.4 + pac * 0.1)
+        
+        # CDM specific features
+        defensive_midfield = (def_ * 0.4 + pas * 0.3 + phy * 0.2 + dri * 0.1)
+        
+        # Add all enhanced engineered features
         engineered = [
-            attacking_score, finishing_score, defensive_score,
-            marking_score, playmaking_score, box_to_box_score,
-            wing_score, crossing_score, aerial_score
+            attacking_score, finishing_score, goal_scoring_potential,
+            defensive_score, marking_score, center_back_potential, full_back_potential,
+            playmaking_score, box_to_box_score, central_midfield_potential,
+            wing_score, crossing_score, wing_back_potential, winger_potential,
+            aerial_score, physical_dominance, speed_potential,
+            # MFL-specific features
+            wing_back_offensive, wing_back_defensive,
+            center_back_defensive, center_back_aerial,
+            defensive_midfield
         ]
         
         features.append(base_features + engineered)
@@ -195,6 +222,110 @@ def train_simple_model(X, y, output_cols):
     except ImportError:
         print("scikit-learn not available, using simple averaging...")
         return None, None, None
+
+def train_advanced_models(X, y, output_cols):
+    """
+    Train advanced models (Random Forest, XGBoost) for better accuracy
+    """
+    print("Training advanced models for improved accuracy...")
+    
+    try:
+        from sklearn.ensemble import RandomForestRegressor
+        from sklearn.preprocessing import StandardScaler
+        from sklearn.model_selection import train_test_split, GridSearchCV
+        from sklearn.metrics import mean_absolute_error, r2_score
+        import joblib
+        
+        models = {}
+        scalers = {}
+        metrics = {}
+        
+        # Split data
+        X_train, X_test, y_train, y_test = train_test_split(
+            X, y, test_size=0.2, random_state=42
+        )
+        
+        # Train a model for each position
+        for i, position in enumerate(output_cols):
+            print(f"Training advanced model for {position}...")
+            
+            # Scale features
+            scaler = StandardScaler()
+            X_train_scaled = scaler.fit_transform(X_train)
+            X_test_scaled = scaler.transform(X_test)
+            
+            # Try different model types
+            best_model = None
+            best_score = -float('inf')
+            
+            # Random Forest with hyperparameter tuning
+            rf_params = {
+                'n_estimators': [100, 200, 300],
+                'max_depth': [10, 15, 20, None],
+                'min_samples_split': [2, 5, 10],
+                'min_samples_leaf': [1, 2, 4]
+            }
+            
+            rf = RandomForestRegressor(random_state=42, n_jobs=-1)
+            rf_grid = GridSearchCV(rf, rf_params, cv=3, scoring='neg_mean_absolute_error', n_jobs=-1)
+            rf_grid.fit(X_train_scaled, y_train[:, i])
+            
+            rf_score = -rf_grid.best_score_
+            
+            # Try XGBoost if available
+            try:
+                import xgboost as xgb
+                
+                xgb_params = {
+                    'n_estimators': [100, 200, 300],
+                    'max_depth': [3, 6, 9],
+                    'learning_rate': [0.01, 0.1, 0.2],
+                    'subsample': [0.8, 0.9, 1.0]
+                }
+                
+                xgb_model = xgb.XGBRegressor(random_state=42, n_jobs=-1)
+                xgb_grid = GridSearchCV(xgb_model, xgb_params, cv=3, scoring='neg_mean_absolute_error', n_jobs=-1)
+                xgb_grid.fit(X_train_scaled, y_train[:, i])
+                
+                xgb_score = -xgb_grid.best_score_
+                
+                # Choose the better model
+                if xgb_score < rf_score:
+                    best_model = xgb_grid.best_estimator_
+                    best_score = xgb_score
+                    print(f"  Using XGBoost for {position}")
+                else:
+                    best_model = rf_grid.best_estimator_
+                    best_score = rf_score
+                    print(f"  Using Random Forest for {position}")
+                    
+            except ImportError:
+                best_model = rf_grid.best_estimator_
+                best_score = rf_score
+                print(f"  Using Random Forest for {position} (XGBoost not available)")
+            
+            # Predict and evaluate
+            predictions = best_model.predict(X_test_scaled)
+            mae = mean_absolute_error(y_test[:, i], predictions)
+            r2 = r2_score(y_test[:, i], predictions)
+            
+            # Store model and metrics
+            models[position] = best_model
+            scalers[position] = scaler
+            metrics[position] = {'MAE': mae, 'R2': r2, 'CV_Score': best_score}
+            
+            print(f"  {position}: MAE={mae:.2f}, R²={r2:.3f}, CV_Score={best_score:.2f}")
+        
+        # Overall metrics
+        overall_mae = np.mean([m['MAE'] for m in metrics.values()])
+        overall_r2 = np.mean([m['R2'] for m in metrics.values()])
+        print(f"\nOverall: MAE={overall_mae:.2f}, R²={overall_r2:.3f}")
+        
+        return models, scalers, metrics
+        
+    except ImportError:
+        print("Advanced models not available, falling back to simple models...")
+        return train_simple_model(X, y, output_cols)
 
 def save_model_data(models, scalers, output_cols, model_dir="models"):
     """
@@ -412,7 +543,7 @@ def main():
     X, y, input_cols, output_cols, df_processed = prepare_training_data(excel_path)
     
     # Train models
-    models, scalers, metrics = train_simple_model(X, y, output_cols)
+    models, scalers, metrics = train_advanced_models(X, y, output_cols)
     
     # Save models
     save_model_data(models, scalers, output_cols)
