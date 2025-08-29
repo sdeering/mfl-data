@@ -1,6 +1,6 @@
 {
   "functions": {
-    "api/predict/route.ts": {
+    "app/api/predict/route.ts": {
       "maxDuration": 30
     }
   },
