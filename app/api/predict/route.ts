@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 // Check if we're in development and should use the Python ML API
 const isDevelopment = process.env.NODE_ENV === 'development';
 const PYTHON_ML_API_URL = 'http://localhost:8000';
+const DIGITALOCEAN_ML_API_URL = 'http://143.198.172.99:8000';
 
 // Simple rule-based prediction system for serverless compatibility
 function calculatePositionRating(attributes: any, overall: number | undefined, position: string): number {
@@ -58,26 +59,26 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { attributes, positions, overall } = body;
     
-    // In development, proxy to Python ML API if available
-    if (isDevelopment) {
-      try {
-        const response = await fetch(`${PYTHON_ML_API_URL}/predict`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(body)
-        });
-        
-        if (response.ok) {
-          const result = await response.json();
-          return NextResponse.json(result);
-        } else {
-          // console.log('Python ML API failed, falling back to rule-based'); // Removed debug logging
-        }
-      } catch (error) {
-        // console.log('Python ML API proxy failed, falling back to rule-based:', error); // Removed debug logging
+    // Proxy to ML API if available (local in development, DigitalOcean in production)
+    const targetApiUrl = isDevelopment ? PYTHON_ML_API_URL : DIGITALOCEAN_ML_API_URL;
+    
+    try {
+      const response = await fetch(`${targetApiUrl}/predict`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(body)
+      });
+      
+      if (response.ok) {
+        const result = await response.json();
+        return NextResponse.json(result);
+      } else {
+        // console.log('ML API failed, falling back to rule-based'); // Removed debug logging
       }
+    } catch (error) {
+      // console.log('ML API proxy failed, falling back to rule-based:', error); // Removed debug logging
     }
     
     if (!attributes || !positions) {
