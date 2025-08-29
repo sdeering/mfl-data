@@ -1,0 +1,36 @@
+{
+  "positions": [
+    "LB",
+    "CB",
+    "RB",
+    "LWB",
+    "RWB",
+    "CDM",
+    "CM",
+    "CAM",
+    "LM",
+    "RM",
+    "CF",
+    "ST",
+    "LW",
+    "RW",
+    "GK"
+  ],
+  "feature_names": [
+    "PAC",
+    "SHO",
+    "PAS",
+    "DRI",
+    "DEF",
+    "PHY",
+    "attacking_score",
+    "finishing_score",
+    "defensive_score",
+    "marking_score",
+    "playmaking_score",
+    "box_to_box_score",
+    "wing_score",
+    "crossing_score",
+    "aerial_score"
+  ]
+}
