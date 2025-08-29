@@ -1,8 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 // Simple rule-based prediction system for serverless compatibility
-function calculatePositionRating(attributes: any, overall: number, position: string): number {
+function calculatePositionRating(attributes: any, overall: number | undefined, position: string): number {
   const { PAC, SHO, PAS, DRI, DEF, PHY } = attributes;
+  
+  // Calculate overall rating if not provided
+  const calculatedOverall = overall || Math.round((PAC + SHO + PAS + DRI + DEF + PHY) / 6);
   
   // Position-specific weight calculations
   const weights: { [key: string]: { [key: string]: number } } = {
@@ -25,7 +28,7 @@ function calculatePositionRating(attributes: any, overall: number, position: str
   
   const positionWeights = weights[position];
   if (!positionWeights) {
-    return overall; // Fallback to overall rating
+    return calculatedOverall; // Fallback to overall rating
   }
   
   // Calculate weighted position rating
@@ -38,7 +41,7 @@ function calculatePositionRating(attributes: any, overall: number, position: str
     PHY * positionWeights.PHY;
   
   // Adjust based on overall rating (players with higher overall tend to be better at all positions)
-  const overallAdjustment = (overall - 50) * 0.1;
+  const overallAdjustment = (calculatedOverall - 50) * 0.1;
   const finalRating = Math.round(weightedRating + overallAdjustment);
   
   // Ensure rating is within valid range
