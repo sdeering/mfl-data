@@ -64,15 +64,15 @@ export function useMLPositionRatings(player: Player): UseMLPositionRatingsReturn
         overall: player.metadata.overall
       };
 
-      // Use the ML-based calculator
-      const results = calculateAllPositionOVRs(playerForCalculation);
+      // Use the ML-based calculator (now async)
+      const results = await calculateAllPositionOVRs(playerForCalculation);
       
       if (results.success) {
         // Convert results to the format expected by the component
         const ratings = Object.values(results.results).map(result => ({
           position: result.position,
           rating: result.ovr,
-          familiarity: result.familiarity,
+          familiarity: (result.familiarity === 'FAMILIAR' ? 'UNFAMILIAR' : result.familiarity) as 'PRIMARY' | 'SECONDARY' | 'UNFAMILIAR',
           difference: result.penalty
         }));
         

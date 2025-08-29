@@ -20,7 +20,7 @@ export class MLPositionCalculator {
   /**
    * Calculate OVR for a specific position using ML models
    */
-  public calculatePositionOVR(player: PlayerForOVRCalculation, targetPosition: MFLPosition): PositionOVRResult {
+  public async calculatePositionOVR(player: PlayerForOVRCalculation, targetPosition: MFLPosition): Promise<PositionOVRResult> {
     try {
       // Validate inputs
       if (!this.allPositions.includes(targetPosition)) {
@@ -46,7 +46,7 @@ export class MLPositionCalculator {
       };
 
       // Get ML predictions
-      const predictionResult = predictAllPositionRatings(playerAttributes, player.positions);
+      const predictionResult = await predictAllPositionRatings(playerAttributes, player.positions, player.overall);
       
       // Find the specific position rating
       const positionRating = predictionResult.positionRatings.find(r => r.position === targetPosition);
@@ -97,7 +97,7 @@ export class MLPositionCalculator {
   /**
    * Calculate all position ratings using ML models
    */
-  public calculateAllPositionOVRs(player: PlayerForOVRCalculation): AllPositionOVRResults {
+  public async calculateAllPositionOVRs(player: PlayerForOVRCalculation): Promise<AllPositionOVRResults> {
     const results: AllPositionOVRResults = {
       success: true,
       playerId: player.id,
@@ -118,7 +118,7 @@ export class MLPositionCalculator {
       };
 
       // Get ML predictions
-      const predictionResult = predictAllPositionRatings(playerAttributes, player.positions);
+      const predictionResult = await predictAllPositionRatings(playerAttributes, player.positions, player.overall);
       
       // Convert to our format
       for (const rating of predictionResult.positionRatings) {
@@ -163,8 +163,8 @@ export class MLPositionCalculator {
   /**
    * Get the best positions for a player (top 5)
    */
-  public getBestPositions(player: PlayerForOVRCalculation, limit: number = 5): Array<{ position: MFLPosition; ovr: number }> {
-    const allOVRs = this.calculateAllPositionOVRs(player);
+  public async getBestPositions(player: PlayerForOVRCalculation, limit: number = 5): Promise<Array<{ position: MFLPosition; ovr: number }>> {
+    const allOVRs = await this.calculateAllPositionOVRs(player);
     
     if (!allOVRs.success) {
       return [];

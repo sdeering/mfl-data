@@ -16,7 +16,7 @@ export function usePositionOVR(player: MFLPlayer | null): UsePositionOVRReturn {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const calculateOVRs = useCallback(() => {
+  const calculateOVRs = useCallback(async () => {
     if (!player) {
       setPositionOVRs(null);
       setError(null);
@@ -34,7 +34,7 @@ export function usePositionOVR(player: MFLPlayer | null): UsePositionOVRReturn {
 
     try {
       const playerForOVR = convertMFLPlayerToOVRFormat(player);
-      const results = calculateAllPositionOVRs(playerForOVR);
+      const results = await calculateAllPositionOVRs(playerForOVR);
       
       if (results.success) {
         setPositionOVRs(results);
