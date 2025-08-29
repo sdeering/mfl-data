@@ -3,6 +3,20 @@
 ## Overview
 The ML API provides position rating predictions for MFL players using trained machine learning models.
 
+## Environment Configuration
+
+### Development (Local)
+Create a `.env.local` file in your project root:
+```bash
+NEXT_PUBLIC_ML_API_URL=http://localhost:8000
+```
+
+### Production
+Create a `.env.production` file in your project root:
+```bash
+NEXT_PUBLIC_ML_API_URL=https://mfldata.com:8000
+```
+
 ## Quick Deployment
 
 ### Option 1: Using the deployment script

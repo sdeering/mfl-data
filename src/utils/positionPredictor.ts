@@ -29,8 +29,8 @@ export interface PredictionRequest {
   overall?: number;
 }
 
-// ML API endpoint
-const ML_API_URL = process.env.NEXT_PUBLIC_ML_API_URL || 'http://localhost:8000';
+// ML API endpoint - use production URL by default
+const ML_API_URL = process.env.NEXT_PUBLIC_ML_API_URL || 'https://mfldata.com:8000';
 
 /**
  * Predict position ratings using the ML API
