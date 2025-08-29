@@ -2,10 +2,7 @@ version: '3.8'
 
 services:
   ml-api:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: ml-api
+    build: .
     ports:
       - "8000:8000"
     environment:
@@ -18,11 +15,3 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s
-    volumes:
-      - ./models:/app/models:ro
-    networks:
-      - ml-api-network
-
-networks:
-  ml-api-network:
-    driver: bridge
