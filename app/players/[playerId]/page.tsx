@@ -18,7 +18,7 @@ async function getPlayerData(playerId: string) {
 }
 
 export default async function PlayerPage({ params }: PlayerPageProps) {
-  const { playerId } = params;
+  const { playerId } = await params;
   await getPlayerData(playerId);
 
   return (

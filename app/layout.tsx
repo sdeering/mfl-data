@@ -1,4 +1,4 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import { Titillium_Web } from 'next/font/google';
 import './globals.css';
 import ThemeProviderWrapper from '../src/components/ThemeProviderWrapper';
@@ -11,6 +11,15 @@ const titilliumWeb = Titillium_Web({
   variable: '--font-titillium-web'
 });
 
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  themeColor: [
+    { media: '(prefers-color-scheme: light)', color: '#ffffff' },
+    { media: '(prefers-color-scheme: dark)', color: '#1f2937' },
+  ],
+};
+
 export const metadata: Metadata = {
   title: 'MFL Data',
   description: 'MFL Player Search Tool',
@@ -19,11 +28,6 @@ export const metadata: Metadata = {
   creator: 'DogeSports',
   publisher: 'DogeSports',
   applicationName: 'MFL Data',
-  viewport: 'width=device-width, initial-scale=1',
-  themeColor: [
-    { media: '(prefers-color-scheme: light)', color: '#ffffff' },
-    { media: '(prefers-color-scheme: dark)', color: '#1f2937' },
-  ],
   manifest: '/manifest.json',
   icons: {
     icon: [
