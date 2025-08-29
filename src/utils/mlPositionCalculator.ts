@@ -120,17 +120,35 @@ export class MLPositionCalculator {
       // Get ML predictions
       const predictionResult = await predictAllPositionRatings(playerAttributes, player.positions, player.overall);
       
-      // Convert to our format
-      for (const rating of predictionResult.positionRatings) {
-        const position = rating.position as MFLPosition;
-        results.results[position] = {
-          success: true,
-          position,
-          ovr: Math.max(0, Math.min(99, rating.rating)),
-          weightedAverage: rating.rating,
-          penalty: rating.difference,
-          familiarity: rating.familiarity
-        };
+      // Convert to our format - handle the new API response format
+      if (predictionResult.predictions) {
+        // New API format: { predictions: { LB: {...}, CB: {...}, ... } }
+        for (const [position, prediction] of Object.entries(predictionResult.predictions)) {
+          const pos = position as MFLPosition;
+          const pred = prediction as any;
+          results.results[pos] = {
+            success: true,
+            position: pos,
+            ovr: Math.max(0, Math.min(99, pred.predicted_rating)),
+            weightedAverage: pred.predicted_rating,
+            penalty: 0, // No penalty in rule-based method
+            familiarity: player.positions.includes(pos) ? 
+              (player.positions[0] === pos ? 'PRIMARY' : 'SECONDARY') : 'UNFAMILIAR'
+          };
+        }
+      } else if (predictionResult.positionRatings) {
+        // Legacy format: { positionRatings: [...] }
+        for (const rating of predictionResult.positionRatings) {
+          const position = rating.position as MFLPosition;
+          results.results[position] = {
+            success: true,
+            position,
+            ovr: Math.max(0, Math.min(99, rating.rating)),
+            weightedAverage: rating.rating,
+            penalty: rating.difference,
+            familiarity: rating.familiarity
+          };
+        }
       }
 
     } catch (error) {

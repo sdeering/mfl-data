@@ -18,9 +18,17 @@ export interface PositionRating {
 }
 
 export interface PredictionResult {
-  positionRatings: PositionRating[];
-  bestPosition: string;
-  top3Positions: string[];
+  predictions?: { [position: string]: { 
+    position: string; 
+    predicted_rating: number; 
+    confidence: number; 
+    method: string; 
+  } };
+  positionRatings?: PositionRating[];
+  bestPosition?: string;
+  top3Positions?: string[];
+  method?: string;
+  timestamp?: string;
 }
 
 export interface PredictionRequest {
