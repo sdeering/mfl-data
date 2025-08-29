@@ -37,8 +37,8 @@ export interface PredictionRequest {
   overall?: number;
 }
 
-// ML API endpoint - use Vercel API route
-const ML_API_URL = process.env.NEXT_PUBLIC_ML_API_URL || '/api/predict';
+// ML API endpoint - use DigitalOcean ML API in production, Vercel API route in development
+const ML_API_URL = process.env.NEXT_PUBLIC_ML_API_URL || (process.env.NODE_ENV === 'production' ? 'http://143.198.172.99:8000' : '/api/predict');
 
 /**
  * Predict position ratings using the ML API
