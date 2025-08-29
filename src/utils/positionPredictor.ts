@@ -50,7 +50,7 @@ export async function predictAllPositionRatings(
       requestBody.overall = overall;
     }
     
-    const response = await fetch(`${ML_API_URL}/predict`, {
+    const response = await fetch(ML_API_URL, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
