@@ -1,8 +1,8 @@
 'use client';
 
 import React, { useState } from 'react';
-import { useScrapedPositionRatings } from '../hooks/useScrapedPositionRatings';
-import type { ScrapedPositionRating } from '../types/positionOvr';
+import { useMLPositionRatings } from '../hooks/useMLPositionRatings';
+import type { MFLPosition } from '../types/positionOvr';
 import { getRatingStyle } from '../utils/ratingUtils';
 
 // Function to get tier color based on rating value (same as PlayerStatsGrid)
@@ -54,6 +54,12 @@ interface PositionRatingsDisplayProps {
       lastName: string;
       overall: number;
       positions: string[];
+      pace: number;
+      shooting: number;
+      passing: number;
+      dribbling: number;
+      defense: number;
+      physical: number;
     };
   };
 }
@@ -61,8 +67,8 @@ interface PositionRatingsDisplayProps {
 export default function PositionRatingsDisplay({ player }: PositionRatingsDisplayProps) {
   const [showAllPositions, setShowAllPositions] = useState(false);
   
-  // Use the scraped position ratings hook
-  const { positionRatings, isLoading, error } = useScrapedPositionRatings(player);
+  // Use the ML position ratings hook
+  const { positionRatings, isLoading, error } = useMLPositionRatings(player);
 
   // Loading state
   if (isLoading) {
@@ -70,7 +76,7 @@ export default function PositionRatingsDisplay({ player }: PositionRatingsDispla
       <div className="text-gray-600 dark:text-gray-400 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
         <div className="flex items-center space-x-2">
           <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
-          <span>Loading position ratings...</span>
+          <span>Calculating position ratings...</span>
         </div>
       </div>
     );
@@ -98,38 +104,28 @@ export default function PositionRatingsDisplay({ player }: PositionRatingsDispla
     );
   }
 
-  // Check if this is a goalkeeper
-  const gkRating = positionRatings.find(r => r.position === 'GK');
-  const isGoalkeeper = gkRating && gkRating.rating > 0 && player.metadata.positions.includes('GK');
+  // Filter positions for goalkeepers
+  const filteredRatings = player.metadata.positions.includes('GK') && player.metadata.positions.length === 1
+    ? positionRatings.filter(rating => rating.position === 'GK')
+    : positionRatings.filter(rating => rating.position !== 'GK');
 
-  // Filter positions for display
-  const positionsToDisplay = isGoalkeeper
-    ? positionRatings.filter(r => r.position === 'GK')
-    : positionRatings.filter(r => r.position !== 'GK' || r.rating > 0);
+  // Sort by rating (highest first)
+  const sortedRatings = [...filteredRatings].sort((a, b) => b.rating - a.rating);
 
-  // Sort positions: primary first, then by rating descending
-  const sortedPositions = positionsToDisplay.sort((a, b) => {
-    if (a.familiarity === 'PRIMARY' && b.familiarity !== 'PRIMARY') return -1;
-    if (b.familiarity === 'PRIMARY' && a.familiarity !== 'PRIMARY') return 1;
-    return b.rating - a.rating;
-  });
-
-  // Show only top positions initially
-  const initialPositions = sortedPositions.slice(0, 6);
-  const remainingPositions = sortedPositions.slice(6);
-  const displayedPositions = showAllPositions ? sortedPositions : initialPositions;
+  // Show only top 6 positions initially, or all if showAllPositions is true
+  const displayedRatings = showAllPositions ? sortedRatings : sortedRatings.slice(0, 6);
 
   return (
     <div className="space-y-4">
       {/* Position Ratings Grid */}
       <div className="grid grid-cols-1 gap-3">
-        {displayedPositions.map((rating, index) => (
+        {displayedRatings.map((rating, index) => (
           <PositionRatingItem key={`${rating.position}-${index}`} rating={rating} player={player} />
         ))}
       </div>
-
+      
       {/* Show More/Less Button */}
-      {(remainingPositions.length > 0 || showAllPositions) && (
+      {sortedRatings.length > 6 && (
         <div className="text-center">
           <button
             onClick={() => setShowAllPositions(!showAllPositions)}
@@ -137,7 +133,7 @@ export default function PositionRatingsDisplay({ player }: PositionRatingsDispla
           >
             {showAllPositions 
               ? `Show Less Positions` 
-              : `Show ${remainingPositions.length} More Positions`
+              : `Show ${sortedRatings.length - 6} More Positions`
             }
           </button>
         </div>
@@ -147,7 +143,15 @@ export default function PositionRatingsDisplay({ player }: PositionRatingsDispla
 }
 
 // Individual position rating item component
-function PositionRatingItem({ rating, player }: { rating: ScrapedPositionRating; player: PositionRatingsDisplayProps['player'] }) {
+function PositionRatingItem({ rating, player }: { 
+  rating: {
+    position: MFLPosition;
+    rating: number;
+    familiarity: 'PRIMARY' | 'SECONDARY' | 'UNFAMILIAR';
+    difference: number;
+  }; 
+  player: PositionRatingsDisplayProps['player'] 
+}) {
   const { position, familiarity, difference, rating: ratingValue } = rating;
   
   const overallRating = player.metadata.overall;
