@@ -22,19 +22,6 @@ export class MLPositionCalculator {
    */
   public async calculatePositionOVR(player: PlayerForOVRCalculation, targetPosition: MFLPosition): Promise<PositionOVRResult> {
     try {
-      // Validate inputs
-      if (!this.allPositions.includes(targetPosition)) {
-        return {
-          success: false,
-          position: targetPosition,
-          ovr: 0,
-          weightedAverage: 0,
-          penalty: 0,
-          familiarity: 'UNFAMILIAR' as const,
-          error: { type: 'INVALID_POSITION' as OVRCalculationError, message: `Invalid position: ${targetPosition}` }
-        };
-      }
-
       // Convert player data to ML format
       const playerAttributes: PlayerAttributes = {
         PAC: player.attributes.PAC,
@@ -48,37 +35,64 @@ export class MLPositionCalculator {
       // Get ML predictions
       const predictionResult = await predictAllPositionRatings(playerAttributes, player.positions, player.overall);
       
-      // Find the specific position rating
-      const positionRating = predictionResult.positionRatings.find(r => r.position === targetPosition);
-      
-      if (!positionRating) {
+      // Handle new API format first
+      if (predictionResult.predictions && predictionResult.predictions[targetPosition]) {
+        const prediction = predictionResult.predictions[targetPosition];
         return {
-          success: false,
+          success: true,
           position: targetPosition,
-          ovr: 0,
-          weightedAverage: 0,
-          penalty: 0,
-          familiarity: 'UNFAMILIAR' as const,
-          error: { type: 'CALCULATION_ERROR' as OVRCalculationError, message: 'Position not found in ML predictions' }
+          ovr: Math.max(0, Math.min(99, prediction.predicted_rating)),
+          weightedAverage: prediction.predicted_rating,
+          penalty: 0, // No penalty in rule-based method
+          familiarity: player.positions.includes(targetPosition) ? 
+            (player.positions[0] === targetPosition ? 'PRIMARY' : 'SECONDARY') : 'UNFAMILIAR'
+        };
+      }
+      
+      // Handle legacy format
+      if (predictionResult.positionRatings) {
+        const positionRating = predictionResult.positionRatings.find(r => r.position === targetPosition);
+        
+        if (!positionRating) {
+          return {
+            success: false,
+            position: targetPosition,
+            ovr: 0,
+            weightedAverage: 0,
+            penalty: 0,
+            familiarity: 'UNFAMILIAR' as const,
+            error: { type: 'CALCULATION_ERROR' as OVRCalculationError, message: 'Position not found in ML predictions' }
+          };
+        }
+
+        // Get overall rating from player data
+        const overallRating = this.getOverallRatingFromPlayer(player);
+        
+        // Calculate penalty (difference from overall)
+        const penalty = positionRating.difference;
+        
+        // Ensure rating is within valid range
+        const finalRating = Math.max(0, Math.min(99, positionRating.rating));
+        
+        return {
+          success: true,
+          position: targetPosition,
+          ovr: finalRating,
+          weightedAverage: positionRating.rating,
+          penalty,
+          familiarity: positionRating.familiarity
         };
       }
 
-      // Get overall rating from player data
-      const overallRating = this.getOverallRatingFromPlayer(player);
-      
-      // Calculate penalty (difference from overall)
-      const penalty = positionRating.difference;
-      
-      // Ensure rating is within valid range
-      const finalRating = Math.max(0, Math.min(99, positionRating.rating));
-      
+      // If neither format is available, return error
       return {
-        success: true,
+        success: false,
         position: targetPosition,
-        ovr: finalRating,
-        weightedAverage: positionRating.rating,
-        penalty,
-        familiarity: positionRating.familiarity
+        ovr: 0,
+        weightedAverage: 0,
+        penalty: 0,
+        familiarity: 'UNFAMILIAR' as const,
+        error: { type: 'CALCULATION_ERROR' as OVRCalculationError, message: 'No prediction data available' }
       };
 
     } catch (error) {
