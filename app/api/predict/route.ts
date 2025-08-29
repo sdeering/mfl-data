@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 
 // Check if we're in development and should use the Python ML API
 const isDevelopment = process.env.NODE_ENV === 'development';
-const PYTHON_ML_API_URL = process.env.NEXT_PUBLIC_ML_API_URL || 'http://localhost:8000';
+const PYTHON_ML_API_URL = 'http://localhost:8000';
 
 // Simple rule-based prediction system for serverless compatibility
 function calculatePositionRating(attributes: any, overall: number | undefined, position: string): number {
@@ -59,9 +59,8 @@ export async function POST(request: NextRequest) {
     const { attributes, positions, overall } = body;
     
     // In development, proxy to Python ML API if available
-    if (isDevelopment && PYTHON_ML_API_URL !== '/api/predict') {
+    if (isDevelopment) {
       try {
-        console.log('Proxying to Python ML API:', PYTHON_ML_API_URL);
         const response = await fetch(`${PYTHON_ML_API_URL}/predict`, {
           method: 'POST',
           headers: {
@@ -72,13 +71,12 @@ export async function POST(request: NextRequest) {
         
         if (response.ok) {
           const result = await response.json();
-          console.log('Python ML API response received');
           return NextResponse.json(result);
         } else {
-          console.log('Python ML API failed, falling back to rule-based');
+          // console.log('Python ML API failed, falling back to rule-based'); // Removed debug logging
         }
       } catch (error) {
-        console.log('Python ML API proxy failed, falling back to rule-based:', error);
+        // console.log('Python ML API proxy failed, falling back to rule-based:', error); // Removed debug logging
       }
     }
     
@@ -102,7 +100,7 @@ export async function POST(request: NextRequest) {
           method: 'rule-based'
         };
       } catch (error) {
-        console.error(`Prediction failed for ${position}:`, error);
+        // console.error(`Prediction failed for ${position}:`, error); // Removed debug logging
         predictions[position] = { 
           position,
           error: 'Prediction failed',
@@ -118,7 +116,7 @@ export async function POST(request: NextRequest) {
     });
     
   } catch (error) {
-    console.error('ML API error:', error);
+    // console.error('ML API error:', error); // Removed debug logging
     return NextResponse.json(
       { error: 'Internal server error', details: error instanceof Error ? error.message : 'Unknown error' },
       { status: 500 }
@@ -135,7 +133,7 @@ export async function GET() {
       timestamp: new Date().toISOString()
     });
   } catch (error) {
-    console.error('Health check error:', error);
+    // console.error('Health check error:', error); // Removed debug logging
     return NextResponse.json(
       { status: 'unhealthy', error: error instanceof Error ? error.message : 'Unknown error' },
       { status: 500 }
