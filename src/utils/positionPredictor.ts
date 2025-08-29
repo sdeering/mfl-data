@@ -40,6 +40,10 @@ export interface PredictionRequest {
 // ML API endpoint - use Vercel API route
 const ML_API_URL = process.env.NEXT_PUBLIC_ML_API_URL || '/api/predict';
 
+// Debug logging
+console.log('ML API URL:', ML_API_URL);
+console.log('Environment variable:', process.env.NEXT_PUBLIC_ML_API_URL);
+
 /**
  * Predict position ratings using the ML API
  */

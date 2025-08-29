@@ -1,5 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+// Check if we're in development and should use the Python ML API
+const isDevelopment = process.env.NODE_ENV === 'development';
+const PYTHON_ML_API_URL = process.env.NEXT_PUBLIC_ML_API_URL || 'http://localhost:8000';
+
 // Simple rule-based prediction system for serverless compatibility
 function calculatePositionRating(attributes: any, overall: number | undefined, position: string): number {
   const { PAC, SHO, PAS, DRI, DEF, PHY } = attributes;
@@ -50,9 +54,33 @@ function calculatePositionRating(attributes: any, overall: number | undefined, p
 
 export async function POST(request: NextRequest) {
   try {
-    // Parse request body
+    // Parse request body once
     const body = await request.json();
     const { attributes, positions, overall } = body;
+    
+    // In development, proxy to Python ML API if available
+    if (isDevelopment && PYTHON_ML_API_URL !== '/api/predict') {
+      try {
+        console.log('Proxying to Python ML API:', PYTHON_ML_API_URL);
+        const response = await fetch(`${PYTHON_ML_API_URL}/predict`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(body)
+        });
+        
+        if (response.ok) {
+          const result = await response.json();
+          console.log('Python ML API response received');
+          return NextResponse.json(result);
+        } else {
+          console.log('Python ML API failed, falling back to rule-based');
+        }
+      } catch (error) {
+        console.log('Python ML API proxy failed, falling back to rule-based:', error);
+      }
+    }
     
     if (!attributes || !positions) {
       return NextResponse.json(
