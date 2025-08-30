@@ -11,12 +11,12 @@ interface PlayerProgressionGraphProps {
 
 const STAT_COLORS = {
   overall: '#3B82F6', // blue
-  pace: '#EF4444', // red
-  dribbling: '#10B981', // green
-  passing: '#F59E0B', // yellow
-  shooting: '#8B5CF6', // purple
-  defense: '#06B6D4', // cyan
-  physical: '#F97316' // orange
+  pace: 'rgb(255, 163, 50)', // orange
+  dribbling: 'rgb(34, 163, 140)', // teal
+  passing: 'rgb(30, 255, 0)', // bright green
+  shooting: 'rgb(255, 0, 61)', // pink/red
+  defense: 'rgb(50, 99, 255)', // blue
+  physical: 'rgb(44, 63, 129)' // dark blue
 };
 
 const STAT_LABELS = {
