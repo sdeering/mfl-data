@@ -107,3 +107,5 @@ The generated Excel files contain the following columns:
 - If the scripts fail, check your internet connection and API availability
 - Progress files are saved every 100 players to prevent data loss
 - The scripts handle errors gracefully and continue processing other players
+
+

@@ -63,7 +63,7 @@ export async function POST(request: NextRequest) {
     const targetApiUrl = isDevelopment ? PYTHON_ML_API_URL : DIGITALOCEAN_ML_API_URL;
     
     try {
-      const response = await fetch(`${targetApiUrl}/predict`, {
+                   const response = await fetch(`${targetApiUrl}/position-ratings`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

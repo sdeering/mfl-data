@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { calculateAllPositionOVRs } from '../utils/positionOvrCalculator';
-import { convertMFLPlayerToOVRFormat, isValidForOVRCalculation } from '../utils/playerDataConverter';
+import { convertMFLPlayerToOVRFormat, validateMFLPlayerData } from '../utils/playerDataConverter';
 import type { MFLPlayer } from '../types/mflApi';
 import type { AllPositionOVRResults } from '../types/positionOvr';
 
@@ -23,7 +23,7 @@ export function usePositionOVR(player: MFLPlayer | null): UsePositionOVRReturn {
       return;
     }
 
-    if (!isValidForOVRCalculation(player)) {
+    if (!validateMFLPlayerData(player)) {
       setPositionOVRs(null);
       setError('Player data is not valid for OVR calculation');
       return;
