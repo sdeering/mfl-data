@@ -120,9 +120,7 @@ export default function PlayerRecentMatches({ playerId, playerName }: PlayerRece
 
   // Initialize with "All" selected on component mount
   useEffect(() => {
-    if (enabledMatchTypes.size === 0) {
-      setEnabledMatchTypes(new Set(['League', 'Cup']));
-    }
+    setEnabledMatchTypes(new Set(['League', 'Cup']));
   }, []);
 
 
@@ -200,7 +198,7 @@ export default function PlayerRecentMatches({ playerId, playerName }: PlayerRece
           <button
             onClick={() => toggleMatchType('League')}
             className={`px-3 py-1 text-sm font-bold rounded-full border transition-colors ${
-              enabledMatchTypes.has('League')
+              enabledMatchTypes.has('League') && enabledMatchTypes.size === 1
                 ? 'text-white border-transparent bg-green-500'
                 : 'text-gray-600 dark:text-gray-400 border-gray-300 dark:border-gray-600'
             }`}
@@ -210,7 +208,7 @@ export default function PlayerRecentMatches({ playerId, playerName }: PlayerRece
           <button
             onClick={() => toggleMatchType('Cup')}
             className={`px-3 py-1 text-sm font-bold rounded-full border transition-colors ${
-              enabledMatchTypes.has('Cup')
+              enabledMatchTypes.has('Cup') && enabledMatchTypes.size === 1
                 ? 'text-white border-transparent bg-purple-500'
                 : 'text-gray-600 dark:text-gray-400 border-gray-300 dark:border-gray-600'
             }`}
