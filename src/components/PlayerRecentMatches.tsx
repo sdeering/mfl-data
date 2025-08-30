@@ -115,15 +115,14 @@ export default function PlayerRecentMatches({ playerId, playerName }: PlayerRece
         console.log('Setting to only:', matchType);
         setEnabledMatchTypes(new Set([matchType]));
       } else {
-        // Normal toggle behavior for individual buttons
-        const newEnabledTypes = new Set(enabledMatchTypes);
-        if (newEnabledTypes.has(matchType)) {
-          newEnabledTypes.delete(matchType);
+        // When switching between individual toggles, replace the current selection
+        if (enabledMatchTypes.has(matchType)) {
+          // If clicking the same toggle, turn it off
+          setEnabledMatchTypes(new Set([]));
         } else {
-          newEnabledTypes.add(matchType);
+          // If clicking a different toggle, switch to only that one
+          setEnabledMatchTypes(new Set([matchType]));
         }
-        console.log('New state:', Array.from(newEnabledTypes));
-        setEnabledMatchTypes(newEnabledTypes);
       }
     }
   };
