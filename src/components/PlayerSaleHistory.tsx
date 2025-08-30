@@ -158,7 +158,7 @@ export default function PlayerSaleHistory({ playerId, playerName }: PlayerSaleHi
                   {(() => {
                     const historicalStats = calculatePlayerStatsAtSale(sale.purchaseDateTime, progressionData);
                     if (historicalStats) {
-                      return `Overall: ${historicalStats.overall} (Age: ${historicalStats.age})`;
+                      return `Overall: ${historicalStats.overall} (Age: ${Math.round(historicalStats.age)})`;
                     } else {
                       return `Overall: ${sale.player.metadata.overall}`;
                     }
