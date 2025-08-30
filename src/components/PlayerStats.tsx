@@ -1,6 +1,6 @@
 import React from 'react';
 import { formatHeight } from '@/src/utils/heightConverter';
-import { getCountryFlag } from '@/src/utils/countryFlags';
+import { getCountryFlag, formatCountryName } from '@/src/utils/countryFlags';
 import type { MFLPlayer } from '@/src/types/mflApi';
 
 // Function to get tier color based on rating value (same as PlayerStatsGrid)
@@ -102,7 +102,7 @@ export default function PlayerStats({ player }: PlayerStatsProps) {
                   {stat.isCountry ? (
                     <span className="text-lg font-bold px-3 py-2 rounded-lg shadow-sm text-gray-900 dark:text-white bg-gradient-to-r from-white to-gray-100 dark:from-gray-400 dark:to-gray-500">
                       <span className="text-xl mr-2">{getCountryFlag(stat.value as string)}</span>
-                      {stat.value}
+                      {formatCountryName(stat.value as string)}
                     </span>
                   ) : stat.isAgency ? (
                     <a 

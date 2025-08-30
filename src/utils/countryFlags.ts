@@ -214,17 +214,31 @@ export const getCountryFlag = (country: string): string => {
     'NAURU': '🇳🇷',
     'TUVALU': '🇹🇻',
     
-    // Fallback
-    'UNKNOWN': '🏳️',
-  };
+      // Fallback
+  'UNKNOWN': '🏳️',
+};
 
-  // First try the exact match
-  const exactMatch = countryToFlag[country.toUpperCase()];
-  if (exactMatch) {
-    return exactMatch;
-  }
+// First try the exact match
+const exactMatch = countryToFlag[country.toUpperCase()];
+if (exactMatch) {
+  return exactMatch;
+}
 
-  // If no exact match, try with underscores replaced by spaces
-  const normalizedCountry = country.toUpperCase().replace(/_/g, ' ');
-  return countryToFlag[normalizedCountry] || '🏳️';
+// If no exact match, try with underscores replaced by spaces
+const normalizedCountry = country.toUpperCase().replace(/_/g, ' ');
+return countryToFlag[normalizedCountry] || '🏳️';
+};
+
+/**
+ * Format country name for display by removing underscores and capitalizing properly
+ */
+export const formatCountryName = (country: string): string => {
+  if (!country) return '';
+  
+  // Replace underscores with spaces and capitalize each word
+  return country
+    .replace(/_/g, ' ')
+    .split(' ')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(' ');
 };

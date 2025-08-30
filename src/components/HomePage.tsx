@@ -35,7 +35,7 @@ export const HomePage: React.FC = () => {
     <div className="min-h-screen">
 
       {/* Main Content - Centered Search */}
-      <main className="flex items-center justify-center min-h-[calc(100vh-120px)] px-4 lg:px-6 bg-white dark:bg-[#121213]">
+      <main className="flex items-center justify-center min-h-[calc(100vh-120px)] bg-white dark:bg-[#121213]">
         <div className="w-full max-w-md">
           <form onSubmit={handleSearch} className="space-y-6">
             <div className="text-center mb-8">
@@ -49,7 +49,7 @@ export const HomePage: React.FC = () => {
                 type="text"
                 value={searchQuery}
                 onChange={handleInputChange}
-                placeholder="Enter player ID..."
+                placeholder="Search for a player by id..."
                 className="w-full px-4 py-3 text-lg bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none text-gray-900 dark:text-white"
               />
             </div>

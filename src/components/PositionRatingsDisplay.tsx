@@ -60,6 +60,7 @@ interface PositionRatingsDisplayProps {
       dribbling: number;
       defense: number;
       physical: number;
+      goalkeeping?: number;
     };
   };
 }
@@ -80,7 +81,7 @@ export default function PositionRatingsDisplay({ player }: PositionRatingsDispla
         DRI: player.metadata.dribbling,
         DEF: player.metadata.defense,
         PHY: player.metadata.physical,
-        GK: 0 // Default to 0 for non-goalkeepers
+        GK: player.metadata.goalkeeping || 0 // Use goalkeeping stat if available, default to 0
       },
       positions: player.metadata.positions as MFLPosition[],
       overall: player.metadata.overall

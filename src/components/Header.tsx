@@ -19,8 +19,8 @@ export const Header: React.FC = () => {
 
   return (
     <>
-      <header className="p-4 lg:p-6 bg-white dark:bg-[#121213]">
-        <div className="flex items-center justify-between lg:justify-start">
+      <header className="px-4 py-4 lg:pl-0 lg:pr-[10px] lg:py-6 bg-white dark:bg-[#121213]">
+        <div className="flex items-center justify-between">
           <div className="flex items-center space-x-4 lg:space-x-6">
             <button 
               onClick={() => router.push('/')}
@@ -41,6 +41,21 @@ export const Header: React.FC = () => {
             )}
           </div>
           
+          {/* Login Button - Desktop */}
+          <div className="hidden lg:flex items-center space-x-3">
+            <button 
+              onClick={handleLoginClick}
+              className="px-4 py-2 text-white rounded-lg transition-all duration-200 cursor-pointer flex items-center space-x-2 hover:bg-gray-800 dark:hover:bg-gray-700 hover:scale-105 hover:shadow-lg"
+              style={{ background: '#2a2a2a' }}
+            >
+              <svg className="w-4 h-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" data-slot="icon">
+                <path d="M2.273 5.625A4.483 4.483 0 0 1 5.25 4.5h13.5c1.141 0 2.183.425 2.977 1.125A3 3 0 0 0 18.75 3H5.25a3 3 0 0 0-2.977 2.625ZM2.273 8.625A4.483 4.483 0 0 1 5.25 7.5h13.5c1.141 0 2.183.425 2.977 1.125A3 3 0 0 0 18.75 6H5.25a3 3 0 0 0-2.977 2.625ZM5.25 9a3 3 0 0 0-3 3v6a3 3 0 0 0 3 3h13.5a3 3 0 0 0 3-3v-6a3 3 0 0 0-3-3H15a.75.75 0 0 0-.75.75 2.25 2.25 0 0 1-4.5 0A.75.75 0 0 0 9 9H5.25Z"></path>
+              </svg>
+              <span>Login with wallet</span>
+            </button>
+          </div>
+          
+          {/* Login Button - Mobile */}
           <div className="lg:hidden">
             <button 
               onClick={handleLoginClick}
@@ -61,19 +76,6 @@ export const Header: React.FC = () => {
             <SearchBar />
           </div>
         )}
-        
-        <div className="hidden lg:flex items-center space-x-3 absolute top-4 lg:top-6 right-4 lg:right-6">
-          <button 
-            onClick={handleLoginClick}
-            className="px-4 py-2 text-white rounded-lg transition-all duration-200 cursor-pointer flex items-center space-x-2 hover:bg-gray-800 dark:hover:bg-gray-700 hover:scale-105 hover:shadow-lg"
-            style={{ background: '#2a2a2a' }}
-          >
-            <svg className="w-4 h-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" data-slot="icon">
-              <path d="M2.273 5.625A4.483 4.483 0 0 1 5.25 4.5h13.5c1.141 0 2.183.425 2.977 1.125A3 3 0 0 0 18.75 3H5.25a3 3 0 0 0-2.977 2.625ZM2.273 8.625A4.483 4.483 0 0 1 5.25 7.5h13.5c1.141 0 2.183.425 2.977 1.125A3 3 0 0 0 18.75 6H5.25a3 3 0 0 0-2.977 2.625ZM5.25 9a3 3 0 0 0-3 3v6a3 3 0 0 0 3 3h13.5a3 3 0 0 0 3-3v-6a3 3 0 0 0-3-3H15a.75.75 0 0 0-.75.75 2.25 2.25 0 0 1-4.5 0A.75.75 0 0 0 9 9H5.25Z"></path>
-            </svg>
-            <span>Login with wallet</span>
-          </button>
-        </div>
       </header>
 
       {/* Login Popup */}
