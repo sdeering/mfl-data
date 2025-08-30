@@ -105,11 +105,14 @@ export default function PlayerRecentMatches({ playerId, playerName }: PlayerRece
   };
 
   const toggleMatchType = (matchType: string) => {
+    console.log('Toggle clicked:', matchType, 'Current state:', Array.from(enabledMatchTypes));
+    
     if (matchType === 'All') {
       setEnabledMatchTypes(new Set(['League', 'Cup']));
     } else {
       // If "All" is currently active (both selected), clicking individual toggle should select only that one
       if (enabledMatchTypes.size === 2) {
+        console.log('Setting to only:', matchType);
         setEnabledMatchTypes(new Set([matchType]));
       } else {
         // Normal toggle behavior for individual buttons
@@ -119,6 +122,7 @@ export default function PlayerRecentMatches({ playerId, playerName }: PlayerRece
         } else {
           newEnabledTypes.add(matchType);
         }
+        console.log('New state:', Array.from(newEnabledTypes));
         setEnabledMatchTypes(newEnabledTypes);
       }
     }
