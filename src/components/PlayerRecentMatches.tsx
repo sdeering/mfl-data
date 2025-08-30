@@ -105,13 +105,17 @@ export default function PlayerRecentMatches({ playerId, playerName }: PlayerRece
   };
 
   const toggleMatchType = (matchType: string) => {
-    const newEnabledTypes = new Set(enabledMatchTypes);
-    if (newEnabledTypes.has(matchType)) {
-      newEnabledTypes.delete(matchType);
+    if (matchType === 'All') {
+      setEnabledMatchTypes(new Set(['League', 'Cup']));
     } else {
-      newEnabledTypes.add(matchType);
+      const newEnabledTypes = new Set(enabledMatchTypes);
+      if (newEnabledTypes.has(matchType)) {
+        newEnabledTypes.delete(matchType);
+      } else {
+        newEnabledTypes.add(matchType);
+      }
+      setEnabledMatchTypes(newEnabledTypes);
     }
-    setEnabledMatchTypes(newEnabledTypes);
   };
 
 
@@ -176,6 +180,16 @@ export default function PlayerRecentMatches({ playerId, playerName }: PlayerRece
         
         {/* Match Type Toggles */}
         <div className="mt-3 flex flex-wrap gap-1">
+          <button
+            onClick={() => toggleMatchType('All')}
+            className={`px-3 py-1 text-sm font-bold rounded-full border transition-colors ${
+              enabledMatchTypes.size === 2
+                ? 'text-white border-transparent bg-blue-500'
+                : 'text-gray-600 dark:text-gray-400 border-gray-300 dark:border-gray-600'
+            }`}
+          >
+            All
+          </button>
           <button
             onClick={() => toggleMatchType('League')}
             className={`px-3 py-1 text-sm font-bold rounded-full border transition-colors ${
