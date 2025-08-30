@@ -72,7 +72,7 @@ export default function RootLayout({
       <head>
         <link rel="author" href="https://www.twitter.com/dogesports69" />
       </head>
-      <body className={`${titilliumWeb.className} min-h-screen transition-colors duration-300 bg-[#f7f7f7]`}>
+      <body className={`${titilliumWeb.className} min-h-screen transition-colors duration-300 bg-[#fafafa]`}>
         <ThemeProviderWrapper>
           <LoadingProvider>
             <div className="max-w-[1200px] mx-auto">
