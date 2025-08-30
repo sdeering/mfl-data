@@ -14,7 +14,7 @@ export default function PlayerRecentMatches({ playerId, playerName }: PlayerRece
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showAllMatches, setShowAllMatches] = useState(false);
-  const [enabledMatchTypes, setEnabledMatchTypes] = useState<Set<string>>(new Set(['League', 'Cup']));
+  const [enabledMatchTypes, setEnabledMatchTypes] = useState<Set<string>>(new Set([]));
 
   useEffect(() => {
     const loadMatches = async () => {
@@ -117,6 +117,13 @@ export default function PlayerRecentMatches({ playerId, playerName }: PlayerRece
       setEnabledMatchTypes(newEnabledTypes);
     }
   };
+
+  // Initialize with "All" selected on component mount
+  useEffect(() => {
+    if (enabledMatchTypes.size === 0) {
+      setEnabledMatchTypes(new Set(['League', 'Cup']));
+    }
+  }, []);
 
 
 
