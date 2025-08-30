@@ -108,9 +108,38 @@ export class RuleBasedPositionCalculator {
       // Get player's primary position (first in array)
       const primaryPosition = player.positions[0];
       
-      // Get familiarity level from matrix
-      const familiarityLevel = POSITION_FAMILIARITY_MATRIX[primaryPosition][targetPosition];
-      const penalty = FAMILIARITY_PENALTIES[familiarityLevel];
+      // Determine penalty based on position familiarity
+      let penalty: number;
+      let familiarity: string;
+      
+      if (targetPosition === primaryPosition) {
+        // Primary position - no penalty
+        penalty = 0;
+        familiarity = 'PRIMARY';
+      } else if (player.positions.includes(targetPosition)) {
+        // Secondary/Third position - -1 penalty
+        penalty = -1;
+        familiarity = 'SECONDARY';
+      } else {
+        // Position not in player's positions - use familiarity matrix
+        const familiarityLevel = POSITION_FAMILIARITY_MATRIX[primaryPosition][targetPosition];
+        penalty = FAMILIARITY_PENALTIES[familiarityLevel];
+        
+        // Convert familiarity level to string
+        switch (familiarityLevel) {
+          case 2:
+            familiarity = 'FAIRLY_FAMILIAR';
+            break;
+          case 1:
+            familiarity = 'SOMEWHAT_FAMILIAR';
+            break;
+          case 0:
+            familiarity = 'UNFAMILIAR';
+            break;
+          default:
+            familiarity = 'UNKNOWN';
+        }
+      }
 
       // Get position weights
       const weights = POSITION_ATTRIBUTE_WEIGHTS[targetPosition];
@@ -130,18 +159,6 @@ export class RuleBasedPositionCalculator {
 
       // Round to nearest whole number and clamp to 0-99 range
       const ovr = Math.max(0, Math.min(99, Math.round(finalRating)));
-
-      // Determine familiarity string
-      let familiarity: 'PRIMARY' | 'SECONDARY' | 'FAMILIAR' | 'UNFAMILIAR';
-      if (familiarityLevel === 3) {
-        familiarity = 'PRIMARY';
-      } else if (player.positions.includes(targetPosition)) {
-        familiarity = 'SECONDARY';
-      } else if (familiarityLevel === 2) {
-        familiarity = 'FAMILIAR';
-      } else {
-        familiarity = 'UNFAMILIAR';
-      }
 
       return {
         success: true,
