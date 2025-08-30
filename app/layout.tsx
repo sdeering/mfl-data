@@ -77,7 +77,7 @@ export default function RootLayout({
           <LoadingProvider>
             <div className="max-w-[1200px] mx-auto">
               <Header />
-              <div className="p-[30px]">
+              <div className="p-[30px] bg-white dark:bg-[#121213]">
                 {children}
               </div>
               <Footer />
