@@ -136,10 +136,10 @@ export default function PlayerProgressionGraph({ playerId, playerName, playerPos
     );
   }
 
-  // Calculate chart dimensions and scales - responsive for mobile
-  const chartWidth = typeof window !== 'undefined' && window.innerWidth < 768 ? 350 : 1200;
-  const chartHeight = typeof window !== 'undefined' && window.innerWidth < 768 ? 300 : 500;
-  const padding = typeof window !== 'undefined' && window.innerWidth < 768 ? 40 : 60;
+  // Calculate chart dimensions and scales - fixed for compare page
+  const chartWidth = 1200;
+  const chartHeight = 500;
+  const padding = 60;
 
   // Get all available stats and their ranges
   const allStatTypes = Object.keys(STAT_COLORS) as StatType[];
@@ -291,10 +291,10 @@ export default function PlayerProgressionGraph({ playerId, playerName, playerPos
       
       <div className="relative">
         <svg
-          width={chartWidth}
-          height={chartHeight}
+          width="100%"
+          height="auto"
           className="w-full max-w-full"
-          viewBox={`0 0 ${chartWidth} ${chartHeight}`}
+          viewBox="0 0 1200 500"
         >
           {/* Grid lines */}
           <defs>

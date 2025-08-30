@@ -74,7 +74,7 @@ export const PlayerStatsGrid: React.FC<PlayerStatsGridProps> = ({ player }) => {
       {stats.map((stat) => {
         const tierColors = getTierColor(stat.value);
         return (
-          <div key={`value-${stat.label}`} className="flex flex-col items-center justify-start gap-1.5 px-1 pt-2">
+          <div key={`value-${stat.label}`} className="flex flex-col items-center justify-start gap-0.5 px-1 pt-1">
             <div className="relative">
               <div className={`flex items-center justify-center rounded-lg shadow-sm px-3 py-2 text-center font-bold ${tierColors.text} ${tierColors.bg} ${tierColors.border}`} style={{ fontSize: '22px' }}>
                 {stat.value}

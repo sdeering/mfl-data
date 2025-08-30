@@ -11,6 +11,21 @@ export const Header: React.FC = () => {
   const pathname = usePathname();
   const { isLoading } = useLoading();
 
+  // Extract player ID from current path
+  const getCurrentPlayerId = () => {
+    const match = pathname.match(/\/players\/(\d+)/);
+    return match ? match[1] : null;
+  };
+
+  const handleCompareClick = () => {
+    const playerId = getCurrentPlayerId();
+    if (playerId) {
+      router.push(`/compare?playerId=${playerId}`);
+    } else {
+      router.push('/compare');
+    }
+  };
+
   const handleLoginClick = () => {
     setShowLoginPopup(true);
   };
@@ -35,10 +50,18 @@ export const Header: React.FC = () => {
               <h1 className="text-xl font-bold text-gray-900 dark:text-white">MFL Data</h1>
             </button>
             
-            {/* Search Bar - Only show on player pages */}
+
+            
+            {/* Search Bar and Compare Link - Only show on player pages */}
             {pathname.includes('/players/') && (
-              <div className="hidden lg:block">
+              <div className="hidden lg:flex items-center space-x-4">
                 <SearchBar isLoading={isLoading} />
+                <button 
+                  onClick={handleCompareClick}
+                  className="px-3 py-2 text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors cursor-pointer"
+                >
+                  Compare
+                </button>
               </div>
             )}
           </div>
@@ -72,10 +95,20 @@ export const Header: React.FC = () => {
           </div>
         </div>
         
-        {/* Search Bar - Mobile only */}
+        {/* Mobile Search and Compare - Only show on player pages */}
         {pathname.includes('/players/') && (
           <div className="mt-4 lg:hidden">
-            <SearchBar isLoading={isLoading} />
+            <div className="flex items-center space-x-4 mb-4">
+              <div className="flex-1">
+                <SearchBar isLoading={isLoading} />
+              </div>
+              <button 
+                onClick={handleCompareClick}
+                className="px-3 py-2 text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors cursor-pointer text-sm"
+              >
+                Compare
+              </button>
+            </div>
           </div>
         )}
       </header>
