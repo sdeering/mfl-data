@@ -171,14 +171,13 @@ export default function PlayerProgressionGraph({ playerId, playerName }: PlayerP
      const hasProgression = uniqueValues.size > 1;
      
      if (!hasProgression) {
-       // If no progression, just draw a straight line from first to last point
-       const firstPoint = validData[0];
-       const lastPoint = validData[validData.length - 1];
-       
-       const x1 = getChartX(firstPoint.date);
-       const y1 = getChartY(firstPoint.value!, stat);
-       const x2 = getChartX(lastPoint.date);
-       const y2 = getChartY(lastPoint.value!, stat);
+       // If no progression, draw a straight line from the very first date to the very last date
+       // Use the constant value for the Y coordinate
+       const constantValue = validData[0].value!;
+       const x1 = getChartX(minDate);
+       const y1 = getChartY(constantValue, stat);
+       const x2 = getChartX(maxDate);
+       const y2 = getChartY(constantValue, stat);
        
        return `M ${x1},${y1} L ${x2},${y2}`;
      }
