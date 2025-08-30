@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useRuleBasedPositionRatings } from '../hooks/useRuleBasedPositionRatings';
 import { convertMFLPlayerToOVRFormat } from '../utils/playerDataConverter';
 import type { MFLPosition } from '../types/positionOvr';
@@ -69,10 +69,13 @@ export default function PositionRatingsDisplay({ player }: PositionRatingsDispla
   const [showAllPositions, setShowAllPositions] = useState(false);
   
   // Convert player data to the format expected by the rule-based calculator
-  const playerForOVR = convertMFLPlayerToOVRFormat({
-    id: player.id,
-    metadata: player.metadata
-  });
+  // Use useMemo to prevent infinite re-renders
+  const playerForOVR = useMemo(() => {
+    return convertMFLPlayerToOVRFormat({
+      id: player.id,
+      metadata: player.metadata
+    });
+  }, [player.id, player.metadata]);
   
   // Use the rule-based position ratings hook
   const { positionRatings, isLoading, error } = useRuleBasedPositionRatings(playerForOVR);
