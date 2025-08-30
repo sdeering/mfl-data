@@ -37,13 +37,4 @@ body {
   font-family: var(--font-titillium-web), Arial, Helvetica, sans-serif;
 }
 
-/* Ensure theme classes are applied to body */
-.light body {
-  background: #ffffff;
-  color: #171717;
-}
-
-.dark body {
-  background: #121213;
-  color: #ededed;
-}
+/* Theme classes removed to allow Tailwind classes to work */
