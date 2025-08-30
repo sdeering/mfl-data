@@ -34,18 +34,17 @@ export const calculatePlayerStatsAtSale = (
   let lastValidEntry: ProgressionDataPoint | null = null;
 
   for (const entry of sortedData) {
-    if (entry.date <= saleDate) {
+    if (entry.date.getTime() <= saleDate) {
       lastValidEntry = entry;
-      // Merge stats from this entry
-      if (entry.values.overall !== undefined) statsAtSale.overall = entry.values.overall;
-      if (entry.values.age !== undefined) statsAtSale.age = entry.values.age;
-      if (entry.values.pace !== undefined) statsAtSale.pace = entry.values.pace;
-      if (entry.values.dribbling !== undefined) statsAtSale.dribbling = entry.values.dribbling;
-      if (entry.values.passing !== undefined) statsAtSale.passing = entry.values.passing;
-      if (entry.values.shooting !== undefined) statsAtSale.shooting = entry.values.shooting;
-      if (entry.values.defense !== undefined) statsAtSale.defense = entry.values.defense;
-      if (entry.values.physical !== undefined) statsAtSale.physical = entry.values.physical;
-      if (entry.values.goalkeeping !== undefined) statsAtSale.goalkeeping = entry.values.goalkeeping;
+      // Merge stats from this entry (flat structure)
+      if (entry.overall !== undefined) statsAtSale.overall = entry.overall;
+      if (entry.age !== undefined) statsAtSale.age = entry.age;
+      if (entry.pace !== undefined) statsAtSale.pace = entry.pace;
+      if (entry.dribbling !== undefined) statsAtSale.dribbling = entry.dribbling;
+      if (entry.passing !== undefined) statsAtSale.passing = entry.passing;
+      if (entry.shooting !== undefined) statsAtSale.shooting = entry.shooting;
+      if (entry.defense !== undefined) statsAtSale.defense = entry.defense;
+      if (entry.physical !== undefined) statsAtSale.physical = entry.physical;
     } else {
       break; // We've passed the sale date
     }
@@ -56,15 +55,15 @@ export const calculatePlayerStatsAtSale = (
     const firstEntry = sortedData[0];
     if (firstEntry) {
       return {
-        overall: firstEntry.values.overall ?? 0,
-        age: firstEntry.values.age ?? 0,
-        pace: firstEntry.values.pace ?? 0,
-        dribbling: firstEntry.values.dribbling ?? 0,
-        passing: firstEntry.values.passing ?? 0,
-        shooting: firstEntry.values.shooting ?? 0,
-        defense: firstEntry.values.defense ?? 0,
-        physical: firstEntry.values.physical ?? 0,
-        goalkeeping: firstEntry.values.goalkeeping ?? 0,
+        overall: firstEntry.overall ?? 0,
+        age: firstEntry.age ?? 0,
+        pace: firstEntry.pace ?? 0,
+        dribbling: firstEntry.dribbling ?? 0,
+        passing: firstEntry.passing ?? 0,
+        shooting: firstEntry.shooting ?? 0,
+        defense: firstEntry.defense ?? 0,
+        physical: firstEntry.physical ?? 0,
+        goalkeeping: 0, // Not available in ProgressionDataPoint
       };
     }
     return null;
@@ -73,32 +72,33 @@ export const calculatePlayerStatsAtSale = (
   // Fill in missing stats with the first available values from progression data
   const firstEntry = sortedData[0];
   if (firstEntry) {
-    if (statsAtSale.overall === undefined && firstEntry.values.overall !== undefined) {
-      statsAtSale.overall = firstEntry.values.overall;
+    if (statsAtSale.overall === undefined && firstEntry.overall !== undefined) {
+      statsAtSale.overall = firstEntry.overall;
     }
-    if (statsAtSale.age === undefined && firstEntry.values.age !== undefined) {
-      statsAtSale.age = firstEntry.values.age;
+    if (statsAtSale.age === undefined && firstEntry.age !== undefined) {
+      statsAtSale.age = firstEntry.age;
     }
-    if (statsAtSale.pace === undefined && firstEntry.values.pace !== undefined) {
-      statsAtSale.pace = firstEntry.values.pace;
+    if (statsAtSale.pace === undefined && firstEntry.pace !== undefined) {
+      statsAtSale.pace = firstEntry.pace;
     }
-    if (statsAtSale.dribbling === undefined && firstEntry.values.dribbling !== undefined) {
-      statsAtSale.dribbling = firstEntry.values.dribbling;
+    if (statsAtSale.dribbling === undefined && firstEntry.dribbling !== undefined) {
+      statsAtSale.dribbling = firstEntry.dribbling;
     }
-    if (statsAtSale.passing === undefined && firstEntry.values.passing !== undefined) {
-      statsAtSale.passing = firstEntry.values.passing;
+    if (statsAtSale.passing === undefined && firstEntry.passing !== undefined) {
+      statsAtSale.passing = firstEntry.passing;
     }
-    if (statsAtSale.shooting === undefined && firstEntry.values.shooting !== undefined) {
-      statsAtSale.shooting = firstEntry.values.shooting;
+    if (statsAtSale.shooting === undefined && firstEntry.shooting !== undefined) {
+      statsAtSale.shooting = firstEntry.shooting;
     }
-    if (statsAtSale.defense === undefined && firstEntry.values.defense !== undefined) {
-      statsAtSale.defense = firstEntry.values.defense;
+    if (statsAtSale.defense === undefined && firstEntry.defense !== undefined) {
+      statsAtSale.defense = firstEntry.defense;
     }
-    if (statsAtSale.physical === undefined && firstEntry.values.physical !== undefined) {
-      statsAtSale.physical = firstEntry.values.physical;
+    if (statsAtSale.physical === undefined && firstEntry.physical !== undefined) {
+      statsAtSale.physical = firstEntry.physical;
     }
-    if (statsAtSale.goalkeeping === undefined && firstEntry.values.goalkeeping !== undefined) {
-      statsAtSale.goalkeeping = firstEntry.values.goalkeeping;
+    // goalkeeping is not available in ProgressionDataPoint, so we'll use 0
+    if (statsAtSale.goalkeeping === undefined) {
+      statsAtSale.goalkeeping = 0;
     }
   }
 
