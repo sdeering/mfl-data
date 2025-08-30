@@ -8,6 +8,7 @@ import PlayerImage from './PlayerImage';
 import PlayerStats from './PlayerStats';
 import PlayerStatsGrid from './PlayerStatsGrid';
 import PositionRatingsDisplay from './PositionRatingsDisplay';
+import PlayerProgressionGraph from './PlayerProgressionGraph';
 
 interface PlayerResultsPageProps {
   propPlayerId?: string;
@@ -175,6 +176,17 @@ const PlayerResultsPage: React.FC<PlayerResultsPageProps> = ({ propPlayerId }) =
                     </button>
                   </div>
                 )}
+              </div>
+            </div>
+
+            {/* Column 4 - Progression Graph (Mobile: Fourth, Desktop: Fourth) */}
+            <div className="w-full lg:w-[350px] lg:flex-shrink-0 order-4 lg:order-4">
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4 hidden">Progression</h2>
+              <div className="w-full p-[5px]">
+                <PlayerProgressionGraph 
+                  playerId={player.id.toString()} 
+                  playerName={`${player.metadata.firstName} ${player.metadata.lastName}`}
+                />
               </div>
             </div>
           </div>
