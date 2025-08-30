@@ -1,57 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { calculatePositionOVR } from '../../../src/utils/ruleBasedPositionCalculator';
+import { MFLPosition } from '../../../src/types/positionOvr';
 
 // Check if we're in development and should use the Python ML API
 const isDevelopment = process.env.NODE_ENV === 'development';
 const PYTHON_ML_API_URL = 'http://localhost:8000';
 const DIGITALOCEAN_ML_API_URL = 'http://143.198.172.99:8000';
-
-// Simple rule-based prediction system for serverless compatibility
-function calculatePositionRating(attributes: any, overall: number | undefined, position: string): number {
-  const { PAC, SHO, PAS, DRI, DEF, PHY } = attributes;
-  
-  // Calculate overall rating if not provided
-  const calculatedOverall = overall || Math.round((PAC + SHO + PAS + DRI + DEF + PHY) / 6);
-  
-  // Position-specific weight calculations
-  const weights: { [key: string]: { [key: string]: number } } = {
-    'LB': { PAC: 0.25, SHO: 0.05, PAS: 0.20, DRI: 0.15, DEF: 0.25, PHY: 0.10 },
-    'CB': { PAC: 0.20, SHO: 0.05, PAS: 0.15, DRI: 0.10, DEF: 0.35, PHY: 0.15 },
-    'RB': { PAC: 0.25, SHO: 0.05, PAS: 0.20, DRI: 0.15, DEF: 0.25, PHY: 0.10 },
-    'LWB': { PAC: 0.30, SHO: 0.05, PAS: 0.25, DRI: 0.20, DEF: 0.15, PHY: 0.05 },
-    'RWB': { PAC: 0.30, SHO: 0.05, PAS: 0.25, DRI: 0.20, DEF: 0.15, PHY: 0.05 },
-    'CDM': { PAC: 0.15, SHO: 0.10, PAS: 0.25, DRI: 0.15, DEF: 0.25, PHY: 0.10 },
-    'CM': { PAC: 0.15, SHO: 0.15, PAS: 0.25, DRI: 0.20, DEF: 0.15, PHY: 0.10 },
-    'CAM': { PAC: 0.15, SHO: 0.20, PAS: 0.25, DRI: 0.25, DEF: 0.10, PHY: 0.05 },
-    'LM': { PAC: 0.25, SHO: 0.15, PAS: 0.20, DRI: 0.25, DEF: 0.10, PHY: 0.05 },
-    'RM': { PAC: 0.25, SHO: 0.15, PAS: 0.20, DRI: 0.25, DEF: 0.10, PHY: 0.05 },
-    'CF': { PAC: 0.20, SHO: 0.25, PAS: 0.15, DRI: 0.25, DEF: 0.05, PHY: 0.10 },
-    'ST': { PAC: 0.15, SHO: 0.30, PAS: 0.10, DRI: 0.20, DEF: 0.05, PHY: 0.20 },
-    'LW': { PAC: 0.25, SHO: 0.20, PAS: 0.15, DRI: 0.25, DEF: 0.05, PHY: 0.10 },
-    'RW': { PAC: 0.25, SHO: 0.20, PAS: 0.15, DRI: 0.25, DEF: 0.05, PHY: 0.10 },
-    'GK': { PAC: 0.05, SHO: 0.05, PAS: 0.15, DRI: 0.05, DEF: 0.35, PHY: 0.35 }
-  };
-  
-  const positionWeights = weights[position];
-  if (!positionWeights) {
-    return calculatedOverall; // Fallback to overall rating
-  }
-  
-  // Calculate weighted position rating
-  const weightedRating = 
-    PAC * positionWeights.PAC +
-    SHO * positionWeights.SHO +
-    PAS * positionWeights.PAS +
-    DRI * positionWeights.DRI +
-    DEF * positionWeights.DEF +
-    PHY * positionWeights.PHY;
-  
-  // Adjust based on overall rating (players with higher overall tend to be better at all positions)
-  const overallAdjustment = (calculatedOverall - 50) * 0.1;
-  const finalRating = Math.round(weightedRating + overallAdjustment);
-  
-  // Ensure rating is within valid range
-  return Math.max(1, Math.min(99, finalRating));
-}
 
 export async function POST(request: NextRequest) {
   try {
@@ -88,24 +42,50 @@ export async function POST(request: NextRequest) {
       );
     }
     
-    // Calculate predictions for requested positions
+    // Calculate predictions for requested positions using our new rule-based algorithm
     const predictions: any = {};
+    
+    // Create a mock player object for our algorithm
+    const mockPlayer = {
+      id: 0,
+      name: 'API Request',
+      attributes: {
+        PAC: attributes.PAC,
+        SHO: attributes.SHO,
+        PAS: attributes.PAS,
+        DRI: attributes.DRI,
+        DEF: attributes.DEF,
+        PHY: attributes.PHY
+      },
+      positions: positions as MFLPosition[]
+    };
     
     for (const position of positions) {
       try {
-        const predictedRating = calculatePositionRating(attributes, overall, position);
-        predictions[position] = {
-          position,
-          predicted_rating: predictedRating,
-          confidence: 0.85, // Rule-based confidence
-          method: 'rule-based'
-        };
+        const result = calculatePositionOVR(mockPlayer, position as MFLPosition);
+        
+        if (result.success) {
+          predictions[position] = {
+            position,
+            predicted_rating: result.ovr,
+            confidence: 0.85, // Rule-based confidence
+            method: 'rule-based',
+            familiarity: result.familiarity,
+            weighted_average: result.weightedAverage,
+            penalty: result.penalty
+          };
+        } else {
+          predictions[position] = { 
+            position,
+            error: result.error?.message || 'Prediction failed',
+            predicted_rating: overall || 50 // Fallback to overall rating
+          };
+        }
       } catch (error) {
-        // console.error(`Prediction failed for ${position}:`, error); // Removed debug logging
         predictions[position] = { 
           position,
           error: 'Prediction failed',
-          predicted_rating: overall // Fallback to overall rating
+          predicted_rating: overall || 50 // Fallback to overall rating
         };
       }
     }
