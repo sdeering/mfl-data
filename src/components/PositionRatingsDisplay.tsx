@@ -70,10 +70,8 @@ export default function PositionRatingsDisplay({ player }: PositionRatingsDispla
   
   // Convert player data to the format expected by the rule-based calculator
   const playerForOVR = convertMFLPlayerToOVRFormat({
-    player: {
-      id: player.id,
-      metadata: player.metadata
-    }
+    id: player.id,
+    metadata: player.metadata
   });
   
   // Use the rule-based position ratings hook
