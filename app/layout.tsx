@@ -71,6 +71,18 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning className={titilliumWeb.variable}>
       <head>
         <link rel="author" href="https://www.twitter.com/dogesports69" />
+        {/* Google tag (gtag.js) */}
+        <script async src="https://www.googletagmanager.com/gtag/js?id=G-RMQQLQJKZZ"></script>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              window.dataLayer = window.dataLayer || [];
+              function gtag(){dataLayer.push(arguments);}
+              gtag('js', new Date());
+              gtag('config', 'G-RMQQLQJKZZ');
+            `,
+          }}
+        />
       </head>
       <body className={`${titilliumWeb.className} min-h-screen transition-colors duration-300 bg-[#fafafa]`}>
         <ThemeProviderWrapper>
