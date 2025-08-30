@@ -60,7 +60,7 @@ export default function PlayerStats({ player }: PlayerStatsProps) {
     }
   } = player;
 
-  const overallTierColors = getTierColor(overall);
+
 
   const stats = [
     { label: 'Player ID', value: `#${player.id}` },
@@ -137,10 +137,8 @@ export default function PlayerStats({ player }: PlayerStatsProps) {
                     )
                   ) : (
                     <span 
-                      className={`font-bold px-3 py-2 rounded-lg shadow-sm ${
-                        stat.isRating ? `${overallTierColors.bg} ${overallTierColors.text} ${overallTierColors.border}` : 'text-gray-900 dark:text-white bg-gradient-to-r from-white to-gray-100 dark:from-gray-400 dark:to-gray-500'
-                      }`}
-                      style={{ fontSize: stat.isRating ? '22px' : '18px' }}
+                      className="font-bold px-3 py-2 rounded-lg shadow-sm text-gray-900 dark:text-white bg-gradient-to-r from-white to-gray-100 dark:from-gray-400 dark:to-gray-500"
+                      style={{ fontSize: '18px' }}
                     >
                       {stat.value}
                     </span>
