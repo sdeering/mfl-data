@@ -58,13 +58,29 @@ export const HomePage: React.FC = () => {
               />
             </div>
             
-                            <button
-                  type="submit"
-                  disabled={!searchQuery.trim()}
-                  className="w-full py-3 bg-black dark:bg-white text-white dark:text-black rounded-lg font-semibold hover:bg-gray-800 dark:hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer transition-all duration-200 hover:scale-[1.02] hover:shadow-lg"
-                >
+            <button
+              type="submit"
+              disabled={!searchQuery.trim()}
+              className="w-full py-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer transition-all duration-200 hover:scale-[1.02] hover:shadow-lg"
+            >
               Search Player
             </button>
+            
+            {/* Quick Search Links */}
+            <div className="flex flex-wrap gap-4 justify-start items-center">
+              <span className="text-black dark:text-white text-sm" style={{ fontSize: '14px' }}>Explore:</span>
+              {[116267, 9122, 93886, 44743, 26114, 71469, 55419].map((playerId) => (
+                <button
+                  key={playerId}
+                  type="button"
+                  onClick={() => router.push(`/players/${playerId}`)}
+                  className="text-black dark:text-white hover:text-gray-600 dark:hover:text-gray-300 underline text-sm cursor-pointer"
+                  style={{ fontSize: '14px' }}
+                >
+                  {playerId}
+                </button>
+              ))}
+            </div>
           </form>
         </div>
       </main>
