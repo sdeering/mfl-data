@@ -129,7 +129,7 @@ const PlayerResultsPage: React.FC<PlayerResultsPageProps> = ({ propPlayerId }) =
             {/* Row 1 - Main player information */}
             <div key={`player-${player.id}`} className="flex flex-wrap gap-6 lg:gap-[30px] h-full mb-6">
               {/* Column 1 - Player Card (Mobile: First, Desktop: Second) */}
-              <div className="w-full lg:w-[375px] lg:flex-shrink-0 flex flex-col order-1 lg:order-2">
+              <div className="w-[85%] lg:w-[375px] lg:flex-shrink-0 flex flex-col order-1 lg:order-2">
                 <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4 text-center hidden">Player Card</h2>
                 <div className="flex flex-col items-center space-y-4 p-[5px]">
                   <PlayerImage player={player!} />
