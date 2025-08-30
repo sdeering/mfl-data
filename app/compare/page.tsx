@@ -318,7 +318,7 @@ function ComparePageContent() {
   );
 }
 
-export default function ComparePage() {
+const ComparePage = () => {
   return (
     <Suspense fallback={
       <div className="min-h-screen bg-white dark:bg-[#121213] flex items-center justify-center">
@@ -331,4 +331,6 @@ export default function ComparePage() {
       <ComparePageContent />
     </Suspense>
   );
-}
+};
+
+export default ComparePage;
