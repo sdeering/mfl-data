@@ -27,7 +27,7 @@ export const calculatePlayerStatsAtSale = (
   }
 
   // Sort progression data by date (oldest first)
-  const sortedData = [...progressionData].sort((a, b) => a.date - b.date);
+  const sortedData = [...progressionData].sort((a, b) => a.date.getTime() - b.date.getTime());
   
   // Find the most recent progression entry before or at the sale date
   let statsAtSale: Partial<SaleStats> = {};
