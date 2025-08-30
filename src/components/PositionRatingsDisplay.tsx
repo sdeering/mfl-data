@@ -2,8 +2,7 @@
 
 import React, { useState, useMemo } from 'react';
 import { useRuleBasedPositionRatings } from '../hooks/useRuleBasedPositionRatings';
-import { convertMFLPlayerToOVRFormat } from '../utils/playerDataConverter';
-import type { MFLPosition } from '../types/positionOvr';
+import type { MFLPosition, PlayerForOVRCalculation } from '../types/positionOvr';
 import { getRatingStyle } from '../utils/ratingUtils';
 
 // Function to get tier color based on rating value (same as PlayerStatsGrid)
@@ -71,10 +70,21 @@ export default function PositionRatingsDisplay({ player }: PositionRatingsDispla
   // Convert player data to the format expected by the rule-based calculator
   // Use useMemo to prevent infinite re-renders
   const playerForOVR = useMemo(() => {
-    return convertMFLPlayerToOVRFormat({
+    return {
       id: player.id,
-      metadata: player.metadata
-    });
+      name: `${player.metadata.firstName} ${player.metadata.lastName}`,
+      attributes: {
+        PAC: player.metadata.pace,
+        SHO: player.metadata.shooting,
+        PAS: player.metadata.passing,
+        DRI: player.metadata.dribbling,
+        DEF: player.metadata.defense,
+        PHY: player.metadata.physical,
+        GK: 0 // Default to 0 for non-goalkeepers
+      },
+      positions: player.metadata.positions as MFLPosition[],
+      overall: player.metadata.overall
+    };
   }, [player.id, player.metadata]);
   
   // Use the rule-based position ratings hook
@@ -117,12 +127,26 @@ export default function PositionRatingsDisplay({ player }: PositionRatingsDispla
   // Convert the results to the format expected by the component
   const ratingsArray = Object.values(positionRatings.results)
     .filter(result => result.success)
-    .map(result => ({
-      position: result.position,
-      rating: result.ovr,
-      familiarity: result.familiarity,
-      difference: result.penalty
-    }));
+    .map(result => {
+      // Map rule-based familiarity values to component expected values
+      let mappedFamiliarity: 'PRIMARY' | 'SECONDARY' | 'UNFAMILIAR';
+      
+      if (result.familiarity === 'PRIMARY') {
+        mappedFamiliarity = 'PRIMARY';
+      } else if (result.familiarity === 'SECONDARY') {
+        mappedFamiliarity = 'SECONDARY';
+      } else {
+        // All other familiarity levels (FAMILIAR, UNFAMILIAR)
+        mappedFamiliarity = 'UNFAMILIAR';
+      }
+      
+      return {
+        position: result.position,
+        rating: result.ovr,
+        familiarity: mappedFamiliarity,
+        difference: result.penalty
+      };
+    });
 
   // Filter positions for goalkeepers
   const filteredRatings = player.metadata.positions.includes('GK') && player.metadata.positions.length === 1

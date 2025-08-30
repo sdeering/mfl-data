@@ -3,7 +3,7 @@
  * Implements the exact algorithm specified for MFL player position ratings
  */
 
-import { MFLPosition, PlayerForOVRCalculation, PositionOVRResult, AllPositionOVRResults, OVRCalculationError } from '../types/positionOvr';
+import { MFLPosition, PlayerForOVRCalculation, PositionOVRResult, AllPositionOVRResults, OVRCalculationError, PositionFamiliarity } from '../types/positionOvr';
 
 // Position Attributes Distribution Table
 // Each position has weights that sum to 100%
@@ -110,7 +110,7 @@ export class RuleBasedPositionCalculator {
       
       // Determine penalty based on position familiarity
       let penalty: number;
-      let familiarity: string;
+      let familiarity: PositionFamiliarity;
       
       if (targetPosition === primaryPosition) {
         // Primary position - no penalty
@@ -125,19 +125,19 @@ export class RuleBasedPositionCalculator {
         const familiarityLevel = POSITION_FAMILIARITY_MATRIX[primaryPosition][targetPosition];
         penalty = FAMILIARITY_PENALTIES[familiarityLevel];
         
-        // Convert familiarity level to string
+        // Convert familiarity level to PositionFamiliarity type
         switch (familiarityLevel) {
           case 2:
-            familiarity = 'FAIRLY_FAMILIAR';
+            familiarity = 'FAMILIAR';
             break;
           case 1:
-            familiarity = 'SOMEWHAT_FAMILIAR';
+            familiarity = 'UNFAMILIAR';
             break;
           case 0:
             familiarity = 'UNFAMILIAR';
             break;
           default:
-            familiarity = 'UNKNOWN';
+            familiarity = 'UNFAMILIAR';
         }
       }
 
