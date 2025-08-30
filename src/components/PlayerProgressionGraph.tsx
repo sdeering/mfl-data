@@ -161,22 +161,40 @@ export default function PlayerProgressionGraph({ playerId, playerName }: PlayerP
     return chartHeight - padding - normalizedValue * (chartHeight - 2 * padding);
   };
 
-  // Generate SVG path for a specific stat
-  const generatePath = (stat: StatType) => {
-    const validData = progressionData
-      .map(d => ({ date: d.date, value: d[stat] }))
-      .filter(d => d.value !== undefined);
+     // Generate SVG path for a specific stat
+   const generatePath = (stat: StatType) => {
+     const validData = progressionData
+       .map(d => ({ date: d.date, value: d[stat] }))
+       .filter(d => d.value !== undefined);
 
-    if (validData.length < 2) return '';
+     if (validData.length < 2) return '';
 
-    const points = validData.map(d => {
-      const x = getChartX(d.date);
-      const y = getChartY(d.value!, stat);
-      return `${x},${y}`;
-    });
+     // For stats with no progression (same value), ensure we draw a line from start to end
+     const uniqueValues = new Set(validData.map(d => d.value));
+     const hasProgression = uniqueValues.size > 1;
+     
+     if (!hasProgression) {
+       // If no progression, just draw a straight line from first to last point
+       const firstPoint = validData[0];
+       const lastPoint = validData[validData.length - 1];
+       
+       const x1 = getChartX(firstPoint.date);
+       const y1 = getChartY(firstPoint.value!, stat);
+       const x2 = getChartX(lastPoint.date);
+       const y2 = getChartY(lastPoint.value!, stat);
+       
+       return `M ${x1},${y1} L ${x2},${y2}`;
+     }
 
-    return `M ${points.join(' L ')}`;
-  };
+     // For stats with progression, include all points
+     const points = validData.map(d => {
+       const x = getChartX(d.date);
+       const y = getChartY(d.value!, stat);
+       return `${x},${y}`;
+     });
+
+     return `M ${points.join(' L ')}`;
+   };
 
   // Generate data points for circles
   const generateDataPoints = (stat: StatType) => {
