@@ -4,17 +4,23 @@ import React, { useState, useEffect } from 'react';
 import { fetchPlayerSaleHistory } from '../services/playerSaleHistoryService';
 import { fetchPlayerExperienceHistory, processProgressionData } from '../services/playerExperienceService';
 import { calculatePlayerStatsAtSale } from '../utils/saleHistoryCalculator';
+import { fetchMarketData } from '../services/marketDataService';
+import { calculateMarketValue } from '../utils/marketValueCalculator';
 import type { PlayerSaleHistoryEntry } from '../types/playerSaleHistory';
 import type { ProgressionDataPoint } from '../types/playerExperience';
+import type { MarketValueEstimate } from '../utils/marketValueCalculator';
+import type { MFLPlayerMetadata } from '../types/mflApi';
 
 interface PlayerSaleHistoryProps {
   playerId: string;
   playerName: string;
+  playerMetadata: MFLPlayerMetadata;
 }
 
-export default function PlayerSaleHistory({ playerId, playerName }: PlayerSaleHistoryProps) {
+export default function PlayerSaleHistory({ playerId, playerName, playerMetadata }: PlayerSaleHistoryProps) {
   const [saleHistory, setSaleHistory] = useState<PlayerSaleHistoryEntry[]>([]);
   const [progressionData, setProgressionData] = useState<ProgressionDataPoint[]>([]);
+  const [marketValueEstimate, setMarketValueEstimate] = useState<MarketValueEstimate | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showAllSales, setShowAllSales] = useState(false);
@@ -25,10 +31,18 @@ export default function PlayerSaleHistory({ playerId, playerName }: PlayerSaleHi
       setError(null);
 
       try {
-        // Fetch both sale history and progression data
-        const [historyResponse, progressionResponse] = await Promise.all([
+        // Fetch sale history, progression data, and market data
+        const [historyResponse, progressionResponse, marketResponse] = await Promise.all([
           fetchPlayerSaleHistory(playerId),
-          fetchPlayerExperienceHistory(playerId)
+          fetchPlayerExperienceHistory(playerId),
+          fetchMarketData({
+            positions: playerMetadata.positions,
+            ageMin: Math.max(1, playerMetadata.age - 1),
+            ageMax: playerMetadata.age + 1,
+            overallMin: Math.max(1, playerMetadata.overall - 1),
+            overallMax: playerMetadata.overall + 1,
+            limit: 50
+          })
         ]);
         
         if (historyResponse.success && historyResponse.data.length > 0) {
@@ -40,6 +54,16 @@ export default function PlayerSaleHistory({ playerId, playerName }: PlayerSaleHi
         if (progressionResponse.success && progressionResponse.data.length > 0) {
           const processedData = processProgressionData(progressionResponse.data);
           setProgressionData(processedData);
+        }
+
+        // Calculate market value estimate
+        if (marketResponse.success) {
+          const estimate = calculateMarketValue(
+            playerMetadata,
+            marketResponse.data,
+            historyResponse.success ? historyResponse.data : []
+          );
+          setMarketValueEstimate(estimate);
         }
       } catch (err) {
         setError('Failed to load sale history');
@@ -184,6 +208,83 @@ export default function PlayerSaleHistory({ playerId, playerName }: PlayerSaleHi
               : `Show ${saleHistory.length - 5} More Sales`
             }
           </button>
+        </div>
+      )}
+
+      {/* Market Value Estimate */}
+      {marketValueEstimate && (
+        <div className="mt-6 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+          <h4 className="text-lg font-semibold text-blue-900 dark:text-blue-100 mb-3">
+            Market Value Estimate
+          </h4>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Main Estimate */}
+            <div className="text-center">
+              <div className="text-3xl font-bold text-blue-600 dark:text-blue-400">
+                ${marketValueEstimate.estimatedValue.toLocaleString()}
+              </div>
+              <div className="text-sm text-blue-700 dark:text-blue-300 mt-1">
+                Confidence: 
+                <span className={`ml-1 font-medium ${
+                  marketValueEstimate.confidence === 'high' ? 'text-green-600 dark:text-green-400' :
+                  marketValueEstimate.confidence === 'medium' ? 'text-yellow-600 dark:text-yellow-400' :
+                  'text-red-600 dark:text-red-400'
+                }`}>
+                  {marketValueEstimate.confidence.charAt(0).toUpperCase() + marketValueEstimate.confidence.slice(1)}
+                </span>
+              </div>
+            </div>
+
+            {/* Breakdown */}
+            <div className="text-sm space-y-1">
+              <div className="flex justify-between">
+                <span className="text-gray-600 dark:text-gray-400">Base Value:</span>
+                <span className="font-medium">${marketValueEstimate.details.baseValue.toLocaleString()}</span>
+              </div>
+              {marketValueEstimate.breakdown.ageAdjustment !== 0 && (
+                <div className="flex justify-between">
+                  <span className="text-gray-600 dark:text-gray-400">Age Adjustment:</span>
+                  <span className={`font-medium ${marketValueEstimate.breakdown.ageAdjustment > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                    {marketValueEstimate.breakdown.ageAdjustment > 0 ? '+' : ''}${marketValueEstimate.breakdown.ageAdjustment.toLocaleString()}
+                  </span>
+                </div>
+              )}
+              {marketValueEstimate.breakdown.overallAdjustment !== 0 && (
+                <div className="flex justify-between">
+                  <span className="text-gray-600 dark:text-gray-400">Overall Adjustment:</span>
+                  <span className={`font-medium ${marketValueEstimate.breakdown.overallAdjustment > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                    {marketValueEstimate.breakdown.overallAdjustment > 0 ? '+' : ''}${marketValueEstimate.breakdown.overallAdjustment.toLocaleString()}
+                  </span>
+                </div>
+              )}
+              {marketValueEstimate.breakdown.positionPremium > 0 && (
+                <div className="flex justify-between">
+                  <span className="text-gray-600 dark:text-gray-400">Position Premium:</span>
+                  <span className="font-medium text-green-600">+${marketValueEstimate.breakdown.positionPremium.toLocaleString()}</span>
+                </div>
+              )}
+              {marketValueEstimate.breakdown.singleOwnerPremium > 0 && (
+                <div className="flex justify-between">
+                  <span className="text-gray-600 dark:text-gray-400">Single Owner Premium:</span>
+                  <span className="font-medium text-green-600">+${marketValueEstimate.breakdown.singleOwnerPremium.toLocaleString()}</span>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Data Sources */}
+          <div className="mt-4 pt-3 border-t border-blue-200 dark:border-blue-800">
+            <div className="text-xs text-blue-700 dark:text-blue-300 space-y-1">
+              <div>Based on {marketValueEstimate.breakdown.comparableListings} comparable listings and {marketValueEstimate.breakdown.recentSales} recent sales</div>
+              {marketValueEstimate.details.comparableAverage > 0 && (
+                <div>Comparable average: ${marketValueEstimate.details.comparableAverage.toLocaleString()}</div>
+              )}
+              {marketValueEstimate.details.recentSalesAverage > 0 && (
+                <div>Recent sales average: ${marketValueEstimate.details.recentSalesAverage.toLocaleString()}</div>
+              )}
+            </div>
+          </div>
         </div>
       )}
     </div>

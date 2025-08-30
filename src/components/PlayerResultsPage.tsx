@@ -210,6 +210,7 @@ const PlayerResultsPage: React.FC<PlayerResultsPageProps> = ({ propPlayerId }) =
                   <PlayerSaleHistory 
                     playerId={player.id.toString()} 
                     playerName={`${player.metadata.firstName} ${player.metadata.lastName}`}
+                    playerMetadata={player.metadata}
                   />
                 </div>
               </div>
