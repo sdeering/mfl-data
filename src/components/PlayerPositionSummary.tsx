@@ -168,7 +168,12 @@ export default function PlayerPositionSummary({ playerId, playerName }: PlayerPo
       // Use match.type instead of competition name for type detection
       const matchType = match.match?.type === 'CUP' ? 'Cup' : 'League';
       const competitionName = match.match?.competition?.name || '';
-      const division = getDivisionBadge(competitionName);
+      
+      // Only apply division detection to League competitions
+      let division = '';
+      if (matchType === 'League') {
+        division = getDivisionBadge(competitionName);
+      }
       
       // Group by match type (League or Cup) and division
       const leagueKey = `${matchType} ${division}`;
