@@ -8,20 +8,20 @@ import { MFLPosition, PlayerForOVRCalculation, PositionOVRResult, AllPositionOVR
 // Position Attributes Distribution Table
 // Each position has weights that sum to 100%
 const POSITION_ATTRIBUTE_WEIGHTS: Record<MFLPosition, Record<string, number>> = {
-  'ST': { PAS: 10, SHO: 46, DEF: 0, DRI: 29, PAC: 10, PHY: 5 },
-  'CF': { PAS: 24, SHO: 23, DEF: 0, DRI: 40, PAC: 13, PHY: 0 },
-  'LW': { PAS: 24, SHO: 23, DEF: 0, DRI: 40, PAC: 13, PHY: 0 },
-  'RW': { PAS: 24, SHO: 23, DEF: 0, DRI: 40, PAC: 13, PHY: 0 },
-  'CAM': { PAS: 34, SHO: 21, DEF: 0, DRI: 38, PAC: 7, PHY: 0 },
-  'CM': { PAS: 43, SHO: 12, DEF: 10, DRI: 29, PAC: 0, PHY: 6 },
-  'LM': { PAS: 43, SHO: 12, DEF: 10, DRI: 29, PAC: 0, PHY: 6 },
-  'RM': { PAS: 43, SHO: 12, DEF: 10, DRI: 29, PAC: 0, PHY: 6 },
-  'CDM': { PAS: 28, SHO: 0, DEF: 40, DRI: 17, PAC: 0, PHY: 15 },
-  'LWB': { PAS: 19, SHO: 0, DEF: 44, DRI: 17, PAC: 10, PHY: 10 },
-  'RWB': { PAS: 19, SHO: 0, DEF: 44, DRI: 17, PAC: 10, PHY: 10 },
-  'LB': { PAS: 19, SHO: 0, DEF: 44, DRI: 17, PAC: 10, PHY: 10 },
-  'RB': { PAS: 19, SHO: 0, DEF: 44, DRI: 17, PAC: 10, PHY: 10 },
-  'CB': { PAS: 5, SHO: 0, DEF: 64, DRI: 9, PAC: 2, PHY: 20 },
+  'ST': { PAS: 10, SHO: 46, DEF: 0, DRI: 29, PAC: 10, PHY: 5, GK: 0 },
+  'CF': { PAS: 24, SHO: 23, DEF: 0, DRI: 40, PAC: 13, PHY: 0, GK: 0 },
+  'LW': { PAS: 24, SHO: 23, DEF: 0, DRI: 40, PAC: 13, PHY: 0, GK: 0 },
+  'RW': { PAS: 24, SHO: 23, DEF: 0, DRI: 40, PAC: 13, PHY: 0, GK: 0 },
+  'CAM': { PAS: 34, SHO: 21, DEF: 0, DRI: 38, PAC: 7, PHY: 0, GK: 0 },
+  'CM': { PAS: 43, SHO: 12, DEF: 10, DRI: 29, PAC: 0, PHY: 6, GK: 0 },
+  'LM': { PAS: 43, SHO: 12, DEF: 10, DRI: 29, PAC: 0, PHY: 6, GK: 0 },
+  'RM': { PAS: 43, SHO: 12, DEF: 10, DRI: 29, PAC: 0, PHY: 6, GK: 0 },
+  'CDM': { PAS: 28, SHO: 0, DEF: 40, DRI: 17, PAC: 0, PHY: 15, GK: 0 },
+  'LWB': { PAS: 19, SHO: 0, DEF: 44, DRI: 17, PAC: 10, PHY: 10, GK: 0 },
+  'RWB': { PAS: 19, SHO: 0, DEF: 44, DRI: 17, PAC: 10, PHY: 10, GK: 0 },
+  'LB': { PAS: 19, SHO: 0, DEF: 44, DRI: 17, PAC: 10, PHY: 10, GK: 0 },
+  'RB': { PAS: 19, SHO: 0, DEF: 44, DRI: 17, PAC: 10, PHY: 10, GK: 0 },
+  'CB': { PAS: 5, SHO: 0, DEF: 64, DRI: 9, PAC: 2, PHY: 20, GK: 0 },
   'GK': { PAS: 0, SHO: 0, DEF: 0, DRI: 0, PAC: 0, PHY: 0, GK: 100 }
 };
 
