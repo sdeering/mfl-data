@@ -22,7 +22,7 @@ const POSITION_ATTRIBUTE_WEIGHTS: Record<MFLPosition, Record<string, number>> = 
   'LB': { PAS: 19, SHO: 0, DEF: 44, DRI: 17, PAC: 10, PHY: 10 },
   'RB': { PAS: 19, SHO: 0, DEF: 44, DRI: 17, PAC: 10, PHY: 10 },
   'CB': { PAS: 5, SHO: 0, DEF: 64, DRI: 9, PAC: 2, PHY: 20 },
-  'GK': { PAS: 0, SHO: 0, DEF: 0, DRI: 0, PAC: 0, PHY: 100 }
+  'GK': { PAS: 0, SHO: 0, DEF: 0, DRI: 0, PAC: 0, PHY: 0, GK: 100 }
 };
 
 // Primary Position Familiarity Matrix
@@ -145,14 +145,15 @@ export class RuleBasedPositionCalculator {
       const weights = POSITION_ATTRIBUTE_WEIGHTS[targetPosition];
 
       // Calculate weighted average using the formula:
-      // PAS * PAS_weight + SHO * SHO_weight + DEF * DEF_weight + DRI * DRI_weight + PAC * PAC_weight + PHY * PHY_weight
+      // PAS * PAS_weight + SHO * SHO_weight + DEF * DEF_weight + DRI * DRI_weight + PAC * PAC_weight + PHY * PHY_weight + GK * GK_weight
       const weightedSum = 
         player.attributes.PAS * (weights.PAS / 100) +
         player.attributes.SHO * (weights.SHO / 100) +
         player.attributes.DEF * (weights.DEF / 100) +
         player.attributes.DRI * (weights.DRI / 100) +
         player.attributes.PAC * (weights.PAC / 100) +
-        player.attributes.PHY * (weights.PHY / 100);
+        player.attributes.PHY * (weights.PHY / 100) +
+        player.attributes.GK * (weights.GK / 100);
 
       // Apply familiarity penalty
       const finalRating = weightedSum + penalty;
