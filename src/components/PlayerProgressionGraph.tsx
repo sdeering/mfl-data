@@ -352,7 +352,7 @@ export default function PlayerProgressionGraph({ playerId, playerName }: PlayerP
                        style={{ backgroundColor: STAT_COLORS[stat] }}
                      />
                      <span className="font-medium">{STAT_LABELS[stat]}:</span>
-                     <span>{currentValue !== undefined ? currentValue : 'N/A'}</span>
+                     <span>{currentValue !== undefined ? currentValue : 0}</span>
                      {change !== 0 && (
                        <span className={change > 0 ? 'text-green-600' : 'text-red-600'}>
                          ({change > 0 ? '+' : ''}{change})
