@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense, useCallback } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { mflApi } from '../../src/services/mflApi';
 import type { MFLPlayer } from '../../src/types/mflApi';
@@ -11,7 +11,7 @@ import PlayerProgressionGraph from '../../src/components/PlayerProgressionGraph'
 import PlayerRecentMatches from '../../src/components/PlayerRecentMatches';
 import { useLoading } from '../../src/contexts/LoadingContext';
 
-export default function ComparePage() {
+function ComparePageContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const [player1, setPlayer1] = useState<MFLPlayer | null>(null);
@@ -29,7 +29,7 @@ export default function ComparePage() {
   const urlPlayer2Id = searchParams.get('player2Id');
   const urlPlayerId = searchParams.get('playerId'); // Legacy support
 
-  const fetchPlayer = async (playerId: string, playerNumber: 1 | 2) => {
+  const fetchPlayer = useCallback(async (playerId: string, playerNumber: 1 | 2) => {
     if (!playerId.trim()) return;
 
     const setIsLoading = playerNumber === 1 ? setIsLoading1 : setIsLoading2;
@@ -51,7 +51,7 @@ export default function ComparePage() {
       setIsLoading(false);
       setGlobalLoading(false);
     }
-  };
+  }, [setGlobalLoading]);
 
   const updateURL = (player1Id: string, player2Id: string) => {
     const params = new URLSearchParams();
@@ -315,5 +315,20 @@ export default function ComparePage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function ComparePage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-white dark:bg-[#121213] flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-500 dark:text-gray-400">Loading compare page...</p>
+        </div>
+      </div>
+    }>
+      <ComparePageContent />
+    </Suspense>
   );
 }
