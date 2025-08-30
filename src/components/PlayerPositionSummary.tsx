@@ -125,14 +125,6 @@ export default function PlayerPositionSummary({ playerId, playerName }: PlayerPo
   const positionSummaries = calculatePositionSummaries();
 
   // Helper functions for league detection (same as Recent Matches)
-  const getMatchType = (competitionName: string): string => {
-    const name = competitionName.toLowerCase();
-    if (name.includes('cup') || name.includes('championship') || name.includes('trophy')) {
-      return 'Cup';
-    }
-    return 'League';
-  };
-
   const getDivisionBadge = (competitionName: string): string => {
     const name = competitionName.toLowerCase();
     if (name.includes('flint')) return 'Flint';
@@ -175,7 +167,7 @@ export default function PlayerPositionSummary({ playerId, playerName }: PlayerPo
     matches.forEach(match => {
       // Use match.type instead of competition name for type detection
       const matchType = match.match?.type === 'CUP' ? 'Cup' : 'League';
-      const competitionName = match.competition?.name || '';
+      const competitionName = match.match?.competition?.name || '';
       const division = getDivisionBadge(competitionName);
       
       // Group by match type (League or Cup) and division
