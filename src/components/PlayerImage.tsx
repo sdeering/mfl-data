@@ -28,7 +28,7 @@ const getRatingTextColor = (overall: number): string => {
 export default function PlayerImage({ player }: PlayerImageProps) {
   if (!player) {
     return (
-      <div className="w-40 sm:w-[280px] md:w-[280px] xl:w-[280px]">
+      <div className="w-40 sm:w-[280px] md:w-[280px] xl:w-[280px] m-0">
         <div className="bg-white dark:bg-gray-800 p-6 h-[500px] flex items-center justify-center">
           <div className="text-center">
             <div className="w-24 h-24 bg-gradient-to-br from-gray-200 to-gray-300 dark:from-gray-600 dark:to-gray-700 mx-auto mb-4 flex items-center justify-center rounded-xl shadow-inner">
@@ -60,7 +60,7 @@ export default function PlayerImage({ player }: PlayerImageProps) {
   const ratingTextColor = getRatingTextColor(player.metadata.overall);
 
   return (
-    <div className="w-40 sm:w-[280px] md:w-[280px] xl:w-[280px]">
+    <div className="w-40 sm:w-[280px] md:w-[280px] xl:w-[280px] m-0">
       {/* Modern container with theme-aware styling */}
       <div className="relative">
         {/* Card container */}
