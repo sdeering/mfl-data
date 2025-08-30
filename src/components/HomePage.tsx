@@ -20,13 +20,16 @@ export const HomePage: React.FC = () => {
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
     setSearchQuery(value);
+  };
+
+  const handlePaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
+    const pastedValue = e.clipboardData.getData('text');
+    const playerIdPattern = /^\d{4,6}$/;
     
-    // Auto-search when a valid player ID (4-6 digits) is pasted
-    const trimmedValue = value.trim();
-    if (/^\d{4,6}$/.test(trimmedValue)) {
-      // Small delay to allow the input to update
+    if (playerIdPattern.test(pastedValue.trim())) {
+      // Auto-search for pasted player IDs
       setTimeout(() => {
-        router.push(`/players/${encodeURIComponent(trimmedValue)}`);
+        router.push(`/players/${encodeURIComponent(pastedValue.trim())}`);
         setSearchQuery('');
       }, 100);
     }
@@ -49,6 +52,7 @@ export const HomePage: React.FC = () => {
                 type="text"
                 value={searchQuery}
                 onChange={handleInputChange}
+                onPaste={handlePaste}
                 placeholder="Search for a player by id..."
                 className="w-full px-4 py-3 text-lg bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none text-gray-900 dark:text-white"
               />

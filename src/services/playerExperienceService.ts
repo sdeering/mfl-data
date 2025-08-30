@@ -33,14 +33,10 @@ export function processProgressionData(experienceData: PlayerExperienceEntry[]) 
   // Sort by date first
   const sortedData = experienceData.sort((a, b) => a.date - b.date);
   
-  console.log('Processing progression data - sorted entries:', sortedData.length);
-  
   // Find the first entry with an age to establish the baseline
   const firstAgeEntry = sortedData.find(entry => entry.values.age !== undefined);
   const baselineAge = firstAgeEntry?.values.age || 0;
   const baselineDate = firstAgeEntry?.date || sortedData[0]?.date || 0;
-  
-  console.log('Baseline age:', baselineAge, 'at date:', new Date(baselineDate).toISOString());
   
   // Carry forward values - each entry should have all stats from previous entries
   let currentValues = {
@@ -84,13 +80,8 @@ export function processProgressionData(experienceData: PlayerExperienceEntry[]) 
         physical: currentValues.physical
       };
 
-      // Debug age progression
-      console.log(`Entry ${index}: Date ${new Date(entry.date).toISOString()}, Days since baseline: ${daysSinceBaseline.toFixed(1)}, Age: ${calculatedAge.toFixed(2)}`);
-
       return result;
     });
 
-  console.log('Final progression data - age values:', progressionData.map(d => ({ date: d.date.toISOString(), age: d.age.toFixed(2) })));
-  
   return progressionData;
 }

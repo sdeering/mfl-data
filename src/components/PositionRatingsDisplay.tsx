@@ -1,9 +1,11 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useRuleBasedPositionRatings } from '../hooks/useRuleBasedPositionRatings';
 import type { MFLPosition, PlayerForOVRCalculation } from '../types/positionOvr';
 import { getRatingStyle } from '../utils/ratingUtils';
+import { fetchPlayerMatches } from '../services/playerMatchesService';
+import type { PlayerMatchStats, PositionSummary } from '../types/playerMatches';
 
 // Function to get tier color based on rating value (same as PlayerStatsGrid)
 const getTierColor = (rating: number) => {
@@ -67,6 +69,8 @@ interface PositionRatingsDisplayProps {
 
 export default function PositionRatingsDisplay({ player }: PositionRatingsDisplayProps) {
   const [showAllPositions, setShowAllPositions] = useState(false);
+  const [matchPositionRatings, setMatchPositionRatings] = useState<PositionSummary[]>([]);
+  const [isLoadingMatches, setIsLoadingMatches] = useState(true);
   
   // Convert player data to the format expected by the rule-based calculator
   // Use useMemo to prevent infinite re-renders
@@ -90,6 +94,52 @@ export default function PositionRatingsDisplay({ player }: PositionRatingsDispla
   
   // Use the rule-based position ratings hook
   const { positionRatings, isLoading, error } = useRuleBasedPositionRatings(playerForOVR);
+
+  // Fetch match position ratings
+  useEffect(() => {
+    const loadMatchRatings = async () => {
+      setIsLoadingMatches(true);
+      try {
+        const response = await fetchPlayerMatches(player.id.toString());
+        if (response.success && response.data.length > 0) {
+          // Calculate position summaries
+          const positionMap = new Map<string, PlayerMatchStats[]>();
+          
+          response.data.forEach(match => {
+            const position = match.stats.position;
+            if (!positionMap.has(position)) {
+              positionMap.set(position, []);
+            }
+            positionMap.get(position)!.push(match);
+          });
+
+          const summaries = Array.from(positionMap.entries()).map(([position, positionMatches]) => {
+            const totalRating = positionMatches.reduce((sum, match) => sum + match.stats.rating, 0);
+            return {
+              position,
+              matches: positionMatches.length,
+              averageRating: totalRating / positionMatches.length,
+              totalMinutes: Math.round(positionMatches.reduce((sum, match) => sum + (match.stats.time / 60), 0)),
+              totalGoals: positionMatches.reduce((sum, match) => sum + match.stats.goals, 0),
+              totalAssists: positionMatches.reduce((sum, match) => sum + match.stats.assists, 0),
+              averageGoals: 0,
+              averageAssists: 0,
+            };
+          }).sort((a, b) => b.matches - a.matches);
+          
+          setMatchPositionRatings(summaries);
+        }
+      } catch (err) {
+        console.error('Error fetching match ratings:', err);
+      } finally {
+        setIsLoadingMatches(false);
+      }
+    };
+
+    if (player.id) {
+      loadMatchRatings();
+    }
+  }, [player.id]);
 
   // Loading state
   if (isLoading) {
@@ -164,9 +214,17 @@ export default function PositionRatingsDisplay({ player }: PositionRatingsDispla
     <div className="space-y-4">
       {/* Position Ratings Grid */}
       <div className="grid grid-cols-1 gap-3">
-        {displayedRatings.map((rating, index) => (
-          <PositionRatingItem key={`${rating.position}-${index}`} rating={rating} player={player} />
-        ))}
+        {displayedRatings.map((rating, index) => {
+          const matchRating = matchPositionRatings.find(mr => mr.position === rating.position);
+          return (
+            <PositionRatingItem 
+              key={`${rating.position}-${index}`} 
+              rating={rating} 
+              player={player} 
+              matchRating={matchRating}
+            />
+          );
+        })}
       </div>
       
       {/* Show More/Less Button */}
@@ -188,14 +246,15 @@ export default function PositionRatingsDisplay({ player }: PositionRatingsDispla
 }
 
 // Individual position rating item component
-function PositionRatingItem({ rating, player }: { 
+function PositionRatingItem({ rating, player, matchRating }: { 
   rating: {
     position: MFLPosition;
     rating: number;
     familiarity: 'PRIMARY' | 'SECONDARY' | 'UNFAMILIAR';
     difference: number;
   }; 
-  player: PositionRatingsDisplayProps['player'] 
+  player: PositionRatingsDisplayProps['player'];
+  matchRating?: PositionSummary;
 }) {
   const { position, familiarity, difference, rating: ratingValue } = rating;
   
@@ -203,6 +262,13 @@ function PositionRatingItem({ rating, player }: {
   const tierColors = getTierColor(ratingValue);
   const gradientStyle = getRatingStyle(ratingValue, overallRating);
   
+  const getMatchRatingColor = (rating: number) => {
+    if (rating >= 8.0) return 'text-[#00adc3]';
+    if (rating >= 7.0) return 'text-[#00c424]';
+    if (rating >= 6.0) return 'text-[#d7af00]';
+    return 'text-red-600';
+  };
+
   return (
     <div
       className={`px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 transition-all duration-200 ${gradientStyle}`}
@@ -224,6 +290,13 @@ function PositionRatingItem({ rating, player }: {
             <span className="text-xs font-semibold text-black dark:text-white">
               Secondary
             </span>
+          )}
+          {matchRating && (
+            <div className="flex items-center space-x-1">
+              <span className={`text-[24px] font-bold ${getMatchRatingColor(matchRating.averageRating)}`}>
+                {matchRating.averageRating.toFixed(2)}
+              </span>
+            </div>
           )}
         </div>
         

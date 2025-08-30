@@ -2,7 +2,10 @@
 
 import React, { useState, useEffect } from 'react';
 import { fetchPlayerSaleHistory } from '../services/playerSaleHistoryService';
+import { fetchPlayerExperienceHistory } from '../services/playerExperienceService';
+import { calculatePlayerStatsAtSale } from '../utils/saleHistoryCalculator';
 import type { PlayerSaleHistoryEntry } from '../types/playerSaleHistory';
+import type { ProgressionDataPoint } from '../types/playerExperience';
 
 interface PlayerSaleHistoryProps {
   playerId: string;
@@ -11,29 +14,34 @@ interface PlayerSaleHistoryProps {
 
 export default function PlayerSaleHistory({ playerId, playerName }: PlayerSaleHistoryProps) {
   const [saleHistory, setSaleHistory] = useState<PlayerSaleHistoryEntry[]>([]);
+  const [progressionData, setProgressionData] = useState<ProgressionDataPoint[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showAllSales, setShowAllSales] = useState(false);
 
   useEffect(() => {
-    const loadSaleHistory = async () => {
+    const loadData = async () => {
       setIsLoading(true);
       setError(null);
 
       try {
-        const history = await fetchPlayerSaleHistory(playerId);
+        // Fetch both sale history and progression data
+        const [historyResponse, progressionResponse] = await Promise.all([
+          fetchPlayerSaleHistory(playerId),
+          fetchPlayerExperienceHistory(playerId)
+        ]);
         
-        console.log('Sale history response for player', playerId, ':', history);
-        
-        if (history.success && history.data.length > 0) {
-          console.log('Setting sale history data:', history.data);
-          setSaleHistory(history.data);
+        if (historyResponse.success && historyResponse.data.length > 0) {
+          setSaleHistory(historyResponse.data);
         } else {
-          console.log('No sale history data or error:', history.error);
-          setError(history.error || 'No sale history available');
+          setError(historyResponse.error || 'No sale history available');
+        }
+
+        if (progressionResponse.success && progressionResponse.data.length > 0) {
+          setProgressionData(progressionResponse.data);
         }
       } catch (err) {
-        console.error('Error fetching sale history:', err);
+        console.error('Error fetching data:', err);
         setError('Failed to load sale history');
       } finally {
         setIsLoading(false);
@@ -41,7 +49,7 @@ export default function PlayerSaleHistory({ playerId, playerName }: PlayerSaleHi
     };
 
     if (playerId) {
-      loadSaleHistory();
+      loadData();
     }
   }, [playerId]);
 
@@ -118,7 +126,7 @@ export default function PlayerSaleHistory({ playerId, playerName }: PlayerSaleHi
     <div className="w-full p-4 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
       <div className="mb-4">
         <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Sale History</h3>
-        <p className="text-sm text-gray-500 dark:text-gray-400">{saleHistory.length} transactions</p>
+        <p className="text-base text-gray-500 dark:text-gray-400">{saleHistory.length} transactions</p>
       </div>
       
       <div className="space-y-3">
@@ -129,25 +137,32 @@ export default function PlayerSaleHistory({ playerId, playerName }: PlayerSaleHi
           >
             <div className="flex justify-between items-start mb-2">
               <div className="flex-1">
-                                 <div className="flex items-center space-x-2">
-                   <span className="text-sm font-medium text-gray-900 dark:text-white">
-                     {sale.sellerName}
-                   </span>
-                   <span className="text-gray-400">→</span>
-                   <span className="text-sm font-medium text-gray-900 dark:text-white">
-                     {sale.buyerName}
-                   </span>
-                 </div>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                                 <div className="flex items-center space-x-2">
+                  <span className="text-sm font-medium text-gray-900 dark:text-white">
+                    {sale.sellerName}
+                  </span>
+                  <span className="text-gray-400">→</span>
+                  <span className="text-sm font-medium text-gray-900 dark:text-white">
+                    {sale.buyerName}
+                  </span>
+                </div>
+                <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
                   {formatDate(sale.purchaseDateTime)}
                 </p>
               </div>
-              <div className="text-right">
-                                 <span className="text-lg font-bold text-green-600">
-                   ${formatPrice(sale.price)}
-                 </span>
-                <p className="text-xs text-gray-500 dark:text-gray-400">
-                  Overall: {sale.player.metadata.overall}
+                            <div className="text-right">
+                <span className="text-lg font-bold text-green-600">
+                  ${formatPrice(sale.price)}
+                </span>
+                <p className="text-sm text-gray-700 dark:text-gray-300">
+                  {(() => {
+                    const historicalStats = calculatePlayerStatsAtSale(sale.purchaseDateTime, progressionData);
+                    if (historicalStats) {
+                      return `Overall: ${historicalStats.overall} (Age: ${historicalStats.age})`;
+                    } else {
+                      return `Overall: ${sale.player.metadata.overall}`;
+                    }
+                  })()}
                 </p>
               </div>
             </div>

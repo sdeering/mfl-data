@@ -10,6 +10,9 @@ import PlayerStatsGrid from './PlayerStatsGrid';
 import PositionRatingsDisplay from './PositionRatingsDisplay';
 import PlayerProgressionGraph from './PlayerProgressionGraph';
 import PlayerSaleHistory from './PlayerSaleHistory';
+import PlayerPositionSummary from './PlayerPositionSummary';
+import PlayerRecentMatches from './PlayerRecentMatches';
+import { useLoading } from '../contexts/LoadingContext';
 
 interface PlayerResultsPageProps {
   propPlayerId?: string;
@@ -49,9 +52,11 @@ const PlayerResultsPage: React.FC<PlayerResultsPageProps> = ({ propPlayerId }) =
   const [player, setPlayer] = useState<MFLPlayer | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { setIsLoading: setGlobalLoading } = useLoading();
 
   const fetchPlayerData = useCallback(async (playerId: string) => {
     setIsLoading(true);
+    setGlobalLoading(true);
     setError(null);
     
     try {
@@ -65,8 +70,9 @@ const PlayerResultsPage: React.FC<PlayerResultsPageProps> = ({ propPlayerId }) =
       setError(errorMessage);
     } finally {
       setIsLoading(false);
+      setGlobalLoading(false);
     }
-  }, []);
+  }, [setGlobalLoading]);
 
   // Initialize player data on component mount
   useEffect(() => {
@@ -181,6 +187,8 @@ const PlayerResultsPage: React.FC<PlayerResultsPageProps> = ({ propPlayerId }) =
                   )}
                 </div>
               </div>
+
+
             </div>
 
             {/* Row 2 - Progression Graph (Full width) */}
@@ -194,13 +202,36 @@ const PlayerResultsPage: React.FC<PlayerResultsPageProps> = ({ propPlayerId }) =
               </div>
             </div>
 
-            {/* Row 3 - Sale History (Full width) */}
-            <div className="w-full mb-6">
-              <div className="w-full p-[5px] max-w-[400px]">
-                <PlayerSaleHistory 
-                  playerId={player.id.toString()} 
-                  playerName={`${player.metadata.firstName} ${player.metadata.lastName}`}
-                />
+            {/* Row 3 - Sale History, Position Summary, and Recent Matches (Three columns) */}
+            <div className="flex flex-wrap gap-4 mb-6">
+              {/* Sale History */}
+              <div className="w-full lg:w-[400px]">
+                <div className="w-full p-[5px]">
+                  <PlayerSaleHistory 
+                    playerId={player.id.toString()} 
+                    playerName={`${player.metadata.firstName} ${player.metadata.lastName}`}
+                  />
+                </div>
+              </div>
+
+              {/* Position Summary */}
+              <div className="w-full lg:w-[350px]">
+                <div className="w-full p-[5px]">
+                  <PlayerPositionSummary 
+                    playerId={player.id.toString()} 
+                    playerName={`${player.metadata.firstName} ${player.metadata.lastName}`}
+                  />
+                </div>
+              </div>
+
+              {/* Recent Matches */}
+              <div className="w-full lg:w-[350px]">
+                <div className="w-full p-[5px]">
+                  <PlayerRecentMatches 
+                    playerId={player.id.toString()} 
+                    playerName={`${player.metadata.firstName} ${player.metadata.lastName}`}
+                  />
+                </div>
               </div>
             </div>
           </>

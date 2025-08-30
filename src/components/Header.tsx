@@ -3,11 +3,13 @@
 import React, { useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import SearchBar from './SearchBar';
+import { useLoading } from '../contexts/LoadingContext';
 
 export const Header: React.FC = () => {
   const [showLoginPopup, setShowLoginPopup] = useState(false);
   const router = useRouter();
   const pathname = usePathname();
+  const { isLoading } = useLoading();
 
   const handleLoginClick = () => {
     setShowLoginPopup(true);
@@ -36,7 +38,7 @@ export const Header: React.FC = () => {
             {/* Search Bar - Only show on player pages */}
             {pathname.includes('/players/') && (
               <div className="hidden lg:block">
-                <SearchBar />
+                <SearchBar isLoading={isLoading} />
               </div>
             )}
           </div>
@@ -73,7 +75,7 @@ export const Header: React.FC = () => {
         {/* Search Bar - Mobile only */}
         {pathname.includes('/players/') && (
           <div className="mt-4 lg:hidden">
-            <SearchBar />
+            <SearchBar isLoading={isLoading} />
           </div>
         )}
       </header>

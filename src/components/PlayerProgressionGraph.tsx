@@ -61,16 +61,12 @@ export default function PlayerProgressionGraph({ playerId, playerName, playerPos
       try {
         const experienceHistory = await fetchPlayerExperienceHistory(playerId);
         
-                       if (experienceHistory.success && experienceHistory.data.length > 0) {
-                         const processedData = processProgressionData(experienceHistory.data);
-        console.log('Raw experience history:', experienceHistory.data);
-        console.log('Processed progression data:', processedData);
-        console.log('First entry:', processedData[0]);
-        console.log('Last entry:', processedData[processedData.length - 1]);
-        setProgressionData(processedData);
-               } else {
-                 setError(experienceHistory.error || 'No progression data available');
-               }
+                               if (experienceHistory.success && experienceHistory.data.length > 0) {
+          const processedData = processProgressionData(experienceHistory.data);
+          setProgressionData(processedData);
+        } else {
+          setError(experienceHistory.error || 'No progression data available');
+        }
       } catch (err) {
         setError('Failed to load progression data');
       } finally {
@@ -203,13 +199,7 @@ export default function PlayerProgressionGraph({ playerId, playerName, playerPos
      const uniqueValues = new Set(validData.map(d => d.value));
      const hasProgression = uniqueValues.size > 1;
      
-     if (stat === 'pace') {
-       console.log('Pace path generation:', {
-         validData: validData.map(d => ({ age: d.age, value: d.value })),
-         uniqueValues: Array.from(uniqueValues),
-         hasProgression
-       });
-     }
+
      
      if (!hasProgression) {
        // If no progression, draw a straight line from the very first age to the very last age
@@ -419,7 +409,7 @@ export default function PlayerProgressionGraph({ playerId, playerName, playerPos
                  // For the legend, we want to show the current (latest) value, not the first value
                  const displayValue = currentValue !== undefined ? currentValue : 0;
                  
-                 console.log(`Legend for ${stat}:`, { currentValue, firstValue, change });
+         
                  
                  return (
                    <div key={stat} className="flex items-center space-x-2 text-base font-semibold text-gray-700">

@@ -4,6 +4,7 @@ import './globals.css';
 import ThemeProviderWrapper from '../src/components/ThemeProviderWrapper';
 import Header from '../src/components/Header';
 import Footer from '../src/components/Footer';
+import { LoadingProvider } from '../src/contexts/LoadingContext';
 
 const titilliumWeb = Titillium_Web({ 
   subsets: ['latin'],
@@ -73,11 +74,13 @@ export default function RootLayout({
       </head>
       <body className={`${titilliumWeb.className} min-h-screen transition-colors duration-300`}>
         <ThemeProviderWrapper>
-          <div className="max-w-[1140px] mx-auto">
-            <Header />
-            {children}
-            <Footer />
-          </div>
+          <LoadingProvider>
+            <div className="max-w-[1140px] mx-auto">
+              <Header />
+              {children}
+              <Footer />
+            </div>
+          </LoadingProvider>
         </ThemeProviderWrapper>
       </body>
     </html>

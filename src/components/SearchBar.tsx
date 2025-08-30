@@ -11,10 +11,15 @@ interface RecentSearch {
   timestamp: number;
 }
 
-export const SearchBar: React.FC = () => {
+interface SearchBarProps {
+  isLoading?: boolean;
+}
+
+export const SearchBar: React.FC<SearchBarProps> = ({ isLoading = false }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [recentSearches, setRecentSearches] = useState<RecentSearch[]>([]);
   const [showRecentSearches, setShowRecentSearches] = useState(false);
+  const [isSearching, setIsSearching] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
@@ -46,11 +51,30 @@ export const SearchBar: React.FC = () => {
     };
   }, []);
 
+  // Reset local searching state when global loading completes
+  useEffect(() => {
+    if (!isLoading) {
+      setIsSearching(false);
+    }
+  }, [isLoading]);
+
+  // Clear search query only after navigation completes
+  useEffect(() => {
+    if (!isLoading && !isSearching) {
+      // Small delay to ensure the page has fully loaded
+      const timer = setTimeout(() => {
+        setSearchQuery('');
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [isLoading, isSearching]);
+
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
     if (searchQuery.trim()) {
+      setIsSearching(true);
       router.push(`/players/${encodeURIComponent(searchQuery.trim())}`);
-      setSearchQuery('');
+      // Don't clear search query immediately - let it stay until page loads
       setShowRecentSearches(false);
     }
   };
@@ -58,19 +82,19 @@ export const SearchBar: React.FC = () => {
   const handleSearchInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
     setSearchQuery(value);
-    
-    // Auto-load player if a valid player ID is entered (numeric, 4-6 digits)
+  };
+
+  const handlePaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
+    const pastedValue = e.clipboardData.getData('text');
     const playerIdPattern = /^\d{4,6}$/;
-    if (playerIdPattern.test(value.trim())) {
-      // Small delay to avoid immediate loading while user is still typing
+    
+    if (playerIdPattern.test(pastedValue.trim())) {
+      // Auto-search for pasted player IDs
       setTimeout(() => {
-        // Use the current value instead of searchQuery state
-        if (playerIdPattern.test(value.trim())) {
-          router.push(`/players/${encodeURIComponent(value.trim())}`);
-          setSearchQuery('');
-          setShowRecentSearches(false);
-        }
-      }, 500); // 500ms delay
+        setIsSearching(true);
+        router.push(`/players/${encodeURIComponent(pastedValue.trim())}`);
+        setShowRecentSearches(false);
+      }, 100);
     }
   };
 
@@ -81,8 +105,9 @@ export const SearchBar: React.FC = () => {
   };
 
   const handleRecentSearchClick = (playerId: string) => {
+    setIsSearching(true);
     router.push(`/players/${playerId}`);
-    setSearchQuery('');
+    // Don't clear search query immediately - let it stay until page loads
     setShowRecentSearches(false);
   };
 
@@ -108,17 +133,30 @@ export const SearchBar: React.FC = () => {
           type="text"
           value={searchQuery}
           onChange={handleSearchInputChange}
+          onPaste={handlePaste}
           onFocus={handleSearchInputFocus}
-                          placeholder="Search for a player by id..."
-          className="w-full lg:w-80 px-3 py-2 pr-10 bg-white dark:bg-[#121213] border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400"
+          placeholder="Search for a player by id..."
+          disabled={isSearching}
+          className={`w-full lg:w-80 px-3 py-2 pr-10 bg-white dark:bg-[#121213] border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 ${
+            isSearching ? 'opacity-50 cursor-not-allowed' : ''
+          }`}
         />
         <button
           type="submit"
-          className="absolute right-2 top-1/2 transform -translate-y-1/2 p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-all duration-200 hover:scale-110 hover:bg-gray-100 dark:hover:bg-gray-700 rounded hover:cursor-pointer cursor-pointer"
+          disabled={isSearching}
+          className={`absolute right-2 top-1/2 transform -translate-y-1/2 p-1 transition-all duration-200 rounded ${
+            isSearching 
+              ? 'text-blue-500 cursor-not-allowed' 
+              : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:scale-110 hover:bg-gray-100 dark:hover:bg-gray-700 hover:cursor-pointer cursor-pointer'
+          }`}
         >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-          </svg>
+          {isSearching ? (
+            <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-500"></div>
+          ) : (
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+          )}
         </button>
       </form>
       
