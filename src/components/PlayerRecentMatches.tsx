@@ -108,13 +108,19 @@ export default function PlayerRecentMatches({ playerId, playerName }: PlayerRece
     if (matchType === 'All') {
       setEnabledMatchTypes(new Set(['League', 'Cup']));
     } else {
-      const newEnabledTypes = new Set(enabledMatchTypes);
-      if (newEnabledTypes.has(matchType)) {
-        newEnabledTypes.delete(matchType);
+      // If "All" is currently active (both selected), clicking individual toggle should select only that one
+      if (enabledMatchTypes.size === 2) {
+        setEnabledMatchTypes(new Set([matchType]));
       } else {
-        newEnabledTypes.add(matchType);
+        // Normal toggle behavior for individual buttons
+        const newEnabledTypes = new Set(enabledMatchTypes);
+        if (newEnabledTypes.has(matchType)) {
+          newEnabledTypes.delete(matchType);
+        } else {
+          newEnabledTypes.add(matchType);
+        }
+        setEnabledMatchTypes(newEnabledTypes);
       }
-      setEnabledMatchTypes(newEnabledTypes);
     }
   };
 
