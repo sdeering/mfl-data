@@ -47,7 +47,8 @@ export function convertDatasetPlayerToOVRFormat(datasetPlayer: DatasetPlayer): P
         PAS: metadata.passing,
         DRI: metadata.dribbling,
         DEF: metadata.defense,
-        PHY: metadata.physical
+        PHY: metadata.physical,
+        GK: metadata.goalkeeping || 0 // Add GK attribute, default to 0 if not provided
       },
       positions: metadata.positions
     };
