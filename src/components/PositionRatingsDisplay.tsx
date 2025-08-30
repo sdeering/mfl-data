@@ -195,7 +195,7 @@ export default function PositionRatingsDisplay({ player }: PositionRatingsDispla
         position: result.position,
         rating: result.ovr,
         familiarity: mappedFamiliarity,
-        difference: result.penalty
+        difference: result.ovr - player.metadata.overall
       };
     });
 
