@@ -55,7 +55,8 @@ export async function POST(request: NextRequest) {
         PAS: attributes.PAS,
         DRI: attributes.DRI,
         DEF: attributes.DEF,
-        PHY: attributes.PHY
+        PHY: attributes.PHY,
+        GK: attributes.GK || 0 // Add GK attribute, default to 0 if not provided
       },
       positions: positions as MFLPosition[]
     };
