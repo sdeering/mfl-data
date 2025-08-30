@@ -32,7 +32,6 @@
 }
 
 body {
-  background: var(--background);
   color: var(--foreground);
   font-family: var(--font-titillium-web), Arial, Helvetica, sans-serif;
 }
