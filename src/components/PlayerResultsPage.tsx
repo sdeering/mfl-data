@@ -123,7 +123,7 @@ const PlayerResultsPage: React.FC<PlayerResultsPageProps> = ({ propPlayerId }) =
   return (
     <div className="min-h-screen">
       {/* Main Content Area - Responsive Layout */}
-      <div className="px-4 lg:px-0 bg-white dark:bg-[#121213] rounded-lg shadow-sm">
+      <div className="px-4 lg:px-0 bg-white dark:bg-[#121213]">
         {player ? (
           <>
             {/* Row 1 - Main player information */}
