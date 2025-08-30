@@ -109,7 +109,7 @@ export const SearchBar: React.FC = () => {
           value={searchQuery}
           onChange={handleSearchInputChange}
           onFocus={handleSearchInputFocus}
-          placeholder="Search for a player..."
+                          placeholder="Search for a player by id..."
           className="w-full lg:w-80 px-3 py-2 pr-10 bg-white dark:bg-[#121213] border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400"
         />
         <button
