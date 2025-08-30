@@ -10,7 +10,7 @@ interface PlayerProgressionGraphProps {
 }
 
 const STAT_COLORS = {
-  overall: '#3B82F6', // blue
+  overall: 'black', // black
   pace: 'rgb(255, 163, 50)', // orange
   dribbling: 'rgb(34, 163, 140)', // teal
   passing: 'rgb(30, 255, 0)', // bright green
