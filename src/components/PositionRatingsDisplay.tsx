@@ -1,7 +1,8 @@
 'use client';
 
 import React, { useState } from 'react';
-import { useMLPositionRatings } from '../hooks/useMLPositionRatings';
+import { useRuleBasedPositionRatings } from '../hooks/useRuleBasedPositionRatings';
+import { convertMFLPlayerToOVRFormat } from '../utils/playerDataConverter';
 import type { MFLPosition } from '../types/positionOvr';
 import { getRatingStyle } from '../utils/ratingUtils';
 
@@ -67,8 +68,16 @@ interface PositionRatingsDisplayProps {
 export default function PositionRatingsDisplay({ player }: PositionRatingsDisplayProps) {
   const [showAllPositions, setShowAllPositions] = useState(false);
   
-  // Use the ML position ratings hook
-  const { positionRatings, isLoading, error } = useMLPositionRatings(player);
+  // Convert player data to the format expected by the rule-based calculator
+  const playerForOVR = convertMFLPlayerToOVRFormat({
+    player: {
+      id: player.id,
+      metadata: player.metadata
+    }
+  });
+  
+  // Use the rule-based position ratings hook
+  const { positionRatings, isLoading, error } = useRuleBasedPositionRatings(playerForOVR);
 
   // Loading state
   if (isLoading) {
@@ -94,7 +103,7 @@ export default function PositionRatingsDisplay({ player }: PositionRatingsDispla
   }
 
   // No ratings available
-  if (!positionRatings || positionRatings.length === 0) {
+  if (!positionRatings || !positionRatings.success || !positionRatings.results) {
     return (
       <div className="text-gray-600 dark:text-gray-400 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
         <div className="text-center">
@@ -104,10 +113,20 @@ export default function PositionRatingsDisplay({ player }: PositionRatingsDispla
     );
   }
 
+  // Convert the results to the format expected by the component
+  const ratingsArray = Object.values(positionRatings.results)
+    .filter(result => result.success)
+    .map(result => ({
+      position: result.position,
+      rating: result.ovr,
+      familiarity: result.familiarity,
+      difference: result.penalty
+    }));
+
   // Filter positions for goalkeepers
   const filteredRatings = player.metadata.positions.includes('GK') && player.metadata.positions.length === 1
-    ? positionRatings.filter(rating => rating.position === 'GK')
-    : positionRatings.filter(rating => rating.position !== 'GK');
+    ? ratingsArray.filter(rating => rating.position === 'GK')
+    : ratingsArray.filter(rating => rating.position !== 'GK');
 
   // Sort by rating (highest first)
   const sortedRatings = [...filteredRatings].sort((a, b) => b.rating - a.rating);
