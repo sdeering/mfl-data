@@ -35,7 +35,13 @@ export function processProgressionData(experienceData: PlayerExperienceEntry[]) 
     .map(entry => ({
       date: new Date(entry.date),
       overall: entry.values.overall!,
-      age: entry.values.age
+      age: entry.values.age,
+      pace: entry.values.pace,
+      dribbling: entry.values.dribbling,
+      passing: entry.values.passing,
+      shooting: entry.values.shooting,
+      defense: entry.values.defense,
+      physical: entry.values.physical
     }))
     .sort((a, b) => a.date.getTime() - b.date.getTime());
 

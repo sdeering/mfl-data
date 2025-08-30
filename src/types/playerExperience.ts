@@ -27,4 +27,12 @@ export interface ProgressionDataPoint {
   date: Date;
   overall: number;
   age?: number;
+  pace?: number;
+  dribbling?: number;
+  passing?: number;
+  shooting?: number;
+  defense?: number;
+  physical?: number;
 }
+
+export type StatType = 'overall' | 'pace' | 'dribbling' | 'passing' | 'shooting' | 'defense' | 'physical';
