@@ -142,7 +142,7 @@ const PlayerResultsPage: React.FC<PlayerResultsPageProps> = ({ propPlayerId }) =
 
               {/* Column 2 - Position Ratings (Mobile: Second, Desktop: Third) */}
               <div className="w-full lg:w-[350px] lg:flex-shrink-0 order-2 lg:order-3">
-                <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4 p-[5px]">Position Ratings</h2>
+                <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-[5px] p-[5px]">Position Ratings</h2>
                 <div className="w-full p-[5px]">
                   <PositionRatingsDisplay player={player} />
                 </div>
