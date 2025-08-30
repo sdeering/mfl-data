@@ -137,13 +137,13 @@ export default function PlayerSaleHistory({ playerId, playerName }: PlayerSaleHi
           >
             <div className="flex justify-between items-start mb-2">
               <div className="flex-1">
-                                                 <div className="flex items-center space-x-2">
+                <div className="flex items-center space-x-2">
                   <span className="text-sm font-medium text-gray-900 dark:text-white">
-                    {sale.sellerName}
+                    {sale.sellerName || (sale.sellerAddress ? `${sale.sellerAddress.slice(0, 8)}...${sale.sellerAddress.slice(-6)}` : 'Unknown')}
                   </span>
                   <span className="text-gray-400">→</span>
                   <span className="text-sm font-medium text-gray-900 dark:text-white">
-                    {sale.buyerName}
+                    {sale.buyerName || (sale.buyerAddress ? `${sale.buyerAddress.slice(0, 8)}...${sale.buyerAddress.slice(-6)}` : 'Unknown')}
                   </span>
                 </div>
                 <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">

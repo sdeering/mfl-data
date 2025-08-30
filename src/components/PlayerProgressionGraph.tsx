@@ -187,7 +187,41 @@ export default function PlayerProgressionGraph({ playerId, playerName, playerPos
     return isNaN(y) ? chartHeight / 2 : y;
   };
 
-     // Generate SVG path for a specific stat
+  // Helper function to get color for the overall line based on rating
+  const getOverallLineColor = (rating: number) => {
+    if (rating >= 95) {
+      return '#87f6f8'; // Ultimate teal
+    } else if (rating >= 85) {
+      return '#fa53ff'; // Legendary purple
+    } else if (rating >= 75) {
+      return '#0047ff'; // Rare blue
+    } else if (rating >= 65) {
+      return '#71ff30'; // Uncommon green
+    } else if (rating >= 55) {
+      return '#ecd17f'; // Limited yellow
+    } else {
+      return '#9f9f9f'; // Common grey
+    }
+  };
+
+  // Helper function to get darker color for dots
+  const getDarkerColor = (color: string) => {
+    // Convert hex to RGB and darken
+    const hex = color.replace('#', '');
+    const r = parseInt(hex.substr(0, 2), 16);
+    const g = parseInt(hex.substr(2, 2), 16);
+    const b = parseInt(hex.substr(4, 2), 16);
+    
+    // Darken by 20%
+    const darkenFactor = 0.8;
+    const darkerR = Math.round(r * darkenFactor);
+    const darkerG = Math.round(g * darkenFactor);
+    const darkerB = Math.round(b * darkenFactor);
+    
+    return `rgb(${darkerR}, ${darkerG}, ${darkerB})`;
+  };
+
+  // Generate SVG path for a specific stat
    const generatePath = (stat: StatType) => {
      const validData = progressionData
        .map(d => ({ age: d.age, value: d[stat] }))
@@ -228,6 +262,76 @@ export default function PlayerProgressionGraph({ playerId, playerName, playerPos
 
      return `M ${points.join(' L ')}`;
    };
+
+  // Generate multi-colored path segments for overall stat
+  const generateOverallPathSegments = () => {
+    const validData = progressionData
+      .map(d => ({ age: d.age, value: d.overall }))
+      .filter(d => d.value !== undefined && d.value >= 0);
+
+    if (validData.length < 2) return [];
+
+    // For stats with no progression (same value), return single segment
+    const uniqueValues = new Set(validData.map(d => d.value));
+    const hasProgression = uniqueValues.size > 1;
+    
+    if (!hasProgression) {
+      const constantValue = validData[0].value!;
+      const x1 = getChartX(minAge);
+      const y1 = getChartY(constantValue, 'overall');
+      const x2 = getChartX(maxAge);
+      const y2 = getChartY(constantValue, 'overall');
+      
+      return [{
+        path: `M ${x1},${y1} L ${x2},${y2}`,
+        color: getOverallLineColor(constantValue)
+      }];
+    }
+
+    // Create path segments with color changes
+    const segments: Array<{ path: string; color: string }> = [];
+    
+    for (let i = 0; i < validData.length - 1; i++) {
+      const currentPoint = validData[i];
+      const nextPoint = validData[i + 1];
+      
+      if (currentPoint.value !== undefined && nextPoint.value !== undefined) {
+        const x1 = getChartX(currentPoint.age || 0);
+        const y1 = getChartY(currentPoint.value, 'overall');
+        const x2 = getChartX(nextPoint.age || 0);
+        const y2 = getChartY(nextPoint.value, 'overall');
+        
+        // Use the color based on the current point's rating
+        const color = getOverallLineColor(currentPoint.value);
+        
+        segments.push({
+          path: `M ${x1},${y1} L ${x2},${y2}`,
+          color
+        });
+      }
+    }
+
+    // Add final segment to current age if needed
+    if (validData.length > 0) {
+      const lastPoint = validData[validData.length - 1];
+      const lastValue = lastPoint.value!;
+      const lastAge = lastPoint.age || 0;
+      
+      if (lastAge < maxAge) {
+        const x1 = getChartX(lastAge);
+        const y1 = getChartY(lastValue, 'overall');
+        const x2 = getChartX(maxAge);
+        const y2 = getChartY(lastValue, 'overall');
+        
+        segments.push({
+          path: `M ${x1},${y1} L ${x2},${y2}`,
+          color: getOverallLineColor(lastValue)
+        });
+      }
+    }
+
+    return segments;
+  };
 
   // Generate data points for circles - only show dots when the stat value changes
   const generateDataPoints = (stat: StatType) => {
@@ -281,7 +385,7 @@ export default function PlayerProgressionGraph({ playerId, playerName, playerPos
                        : 'text-gray-600 dark:text-gray-400 border-gray-300 dark:border-gray-600'
                    }`}
                    style={{
-                     backgroundColor: enabledStats.has(stat) ? STAT_COLORS[stat] : 'transparent'
+                     backgroundColor: enabledStats.has(stat) ? (stat === 'overall' ? getOverallLineColor(progressionData[progressionData.length - 1]?.overall || 0) : STAT_COLORS[stat]) : 'transparent'
                    }}
                  >
                    {STAT_LABELS[stat]}
@@ -372,6 +476,31 @@ export default function PlayerProgressionGraph({ playerId, playerName, playerPos
           {availableStats.map(stat => {
             if (!enabledStats.has(stat) || !statRanges[stat]) return null;
             
+            if (stat === 'overall') {
+              return (
+                <g key={stat}>
+                  {generateOverallPathSegments().map((segment, index) => (
+                    <path
+                      key={`${stat}-segment-${index}`}
+                      d={segment.path}
+                      fill="none"
+                      stroke={segment.color}
+                      strokeWidth="4"
+                    />
+                  ))}
+                  {generateDataPoints(stat).map((point, index) => (
+                    <circle
+                      key={`${stat}-${index}`}
+                      cx={point.x}
+                      cy={point.y}
+                      r="4"
+                      fill={getDarkerColor(getOverallLineColor(point.value || 0))}
+                    />
+                  ))}
+                </g>
+              );
+            }
+
             return (
               <g key={stat}>
                 <path
@@ -415,7 +544,7 @@ export default function PlayerProgressionGraph({ playerId, playerName, playerPos
                    <div key={stat} className="flex items-center space-x-2 text-base font-semibold text-gray-700">
                      <div 
                        className="w-3 h-3 rounded-full" 
-                       style={{ backgroundColor: STAT_COLORS[stat] }}
+                       style={{ backgroundColor: stat === 'overall' ? getOverallLineColor(displayValue) : STAT_COLORS[stat] }}
                      />
                      <span className="font-medium">{STAT_LABELS[stat]}:</span>
                      <span>{displayValue}</span>
