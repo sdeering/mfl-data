@@ -75,7 +75,7 @@ export default function RootLayout({
       <body className={`${titilliumWeb.className} min-h-screen transition-colors duration-300 bg-[#f7f7f7]`}>
         <ThemeProviderWrapper>
           <LoadingProvider>
-            <div className="max-w-[1140px] mx-auto">
+            <div className="max-w-[1200px] mx-auto">
               <Header />
               <div className="p-[30px]">
                 {children}
