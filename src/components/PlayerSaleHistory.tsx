@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { fetchPlayerSaleHistory } from '../services/playerSaleHistoryService';
-import { fetchPlayerExperienceHistory } from '../services/playerExperienceService';
+import { fetchPlayerExperienceHistory, processProgressionData } from '../services/playerExperienceService';
 import { calculatePlayerStatsAtSale } from '../utils/saleHistoryCalculator';
 import type { PlayerSaleHistoryEntry } from '../types/playerSaleHistory';
 import type { ProgressionDataPoint } from '../types/playerExperience';
@@ -38,10 +38,10 @@ export default function PlayerSaleHistory({ playerId, playerName }: PlayerSaleHi
         }
 
         if (progressionResponse.success && progressionResponse.data.length > 0) {
-          setProgressionData(progressionResponse.data);
+          const processedData = processProgressionData(progressionResponse.data);
+          setProgressionData(processedData);
         }
       } catch (err) {
-        console.error('Error fetching data:', err);
         setError('Failed to load sale history');
       } finally {
         setIsLoading(false);
