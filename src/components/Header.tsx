@@ -21,7 +21,7 @@ export const Header: React.FC = () => {
 
   return (
     <>
-      <header className="px-4 py-4 lg:pl-0 lg:pr-[10px] lg:py-6 bg-white dark:bg-[#121213]">
+      <header className="px-[30px] py-4 lg:py-6 bg-white dark:bg-[#121213]">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-4 lg:space-x-6">
             <button 
