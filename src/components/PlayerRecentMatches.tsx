@@ -61,6 +61,9 @@ export default function PlayerRecentMatches({ playerId, playerName }: PlayerRece
 
   const getDivisionBadge = (competitionName: string): string => {
     const name = competitionName.toLowerCase();
+    if (name.includes('flint')) return 'Flint';
+    if (name.includes('ice')) return 'Ice';
+    if (name.includes('spark')) return 'Spark';
     if (name.includes('stone')) return 'Stone';
     if (name.includes('iron')) return 'Iron';
     if (name.includes('bronze')) return 'Bronze';
@@ -75,6 +78,9 @@ export default function PlayerRecentMatches({ playerId, playerName }: PlayerRece
 
   const getDivisionColor = (division: string): string => {
     switch (division.toLowerCase()) {
+      case 'flint': return 'bg-orange-600 text-white';
+      case 'ice': return 'bg-cyan-400 text-gray-900';
+      case 'spark': return 'bg-yellow-400 text-gray-900';
       case 'stone': return 'bg-gray-500 text-white';
       case 'iron': return 'bg-gray-700 text-white';
       case 'bronze': return 'bg-amber-600 text-white';

@@ -281,21 +281,21 @@ function PositionRatingItem({ rating, player, matchRating }: {
           }`}>
             {position}
           </span>
-          {familiarity === 'PRIMARY' && (
-            <span className="text-xs font-semibold text-black dark:text-white">
-              Primary
-            </span>
-          )}
-          {familiarity === 'SECONDARY' && (
-            <span className="text-xs font-semibold text-black dark:text-white">
-              Secondary
-            </span>
-          )}
           {matchRating && (
             <div className="flex items-center space-x-1">
-              <span className={`text-[24px] font-bold ${getMatchRatingColor(matchRating.averageRating)}`}>
+              <span className={`text-[24px] font-bold ${getMatchRatingColor(matchRating.averageRating)}`} style={{ marginRight: '10px', marginLeft: '4px' }}>
                 {matchRating.averageRating.toFixed(2)}
               </span>
+              {familiarity === 'PRIMARY' && (
+                <span className="text-xs font-semibold text-black dark:text-white">
+                  Primary
+                </span>
+              )}
+              {familiarity === 'SECONDARY' && (
+                <span className="text-xs font-semibold text-black dark:text-white">
+                  Secondary
+                </span>
+              )}
             </div>
           )}
         </div>
