@@ -86,7 +86,6 @@ export default function PlayerProgressionGraph({ playerId, playerName }: PlayerP
   if (isLoading) {
     return (
       <div className="w-full p-4 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
-        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Player Progression</h3>
         <div className="flex items-center justify-center h-48">
           <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
         </div>
@@ -98,7 +97,6 @@ export default function PlayerProgressionGraph({ playerId, playerName }: PlayerP
   if (error) {
     return (
       <div className="w-full p-4 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
-        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Player Progression</h3>
         <div className="flex items-center justify-center h-48">
           <div className="text-center text-gray-500 dark:text-gray-400">
             <p className="text-sm">{error}</p>
@@ -112,7 +110,6 @@ export default function PlayerProgressionGraph({ playerId, playerName }: PlayerP
   if (progressionData.length === 0) {
     return (
       <div className="w-full p-4 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
-        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Player Progression</h3>
         <div className="flex items-center justify-center h-48">
           <div className="text-center text-gray-500 dark:text-gray-400">
             <p className="text-sm">No progression data available</p>
@@ -335,7 +332,7 @@ export default function PlayerProgressionGraph({ playerId, playerName }: PlayerP
         {/* Legend */}
         <div className="mt-4 text-xs text-gray-500 dark:text-gray-400">
           <div className="flex items-center justify-between">
-            <span>Data Points: {progressionData.length}</span>
+            <span>Player Progression</span>
             <span>Time Range: {minDate.toLocaleDateString()} - {maxDate.toLocaleDateString()}</span>
           </div>
                      {enabledStats.size > 0 && (
