@@ -64,7 +64,6 @@ export default function PlayerStats({ player }: PlayerStatsProps) {
 
   const stats = [
     { label: 'Player ID', value: `#${player.id}` },
-    { label: 'Overall Rating', value: overall, isRating: true },
     { label: 'Country', value: nationalities?.[0], isCountry: true },
     { label: 'Age', value: age },
     { label: 'Height', value: formatHeight(height), isHeight: true },
