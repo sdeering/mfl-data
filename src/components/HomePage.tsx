@@ -38,7 +38,7 @@ export const HomePage: React.FC = () => {
     <div className="min-h-screen">
 
       {/* Main Content - Centered Search */}
-      <main className="flex items-start lg:items-center justify-center min-h-[calc(100vh-120px)] bg-white dark:bg-[#121213] pt-32 lg:pt-0" style={{ marginTop: '-200px' }}>
+      <main className="flex items-start lg:items-center justify-center min-h-[calc(100vh-120px)] bg-white dark:bg-[#121213] pt-48 lg:pt-0" style={{ marginTop: '-200px' }}>
         <div className="w-full max-w-md">
           <form onSubmit={handleSearch} className="space-y-6">
             <div className="text-center mb-8">
