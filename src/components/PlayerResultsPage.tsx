@@ -213,7 +213,7 @@ const PlayerResultsPage: React.FC<PlayerResultsPageProps> = ({ propPlayerId }) =
   if (error) {
     return (
       <div className="min-h-screen">
-        <div className="p-6 bg-white dark:bg-[#121213] pt-24">
+        <div className="p-6 bg-white dark:bg-[#121213] pt-8">
           <div className="flex items-center justify-center min-h-[calc(100vh-6rem)]">
             <div className="text-center max-w-md">
               <div className="mb-6">
