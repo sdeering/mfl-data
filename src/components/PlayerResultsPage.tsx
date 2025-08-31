@@ -117,12 +117,20 @@ const PlayerResultsPage: React.FC<PlayerResultsPageProps> = ({ propPlayerId }) =
 
       if (marketResponse.success && player.metadata) {
   
+        // Convert position ratings to the expected format
+        const positionRatingsForMarketValue = Object.entries(positionRatings).reduce((acc, [position, result]) => {
+          if (result.success) {
+            acc[position] = result.ovr;
+          }
+          return acc;
+        }, {} as { [position: string]: number });
+
         const estimate = calculateMarketValue(
           player.metadata,
           marketResponse.data,
           historyResponse.success ? historyResponse.data : [],
           progressionResponse.success ? processProgressionData(progressionResponse.data) : [],
-          positionRatings,
+          positionRatingsForMarketValue,
           player.metadata.retirementYears,
           matchesResponse.success ? matchesResponse.data.length : undefined,
           player.id // Pass the actual player ID
