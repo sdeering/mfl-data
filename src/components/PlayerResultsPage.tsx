@@ -160,7 +160,23 @@ const PlayerResultsPage: React.FC<PlayerResultsPageProps> = ({ propPlayerId }) =
       // Calculate market value
       await calculateMarketValueForPlayer(player);
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to fetch player data';
+      let errorMessage = 'Failed to fetch player data';
+      
+      if (err instanceof Error) {
+        // Check if it's an HTTP 400 error (likely a name search)
+        if (err.message.includes('HTTP 400')) {
+          // Check if the search query looks like a name (contains letters) vs an ID (numbers only)
+          const isLikelyName = /[a-zA-Z]/.test(playerId);
+          if (isLikelyName) {
+            errorMessage = 'Player name search is not supported yet. Please search by Player ID (numbers only).';
+          } else {
+            errorMessage = 'Invalid Player ID. Please enter a valid numeric Player ID.';
+          }
+        } else {
+          errorMessage = err.message;
+        }
+      }
+      
       setError(errorMessage);
     } finally {
       setIsLoading(false);
@@ -199,14 +215,41 @@ const PlayerResultsPage: React.FC<PlayerResultsPageProps> = ({ propPlayerId }) =
       <div className="min-h-screen">
         <div className="p-6 bg-white dark:bg-[#121213]">
           <div className="flex items-center justify-center h-64">
-            <div className="text-center">
-              <p className="text-red-600 mb-4">Error: {error}</p>
-              <button
-                onClick={() => window.location.reload()}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-              >
-                Try Again
-              </button>
+            <div className="text-center max-w-md">
+              <div className="mb-6">
+                <svg className="w-16 h-16 text-red-500 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                </svg>
+                <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">Search Error</h2>
+                <p className="text-gray-600 dark:text-gray-400 mb-4">{error}</p>
+              </div>
+              
+              <div className="space-y-3">
+                <button
+                  onClick={() => window.location.href = '/'}
+                  className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                >
+                  Back to Search
+                </button>
+                <button
+                  onClick={() => window.location.reload()}
+                  className="w-full px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
+                >
+                  Try Again
+                </button>
+              </div>
+              
+              {error.includes('Player name search') && (
+                <div className="mt-6 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                  <h3 className="font-medium text-blue-900 dark:text-blue-100 mb-2">How to find a Player ID:</h3>
+                  <ul className="text-sm text-blue-800 dark:text-blue-200 space-y-1">
+                    <li>• Visit <a href="https://app.playmfl.com" target="_blank" rel="noopener noreferrer" className="underline">app.playmfl.com</a></li>
+                    <li>• Search for the player you want</li>
+                    <li>• Copy the Player ID from the URL or player page</li>
+                    <li>• Paste the ID here to search</li>
+                  </ul>
+                </div>
+              )}
             </div>
           </div>
         </div>
