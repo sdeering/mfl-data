@@ -127,7 +127,7 @@ describe('Market Value Calculator', () => {
       expect(result.breakdown.positionPremium).toBe(expectedPremium);
     });
 
-    it('should apply +15% premium for 3+ playable positions', () => {
+    it('should apply +15% premium for 3 playable positions', () => {
       const positionRatings = {
         'LB': 82, // 0 points difference - playable
         'LWB': 77, // 5 points difference - playable
@@ -146,6 +146,29 @@ describe('Market Value Calculator', () => {
       expect(result.breakdown.positionPremium).toBeGreaterThan(0);
       // Should be approximately 15% of base value
       const expectedPremium = Math.round(result.details.baseValue * 0.15);
+      expect(result.breakdown.positionPremium).toBe(expectedPremium);
+    });
+
+    it('should apply +20% premium for 4+ playable positions', () => {
+      const positionRatings = {
+        'LB': 82, // 0 points difference - playable
+        'LWB': 77, // 5 points difference - playable
+        'CB': 76, // 6 points difference - playable
+        'RB': 78, // 4 points difference - playable
+        'CDM': 65  // 17 points difference - not playable
+      };
+
+      const result = calculateMarketValue(
+        mockPlayer,
+        mockComparableListings,
+        mockRecentSales,
+        mockProgressionData,
+        positionRatings
+      );
+
+      expect(result.breakdown.positionPremium).toBeGreaterThan(0);
+      // Should be approximately 20% of base value
+      const expectedPremium = Math.round(result.details.baseValue * 0.20);
       expect(result.breakdown.positionPremium).toBe(expectedPremium);
     });
 
@@ -193,7 +216,7 @@ describe('Market Value Calculator', () => {
     it('should fallback to original positions logic when positionRatings not provided', () => {
       const playerWithMultiplePositions = {
         ...mockPlayer,
-        positions: ['LB', 'LWB', 'CB'] as const
+        positions: ['LB', 'LWB', 'CB', 'RB'] as const
       };
 
       const result = calculateMarketValue(
@@ -205,8 +228,8 @@ describe('Market Value Calculator', () => {
       );
 
       expect(result.breakdown.positionPremium).toBeGreaterThan(0);
-      // Should be approximately 15% of base value (3 positions)
-      const expectedPremium = Math.round(result.details.baseValue * 0.15);
+      // Should be approximately 20% of base value (4 positions)
+      const expectedPremium = Math.round(result.details.baseValue * 0.20);
       expect(result.breakdown.positionPremium).toBe(expectedPremium);
     });
   });

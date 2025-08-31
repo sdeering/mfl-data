@@ -150,11 +150,11 @@ export function calculateMarketValue(
       // Position premium based on number of playable positions
       if (playablePositionCount === 2) {
         positionPremium = roundedBaseValue * 0.10; // +10% for 2 playable positions
-      } else if (playablePositionCount >= 3) {
-        positionPremium = roundedBaseValue * 0.15; // +15% for 3+ playable positions
+      } else if (playablePositionCount === 3) {
+        positionPremium = roundedBaseValue * 0.15; // +15% for 3 playable positions
+      } else if (playablePositionCount >= 4) {
+        positionPremium = roundedBaseValue * 0.20; // +20% for 4+ playable positions
       }
-      
-
       
       totalAdjustments += positionPremium;
     }
@@ -163,8 +163,10 @@ export function calculateMarketValue(
     if (player.positions.length > 1) {
       if (player.positions.length === 2) {
         positionPremium = roundedBaseValue * 0.10; // +10% for 2 positions
-      } else if (player.positions.length >= 3) {
-        positionPremium = roundedBaseValue * 0.15; // +15% for 3+ positions
+      } else if (player.positions.length === 3) {
+        positionPremium = roundedBaseValue * 0.15; // +15% for 3 positions
+      } else if (player.positions.length >= 4) {
+        positionPremium = roundedBaseValue * 0.20; // +20% for 4+ positions
       }
       
       totalAdjustments += positionPremium;
