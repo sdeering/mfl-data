@@ -396,7 +396,7 @@ export default function PlayerProgressionGraph({ playerId, playerName, playerPos
       <div className="relative">
         <svg
           width="100%"
-          height="auto"
+          height="500"
           className="w-full max-w-full"
           viewBox="0 0 1200 500"
         >
@@ -428,12 +428,12 @@ export default function PlayerProgressionGraph({ playerId, playerName, playerPos
             const maxValue = Math.max(...enabledRanges.map(r => r!.max));
             const midValue = Math.round((minValue + maxValue) / 2);
             
-            return [minValue, midValue, maxValue].map((value) => {
+            return [minValue, midValue, maxValue].map((value, index) => {
               // Use the first enabled stat for Y calculation (they all use the same range now)
               const firstStat = Array.from(enabledStats)[0];
               const y = getChartY(value, firstStat);
               return (
-                <g key={value}>
+                <g key={`y-axis-${value}-${index}`}>
                   <text
                     x={padding - 5}
                     y={y + 4}

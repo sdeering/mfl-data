@@ -3,7 +3,14 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { mflApi } from '../services/mflApi';
+import { fetchMarketData } from '../services/marketDataService';
+import { calculateMarketValue } from '../utils/marketValueCalculator';
+import { fetchPlayerSaleHistory } from '../services/playerSaleHistoryService';
+import { fetchPlayerExperienceHistory, processProgressionData } from '../services/playerExperienceService';
+import { fetchPlayerMatches } from '../services/playerMatchesService';
+import { calculateAllPositionOVRs } from '../utils/ruleBasedPositionCalculator';
 import type { MFLPlayer } from '../types/mflApi';
+import type { MarketValueEstimate } from '../utils/marketValueCalculator';
 import PlayerImage from './PlayerImage';
 import PlayerStats from './PlayerStats';
 import PlayerStatsGrid from './PlayerStatsGrid';
@@ -38,8 +45,8 @@ const addToRecentSearches = (player: MFLPlayer) => {
     // Add new search to the beginning
     const updatedSearches = [newSearch, ...filteredSearches];
     
-    // Keep only the last 10 searches
-    const limitedSearches = updatedSearches.slice(0, 10);
+    // Keep only the last 20 searches
+    const limitedSearches = updatedSearches.slice(0, 20);
     
     localStorage.setItem('mfl-recent-searches', JSON.stringify(limitedSearches));
   } catch (error) {
@@ -50,9 +57,85 @@ const addToRecentSearches = (player: MFLPlayer) => {
 const PlayerResultsPage: React.FC<PlayerResultsPageProps> = ({ propPlayerId }) => {
   const searchParams = useSearchParams();
   const [player, setPlayer] = useState<MFLPlayer | null>(null);
+  const [marketValueEstimate, setMarketValueEstimate] = useState<MarketValueEstimate | null>(null);
+  const [progressionData, setProgressionData] = useState<any[] | null>(null);
+  const [matchCount, setMatchCount] = useState<number | undefined>(undefined);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { setIsLoading: setGlobalLoading } = useLoading();
+
+  const calculateMarketValueForPlayer = useCallback(async (player: MFLPlayer) => {
+    try {
+      // Validate that player and metadata exist
+      if (!player || !player.metadata) {
+        console.warn('Player or player metadata not available for market value calculation');
+        return;
+      }
+
+      const [marketResponse, historyResponse, progressionResponse, matchesResponse] = await Promise.all([
+        fetchMarketData({
+          positions: player.metadata.positions,
+          ageMin: Math.max(1, player.metadata.age - 1),
+          ageMax: player.metadata.age + 1,
+          overallMin: Math.max(1, player.metadata.overall - 1),
+          overallMax: player.metadata.overall + 1,
+          limit: 50
+        }),
+        fetchPlayerSaleHistory(player.id.toString()),
+        fetchPlayerExperienceHistory(player.id.toString()),
+        fetchPlayerMatches(player.id.toString())
+      ]);
+
+      // Calculate position ratings
+      const playerForOVR = {
+        id: player.id,
+        name: `${player.metadata.firstName} ${player.metadata.lastName}`,
+        attributes: {
+          PAC: player.metadata.pace,
+          SHO: player.metadata.shooting,
+          PAS: player.metadata.passing,
+          DRI: player.metadata.dribbling,
+          DEF: player.metadata.defense,
+          PHY: player.metadata.physical,
+          GK: player.metadata.goalkeeping || 0
+        },
+        positions: player.metadata.positions,
+        overall: player.metadata.overall
+      };
+      const positionRatingsResult = calculateAllPositionOVRs(playerForOVR);
+      const positionRatings = positionRatingsResult.results;
+      
+
+
+      // Store progression data and match count for tags
+      if (progressionResponse.success) {
+        setProgressionData(processProgressionData(progressionResponse.data));
+      }
+      if (matchesResponse.success) {
+        setMatchCount(matchesResponse.data.length);
+      }
+
+      if (marketResponse.success && player.metadata) {
+  
+        const estimate = calculateMarketValue(
+          player.metadata,
+          marketResponse.data,
+          historyResponse.success ? historyResponse.data : [],
+          progressionResponse.success ? processProgressionData(progressionResponse.data) : [],
+          positionRatings,
+          player.metadata.retirementYears,
+          matchesResponse.success ? matchesResponse.data.length : undefined,
+          player.id // Pass the actual player ID
+        );
+
+        setMarketValueEstimate(estimate);
+      } else {
+
+      }
+    } catch (error) {
+      console.error('Failed to calculate market value:', error);
+    }
+  }, []);
 
   const fetchPlayerData = useCallback(async (playerId: string) => {
     setIsLoading(true);
@@ -65,6 +148,9 @@ const PlayerResultsPage: React.FC<PlayerResultsPageProps> = ({ propPlayerId }) =
       
       // Add player to recent searches when successfully loaded
       addToRecentSearches(player);
+      
+      // Calculate market value
+      await calculateMarketValueForPlayer(player);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to fetch player data';
       setError(errorMessage);
@@ -72,7 +158,7 @@ const PlayerResultsPage: React.FC<PlayerResultsPageProps> = ({ propPlayerId }) =
       setIsLoading(false);
       setGlobalLoading(false);
     }
-  }, [setGlobalLoading]);
+  }, [setGlobalLoading, calculateMarketValueForPlayer]);
 
   // Initialize player data on component mount
   useEffect(() => {
@@ -152,46 +238,56 @@ const PlayerResultsPage: React.FC<PlayerResultsPageProps> = ({ propPlayerId }) =
               <div className="w-full lg:w-[350px] lg:flex-shrink-0 order-3 lg:order-1">
                 <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4 hidden">Player Information</h2>
                 <div className="w-full bg-white dark:bg-[#121213] p-[5px]">
-                  <PlayerStats player={player!} />
-                  {/* View on MFL.com Button */}
-                  {player!.id && (
-                    <div className="mt-4 space-y-2">
-                      <button
-                        onClick={() => window.open(`https://app.playmfl.com/players/${player!.id}`, '_blank')}
-                        className="w-full px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg border border-gray-200 dark:border-gray-600 hover:bg-gray-200 dark:hover:bg-gray-600 hover:text-gray-900 dark:hover:text-white transition-all duration-200 font-medium text-sm flex items-center justify-center space-x-2 cursor-pointer"
-                      >
-                        <span>View on mfl.com</span>
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                        </svg>
-                      </button>
-                      <button
-                        onClick={() => window.open(`https://mflplayer.info/player/${player!.id}`, '_blank')}
-                        className="w-full px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg border border-gray-200 dark:border-gray-600 hover:bg-gray-200 dark:hover:bg-gray-600 hover:text-gray-900 dark:hover:text-white transition-all duration-200 font-medium text-sm flex items-center justify-center space-x-2 cursor-pointer"
-                      >
-                        <span>View on mflplayer.info</span>
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                        </svg>
-                      </button>
-                      <button
-                        onClick={() => window.open(`https://mfl-assistant.com/search?q=${encodeURIComponent(`${player!.metadata.firstName} ${player!.metadata.lastName}`)}`, '_blank')}
-                        className="w-full px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg border border-gray-200 dark:border-gray-600 hover:bg-gray-200 dark:hover:bg-gray-600 hover:text-gray-900 dark:hover:text-white transition-all duration-200 font-medium text-sm flex items-center justify-center space-x-2 cursor-pointer"
-                      >
-                        <span>View on mfl-assistant.com</span>
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                        </svg>
-                      </button>
-                    </div>
-                  )}
+                  <PlayerStats 
+                    player={player!} 
+                    marketValueEstimate={marketValueEstimate}
+                    progressionData={progressionData}
+                    matchCount={matchCount}
+                  />
                 </div>
               </div>
 
 
             </div>
 
-            {/* Row 2 - Progression Graph (Full width) */}
+            {/* Row 2 - External Links (Full width) */}
+            {player!.id && (
+              <div className="w-full mb-6">
+                <div className="w-full p-[5px]">
+                  <div className="flex gap-2 max-w-lg mx-auto">
+                    <button
+                      onClick={() => window.open(`https://app.playmfl.com/players/${player!.id}`, '_blank')}
+                      className="flex-1 px-3 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg border border-gray-200 dark:border-gray-600 hover:bg-gray-200 dark:hover:bg-gray-600 hover:text-gray-900 dark:hover:text-white transition-all duration-200 font-medium text-sm flex items-center justify-center space-x-2 cursor-pointer"
+                    >
+                      <span>mfl.com</span>
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                      </svg>
+                    </button>
+                    <button
+                      onClick={() => window.open(`https://mflplayer.info/player/${player!.id}`, '_blank')}
+                      className="flex-1 px-3 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg border border-gray-200 dark:border-gray-600 hover:bg-gray-200 dark:hover:bg-gray-600 hover:text-gray-900 dark:hover:text-white transition-all duration-200 font-medium text-sm flex items-center justify-center space-x-2 cursor-pointer"
+                    >
+                      <span>mflplayer.info</span>
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                      </svg>
+                    </button>
+                    <button
+                      onClick={() => window.open(`https://mfl-assistant.com/search?q=${encodeURIComponent(`${player!.metadata.firstName} ${player!.metadata.lastName}`)}`, '_blank')}
+                      className="flex-1 px-3 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg border border-gray-200 dark:border-gray-600 hover:bg-gray-200 dark:hover:bg-gray-600 hover:text-gray-900 dark:hover:text-white transition-all duration-200 font-medium text-sm flex items-center justify-center space-x-2 cursor-pointer"
+                    >
+                      <span>mfl-assistant.com</span>
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Row 3 - Progression Graph (Full width) */}
             <div className="w-full mb-6">
               <div className="w-full p-[5px]">
                 <PlayerProgressionGraph 
@@ -202,7 +298,7 @@ const PlayerResultsPage: React.FC<PlayerResultsPageProps> = ({ propPlayerId }) =
               </div>
             </div>
 
-            {/* Row 3 - Sale History, Position Summary, and Recent Matches (Three columns) */}
+            {/* Row 4 - Sale History, Position Summary, and Recent Matches (Three columns) */}
             <div className="flex flex-wrap gap-4 mb-6">
               {/* Sale History */}
               <div className="w-full lg:w-[400px]">
@@ -211,6 +307,7 @@ const PlayerResultsPage: React.FC<PlayerResultsPageProps> = ({ propPlayerId }) =
                     playerId={player.id.toString()} 
                     playerName={`${player.metadata.firstName} ${player.metadata.lastName}`}
                     playerMetadata={player.metadata}
+                    marketValueEstimate={marketValueEstimate}
                   />
                 </div>
               </div>
@@ -250,3 +347,4 @@ const PlayerResultsPage: React.FC<PlayerResultsPageProps> = ({ propPlayerId }) =
 };
 
 export default PlayerResultsPage;
+

@@ -1,6 +1,8 @@
 // Market Data Service for fetching comparable player listings
 // Used for market value estimation
 
+import { cacheService } from './cacheService';
+
 export interface MarketListing {
   listingResourceId: string;
   price: number;
@@ -43,11 +45,18 @@ export async function fetchMarketData(params: {
       overallMin: overallMin.toString(),
       overallMax: overallMax.toString(),
       positions: positions.join(','),
-      onlyPrimaryPosition: 'false'
+      onlyPrimaryPosition: 'true'  // Only include primary position matches
     });
 
     const url = `https://z519wdyajg.execute-api.us-east-1.amazonaws.com/prod/listings?${queryParams}`;
-    
+
+    // Check cache first
+    const cachedData = cacheService.get(url);
+    if (cachedData) {
+      
+      return cachedData;
+    }
+
     const response = await fetch(url);
     
     if (!response.ok) {
@@ -56,10 +65,15 @@ export async function fetchMarketData(params: {
     
     const data = await response.json();
     
-    return {
+    const result = {
       success: true,
       data: Array.isArray(data) ? data : []
     };
+
+    // Cache the result
+    cacheService.set(url, result);
+
+    return result;
   } catch (error) {
     console.error('Error fetching market data:', error);
     return {

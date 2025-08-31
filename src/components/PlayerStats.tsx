@@ -46,9 +46,35 @@ const getTierColor = (rating: number) => {
 
 interface PlayerStatsProps {
   player: MFLPlayer;
+  marketValueEstimate?: {
+    estimatedValue: number;
+    confidence: 'high' | 'medium' | 'low';
+    breakdown: {
+      comparableListings: number;
+      recentSales: number;
+      ageAdjustment: number;
+      overallAdjustment: number;
+      positionPremium: number;
+      progressionPremium: number;
+      retirementPenalty: number;
+      newlyMintPremium: number;
+      pacePenalty: number;
+      pacePremium: number;
+      totalAdjustments: number;
+    };
+    details: {
+      comparableListings: any[];
+      recentSales: any[];
+      comparableAverage: number;
+      recentSalesAverage: number;
+      baseValue: number;
+    };
+  } | null;
+  progressionData?: any[] | null;
+  matchCount?: number;
 }
 
-export default function PlayerStats({ player }: PlayerStatsProps) {
+export default function PlayerStats({ player, marketValueEstimate, progressionData, matchCount }: PlayerStatsProps) {
   const {
     metadata: {
       overall,
@@ -62,8 +88,69 @@ export default function PlayerStats({ player }: PlayerStatsProps) {
 
 
 
+  // Generate tags based on player data
+  const generateTags = () => {
+    const tags = [];
+    
+    // Retirement tag
+    if (player.metadata.retirementYears && player.metadata.retirementYears > 0) {
+      tags.push({
+        text: `Retirement in ${player.metadata.retirementYears} year${player.metadata.retirementYears > 1 ? 's' : ''}`,
+        type: 'retirement'
+      });
+    }
+    
+    // Multiple positions tag (check if player has multiple playable positions)
+    if (marketValueEstimate?.breakdown?.positionPremium > 0) {
+      tags.push({
+        text: 'Multiple positions',
+        type: 'positions'
+      });
+    }
+    
+    // Single owner tag (check if player has no sales history)
+    if (marketValueEstimate?.breakdown?.singleOwnerPremium > 0) {
+      tags.push({
+        text: 'Single owner',
+        type: 'singleOwner'
+      });
+    }
+    
+    // Newly minted tag
+    if (progressionData && matchCount !== undefined && matchCount < 10) {
+      // Check if there's no progression on any stats
+      const hasProgression = progressionData.some((entry: any, index: number) => {
+        if (index === 0) return false; // Skip first entry as there's no previous to compare
+        
+        const currentEntry = entry;
+        const previousEntry = progressionData[index - 1];
+        
+        // Check if any stat has increased
+        return (
+          currentEntry.pace > previousEntry.pace ||
+          currentEntry.shooting > previousEntry.shooting ||
+          currentEntry.passing > previousEntry.passing ||
+          currentEntry.dribbling > previousEntry.dribbling ||
+          currentEntry.defending > previousEntry.defending ||
+          currentEntry.physical > previousEntry.physical ||
+          currentEntry.overall > previousEntry.overall
+        );
+      });
+      
+      if (!hasProgression) {
+        tags.push({
+          text: 'Newly minted',
+          type: 'newlyMinted'
+        });
+      }
+    }
+    
+    return tags.length > 0 ? tags : undefined;
+  };
+
   const stats = [
     { label: 'Player ID', value: `#${player.id}` },
+    { label: 'Player name', value: `${player.metadata.firstName} ${player.metadata.lastName}` },
     { label: 'Country', value: nationalities?.[0], isCountry: true },
     { label: 'Age', value: age },
     { label: 'Height', value: formatHeight(height), isHeight: true },
@@ -85,6 +172,19 @@ export default function PlayerStats({ player }: PlayerStatsProps) {
       teamId: player.activeContract?.club?.id,
       isFreeAgent: !player.activeContract,
       isDevCentre: player.activeContract && !player.activeContract.club?.name
+    },
+    {
+      label: 'Market Value Est',
+      value: marketValueEstimate ? `$${marketValueEstimate.estimatedValue.toLocaleString()}` : undefined,
+      isMarketValue: true,
+      confidence: marketValueEstimate?.confidence,
+      breakdown: marketValueEstimate?.breakdown,
+      details: marketValueEstimate?.details
+    },
+    {
+      label: 'Tags',
+      value: generateTags(),
+      isTags: true
     }
   ];
 
@@ -135,6 +235,91 @@ export default function PlayerStats({ player }: PlayerStatsProps) {
                         {stat.value}
                       </span>
                     )
+                  ) : stat.isMarketValue ? (
+                    <div className="flex items-center space-x-2">
+                      <div className="flex items-center space-x-1 px-3 py-2 rounded-lg shadow-sm text-gray-900 dark:text-white bg-gradient-to-r from-white to-gray-100 dark:from-gray-400 dark:to-gray-500">
+                        <span className="text-lg font-bold">
+                          {stat.value}
+                        </span>
+                        {stat.confidence && (
+                          <span className={`text-xs px-2 py-1 rounded-full ml-2 ${
+                            stat.confidence === 'high' 
+                              ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
+                              : stat.confidence === 'medium'
+                              ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200'
+                              : 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
+                          }`}>
+                            {stat.confidence}
+                          </span>
+                        )}
+                        {stat.breakdown && (
+                          <div className="relative group">
+                            <svg className="w-4 h-4 text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 cursor-help" fill="currentColor" viewBox="0 0 20 20">
+                              <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-3a1 1 0 00-.867.5 1 1 0 11-1.731-1A3 3 0 0113 8a3.001 3.001 0 01-2 2.83V11a1 1 0 11-2 0v-1a1 1 0 011-1 1 1 0 100-2zm0 8a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
+                            </svg>
+                                                  {/* Tooltip */}
+                      <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-gray-900 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-10 max-w-xs">
+                        <div className="font-semibold mb-1">Market Value Estimate</div>
+                        <div className="space-y-1">
+                          <div>Base value: ${stat.details?.baseValue?.toLocaleString()}</div>
+
+                          {stat.breakdown.positionPremium > 0 && (
+                            <div>Positions premium: +${stat.breakdown.positionPremium.toLocaleString()}</div>
+                          )}
+                          {stat.breakdown.singleOwnerPremium > 0 && (
+                            <div>Single owner premium: +${stat.breakdown.singleOwnerPremium.toLocaleString()}</div>
+                          )}
+                          {stat.breakdown.progressionPremium !== 0 && (
+                            <div>{stat.breakdown.progressionPremium > 0 ? 'Progression premium' : 'Progression penalty'}: {stat.breakdown.progressionPremium > 0 ? '+' : '-'}${Math.abs(stat.breakdown.progressionPremium).toLocaleString()}</div>
+                          )}
+                          {stat.breakdown.retirementPenalty !== 0 && (
+                            <div>Retirement penalty: -${Math.abs(stat.breakdown.retirementPenalty).toLocaleString()}</div>
+                          )}
+                          {stat.breakdown.newlyMintPremium > 0 && (
+                            <div>Newly mint premium: +${stat.breakdown.newlyMintPremium.toLocaleString()}</div>
+                          )}
+                          {stat.breakdown.pacePenalty !== 0 && (
+                            <div>Pace penalty: -${Math.abs(stat.breakdown.pacePenalty).toLocaleString()}</div>
+                          )}
+                          {stat.breakdown.pacePremium > 0 && (
+                            <div>Pace premium: +${stat.breakdown.pacePremium.toLocaleString()}</div>
+                          )}
+                          {stat.breakdown.heightAdjustment !== 0 && (
+                            <div>{stat.breakdown.heightAdjustment > 0 ? 'Height premium' : 'Height penalty'}: {stat.breakdown.heightAdjustment > 0 ? '+' : '-'}${Math.abs(stat.breakdown.heightAdjustment).toLocaleString()}</div>
+                          )}
+                        </div>
+                        <div className="border-t border-gray-700 pt-1 mt-1">
+                          <div>Based on {stat.breakdown.comparableListings} comparable listings and {stat.breakdown.recentSales} recent sales</div>
+                          <div>Confidence: {stat.confidence}</div>
+                          <div className="italic text-gray-400">* this is just an estimate, please do your own research *</div>
+                        </div>
+                        <div className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-900"></div>
+                      </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ) : stat.isTags ? (
+                    stat.value && stat.value.length > 0 ? (
+                      <div className="flex flex-wrap gap-1">
+                        {stat.value.map((tag: any, index: number) => (
+                          <span 
+                            key={index}
+                            className={`text-xs font-medium px-2 py-1 rounded-md ${
+                              tag.type === 'retirement' 
+                                ? 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200'
+                                : tag.type === 'positions'
+                                ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
+                                : tag.type === 'newlyMinted'
+                                ? 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200'
+                                : 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200'
+                            }`}
+                          >
+                            {tag.text}
+                          </span>
+                        ))}
+                      </div>
+                    ) : null
                   ) : (
                     <span 
                       className="font-bold px-3 py-2 rounded-lg shadow-sm text-gray-900 dark:text-white bg-gradient-to-r from-white to-gray-100 dark:from-gray-400 dark:to-gray-500"
@@ -145,6 +330,9 @@ export default function PlayerStats({ player }: PlayerStatsProps) {
                   )}
 
                 </>
+              ) : stat.isTags ? (
+                // Don't show anything for empty tags
+                null
               ) : (
                 <span className="text-sm text-gray-400 dark:text-gray-500 italic bg-gray-100 dark:bg-gray-700 px-3 py-1 rounded-lg">Not available</span>
               )}

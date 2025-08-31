@@ -38,6 +38,7 @@ export interface MFLPlayerMetadata {
   defense: number;
   physical: number;
   goalkeeping: number;
+  retirementYears?: number;
 }
 
 // ============================================================================

@@ -15,9 +15,10 @@ interface PlayerSaleHistoryProps {
   playerId: string;
   playerName: string;
   playerMetadata: MFLPlayerMetadata;
+  marketValueEstimate?: MarketValueEstimate | null;
 }
 
-export default function PlayerSaleHistory({ playerId, playerName, playerMetadata }: PlayerSaleHistoryProps) {
+export default function PlayerSaleHistory({ playerId, playerName, playerMetadata, marketValueEstimate: propMarketValueEstimate }: PlayerSaleHistoryProps) {
   const [saleHistory, setSaleHistory] = useState<PlayerSaleHistoryEntry[]>([]);
   const [progressionData, setProgressionData] = useState<ProgressionDataPoint[]>([]);
   const [marketValueEstimate, setMarketValueEstimate] = useState<MarketValueEstimate | null>(null);
@@ -48,7 +49,8 @@ export default function PlayerSaleHistory({ playerId, playerName, playerMetadata
         if (historyResponse.success && historyResponse.data.length > 0) {
           setSaleHistory(historyResponse.data);
         } else {
-          setError(historyResponse.error || 'No sale history available');
+          // Don't set error for no sale history - this is normal
+          setSaleHistory([]);
         }
 
         if (progressionResponse.success && progressionResponse.data.length > 0) {
@@ -56,14 +58,9 @@ export default function PlayerSaleHistory({ playerId, playerName, playerMetadata
           setProgressionData(processedData);
         }
 
-        // Calculate market value estimate
-        if (marketResponse.success) {
-          const estimate = calculateMarketValue(
-            playerMetadata,
-            marketResponse.data,
-            historyResponse.success ? historyResponse.data : []
-          );
-          setMarketValueEstimate(estimate);
+        // Use the market value estimate from props (calculated with position ratings)
+        if (propMarketValueEstimate) {
+          setMarketValueEstimate(propMarketValueEstimate);
         }
       } catch (err) {
         setError('Failed to load sale history');
@@ -88,8 +85,8 @@ export default function PlayerSaleHistory({ playerId, playerName, playerMetadata
     );
   }
 
-  // Error state
-  if (error) {
+  // Error state - only show for actual errors, not for no sale history
+  if (error && error !== 'No sale history available') {
     return (
       <div className="w-full p-4 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
         <div className="flex items-center justify-center h-48">
@@ -105,11 +102,99 @@ export default function PlayerSaleHistory({ playerId, playerName, playerMetadata
   if (saleHistory.length === 0) {
     return (
       <div className="w-full p-4 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
-        <div className="mb-4">
+        {/* Market Value Estimate - At the top */}
+        {marketValueEstimate && (
+          <div className="mb-6 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+            <h4 className="text-lg font-semibold text-blue-900 dark:text-blue-100 mb-3 text-center">
+              Market Value Estimate
+            </h4>
+            
+            {/* Main Estimate - Centered */}
+            <div className="text-center mb-4">
+              <div className="text-3xl font-bold" style={{ color: '#00a63e' }}>
+                ${marketValueEstimate.estimatedValue.toLocaleString()}
+              </div>
+              <div className="text-sm text-blue-700 dark:text-blue-300 mt-1">
+                Confidence: 
+                <span className={`ml-1 font-medium ${
+                  marketValueEstimate.confidence === 'high' ? 'text-green-600 dark:text-green-400' :
+                  marketValueEstimate.confidence === 'medium' ? 'text-yellow-600 dark:text-yellow-400' :
+                  'text-red-600 dark:text-red-400'
+                }`}>
+                  {marketValueEstimate.confidence.charAt(0).toUpperCase() + marketValueEstimate.confidence.slice(1)}
+                </span>
+              </div>
+            </div>
+
+            {/* Breakdown - New Row */}
+            <div className="text-sm space-y-1 max-w-md mx-auto">
+              <div className="flex justify-between">
+                <span className="text-gray-600 dark:text-gray-400">Base value:</span>
+                <span className="font-medium">${marketValueEstimate.details.baseValue.toLocaleString()}</span>
+              </div>
+              
+
+              {marketValueEstimate.breakdown.positionPremium > 0 && (
+                <div className="flex justify-between">
+                  <span className="text-gray-600 dark:text-gray-400">Positions premium:</span>
+                  <span className="font-medium text-green-600">+${marketValueEstimate.breakdown.positionPremium.toLocaleString()}</span>
+                </div>
+              )}
+              {marketValueEstimate.breakdown.singleOwnerPremium > 0 && (
+                <div className="flex justify-between">
+                  <span className="text-gray-600 dark:text-gray-400">Single owner premium:</span>
+                  <span className="font-medium text-green-600">+${marketValueEstimate.breakdown.singleOwnerPremium.toLocaleString()}</span>
+                </div>
+              )}
+              {marketValueEstimate.breakdown.progressionPremium !== 0 && (
+                <div className="flex justify-between">
+                  <span className="text-gray-600 dark:text-gray-400">{marketValueEstimate.breakdown.progressionPremium > 0 ? 'Progression premium' : 'Progression penalty'}:</span>
+                  <span className={`font-medium ${marketValueEstimate.breakdown.progressionPremium > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                    {marketValueEstimate.breakdown.progressionPremium > 0 ? '+' : '-'}${Math.abs(marketValueEstimate.breakdown.progressionPremium).toLocaleString()}
+                  </span>
+                </div>
+              )}
+              {marketValueEstimate.breakdown.retirementPenalty !== 0 && (
+                <div className="flex justify-between">
+                  <span className="text-gray-600 dark:text-gray-400">Retirement penalty:</span>
+                  <span className="font-medium text-red-600">-${Math.abs(marketValueEstimate.breakdown.retirementPenalty).toLocaleString()}</span>
+                </div>
+              )}
+              {marketValueEstimate.breakdown.newlyMintPremium > 0 && (
+                <div className="flex justify-between">
+                  <span className="text-gray-600 dark:text-gray-400">Newly mint premium:</span>
+                  <span className="font-medium text-green-600">+${marketValueEstimate.breakdown.newlyMintPremium.toLocaleString()}</span>
+                </div>
+              )}
+              {marketValueEstimate.breakdown.pacePenalty !== 0 && (
+                <div className="flex justify-between">
+                  <span className="text-gray-600 dark:text-gray-400">Pace penalty:</span>
+                  <span className="font-medium text-red-600">-${Math.abs(marketValueEstimate.breakdown.pacePenalty).toLocaleString()}</span>
+                </div>
+              )}
+              {marketValueEstimate.breakdown.pacePremium > 0 && (
+                <div className="flex justify-between">
+                  <span className="text-gray-600 dark:text-gray-400">Pace premium:</span>
+                  <span className="font-medium text-green-600">+${marketValueEstimate.breakdown.pacePremium.toLocaleString()}</span>
+                </div>
+              )}
+            </div>
+
+            {/* Data Sources */}
+            <div className="mt-4 pt-3 border-t border-blue-200 dark:border-blue-800">
+              <div className="text-xs text-blue-700 dark:text-blue-300 space-y-1">
+                <div>Based on {marketValueEstimate.breakdown.comparableListings} comparable listings and {marketValueEstimate.breakdown.recentSales} recent sales</div>
+                <div className="italic text-gray-500 dark:text-gray-400">* this is just an estimate, please do your own research *</div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        <div className="mb-3">
           <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Sale History</h3>
           <p className="text-sm text-gray-500 dark:text-gray-400">No transactions</p>
         </div>
-        <div className="flex items-center justify-center h-48">
+        <div className="flex items-center justify-center h-32">
           <div className="text-center text-gray-500 dark:text-gray-400">
             <p className="text-sm">No sale history available</p>
           </div>
@@ -148,6 +233,102 @@ export default function PlayerSaleHistory({ playerId, playerName, playerMetadata
 
   return (
     <div className="w-full p-4 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
+      {/* Market Value Estimate - At the top */}
+      {marketValueEstimate && (
+        <div className="mb-6 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+          <h4 className="text-lg font-semibold text-blue-900 dark:text-blue-100 mb-3 text-center">
+            Market Value Estimate
+          </h4>
+          
+          {/* Main Estimate - Centered */}
+          <div className="text-center mb-4">
+            <div className="text-3xl font-bold" style={{ color: '#00a63e' }}>
+              ${marketValueEstimate.estimatedValue.toLocaleString()}
+            </div>
+            <div className="text-sm text-blue-700 dark:text-blue-300 mt-1">
+              Confidence: 
+              <span className={`ml-1 font-medium ${
+                marketValueEstimate.confidence === 'high' ? 'text-green-600 dark:text-green-400' :
+                marketValueEstimate.confidence === 'medium' ? 'text-yellow-600 dark:text-yellow-400' :
+                'text-red-600 dark:text-red-400'
+              }`}>
+                {marketValueEstimate.confidence.charAt(0).toUpperCase() + marketValueEstimate.confidence.slice(1)}
+              </span>
+            </div>
+          </div>
+
+          {/* Breakdown - New Row */}
+          <div className="text-sm space-y-1 max-w-md mx-auto">
+            <div className="flex justify-between">
+              <span className="text-gray-600 dark:text-gray-400">Base value:</span>
+              <span className="font-medium">${marketValueEstimate.details.baseValue.toLocaleString()}</span>
+            </div>
+
+
+            {marketValueEstimate.breakdown.positionPremium > 0 && (
+              <div className="flex justify-between">
+                <span className="text-gray-600 dark:text-gray-400">Positions premium:</span>
+                <span className="font-medium text-green-600">+${marketValueEstimate.breakdown.positionPremium.toLocaleString()}</span>
+              </div>
+            )}
+            {marketValueEstimate.breakdown.singleOwnerPremium > 0 && (
+              <div className="flex justify-between">
+                <span className="text-gray-600 dark:text-gray-400">Single owner premium:</span>
+                <span className="font-medium text-green-600">+${marketValueEstimate.breakdown.singleOwnerPremium.toLocaleString()}</span>
+              </div>
+            )}
+            {marketValueEstimate.breakdown.progressionPremium !== 0 && (
+              <div className="flex justify-between">
+                <span className="text-gray-600 dark:text-gray-400">{marketValueEstimate.breakdown.progressionPremium > 0 ? 'Progression premium' : 'Progression penalty'}:</span>
+                <span className={`font-medium ${marketValueEstimate.breakdown.progressionPremium > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                  {marketValueEstimate.breakdown.progressionPremium > 0 ? '+' : '-'}${Math.abs(marketValueEstimate.breakdown.progressionPremium).toLocaleString()}
+                </span>
+              </div>
+            )}
+            {marketValueEstimate.breakdown.retirementPenalty !== 0 && (
+              <div className="flex justify-between">
+                <span className="text-gray-600 dark:text-gray-400">Retirement penalty:</span>
+                <span className="font-medium text-red-600">-${Math.abs(marketValueEstimate.breakdown.retirementPenalty).toLocaleString()}</span>
+              </div>
+            )}
+            {marketValueEstimate.breakdown.newlyMintPremium > 0 && (
+              <div className="flex justify-between">
+                <span className="text-gray-600 dark:text-gray-400">Newly mint premium:</span>
+                <span className="font-medium text-green-600">+${marketValueEstimate.breakdown.newlyMintPremium.toLocaleString()}</span>
+              </div>
+            )}
+            {marketValueEstimate.breakdown.pacePenalty !== 0 && (
+              <div className="flex justify-between">
+                <span className="text-gray-600 dark:text-gray-400">Pace penalty:</span>
+                <span className="font-medium text-red-600">-${Math.abs(marketValueEstimate.breakdown.pacePenalty).toLocaleString()}</span>
+              </div>
+            )}
+            {marketValueEstimate.breakdown.pacePremium > 0 && (
+              <div className="flex justify-between">
+                <span className="text-gray-600 dark:text-gray-400">Pace premium:</span>
+                <span className="font-medium text-green-600">+${marketValueEstimate.breakdown.pacePremium.toLocaleString()}</span>
+              </div>
+            )}
+            {marketValueEstimate.breakdown.heightAdjustment !== 0 && (
+              <div className="flex justify-between">
+                <span className="text-gray-600 dark:text-gray-400">{marketValueEstimate.breakdown.heightAdjustment > 0 ? 'Height premium' : 'Height penalty'}:</span>
+                <span className={`font-medium ${marketValueEstimate.breakdown.heightAdjustment > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                  {marketValueEstimate.breakdown.heightAdjustment > 0 ? '+' : '-'}${Math.abs(marketValueEstimate.breakdown.heightAdjustment).toLocaleString()}
+                </span>
+              </div>
+            )}
+          </div>
+
+          {/* Data Sources */}
+          <div className="mt-4 pt-3 border-t border-blue-200 dark:border-blue-800">
+            <div className="text-xs text-blue-700 dark:text-blue-300 space-y-1">
+              <div>Based on {marketValueEstimate.breakdown.comparableListings} comparable listings and {marketValueEstimate.breakdown.recentSales} recent sales</div>
+              <div className="italic text-gray-500 dark:text-gray-400">* this is just an estimate, please do your own research *</div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="mb-4">
         <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Sale History</h3>
         <p className="text-base text-gray-500 dark:text-gray-400">{saleHistory.length} transactions</p>
@@ -211,82 +392,7 @@ export default function PlayerSaleHistory({ playerId, playerName, playerMetadata
         </div>
       )}
 
-      {/* Market Value Estimate */}
-      {marketValueEstimate && (
-        <div className="mt-6 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
-          <h4 className="text-lg font-semibold text-blue-900 dark:text-blue-100 mb-3">
-            Market Value Estimate
-          </h4>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Main Estimate */}
-            <div className="text-center">
-              <div className="text-3xl font-bold text-blue-600 dark:text-blue-400">
-                ${marketValueEstimate.estimatedValue.toLocaleString()}
-              </div>
-              <div className="text-sm text-blue-700 dark:text-blue-300 mt-1">
-                Confidence: 
-                <span className={`ml-1 font-medium ${
-                  marketValueEstimate.confidence === 'high' ? 'text-green-600 dark:text-green-400' :
-                  marketValueEstimate.confidence === 'medium' ? 'text-yellow-600 dark:text-yellow-400' :
-                  'text-red-600 dark:text-red-400'
-                }`}>
-                  {marketValueEstimate.confidence.charAt(0).toUpperCase() + marketValueEstimate.confidence.slice(1)}
-                </span>
-              </div>
-            </div>
 
-            {/* Breakdown */}
-            <div className="text-sm space-y-1">
-              <div className="flex justify-between">
-                <span className="text-gray-600 dark:text-gray-400">Base Value:</span>
-                <span className="font-medium">${marketValueEstimate.details.baseValue.toLocaleString()}</span>
-              </div>
-              {marketValueEstimate.breakdown.ageAdjustment !== 0 && (
-                <div className="flex justify-between">
-                  <span className="text-gray-600 dark:text-gray-400">Age Adjustment:</span>
-                  <span className={`font-medium ${marketValueEstimate.breakdown.ageAdjustment > 0 ? 'text-green-600' : 'text-red-600'}`}>
-                    {marketValueEstimate.breakdown.ageAdjustment > 0 ? '+' : ''}${marketValueEstimate.breakdown.ageAdjustment.toLocaleString()}
-                  </span>
-                </div>
-              )}
-              {marketValueEstimate.breakdown.overallAdjustment !== 0 && (
-                <div className="flex justify-between">
-                  <span className="text-gray-600 dark:text-gray-400">Overall Adjustment:</span>
-                  <span className={`font-medium ${marketValueEstimate.breakdown.overallAdjustment > 0 ? 'text-green-600' : 'text-red-600'}`}>
-                    {marketValueEstimate.breakdown.overallAdjustment > 0 ? '+' : ''}${marketValueEstimate.breakdown.overallAdjustment.toLocaleString()}
-                  </span>
-                </div>
-              )}
-              {marketValueEstimate.breakdown.positionPremium > 0 && (
-                <div className="flex justify-between">
-                  <span className="text-gray-600 dark:text-gray-400">Position Premium:</span>
-                  <span className="font-medium text-green-600">+${marketValueEstimate.breakdown.positionPremium.toLocaleString()}</span>
-                </div>
-              )}
-              {marketValueEstimate.breakdown.singleOwnerPremium > 0 && (
-                <div className="flex justify-between">
-                  <span className="text-gray-600 dark:text-gray-400">Single Owner Premium:</span>
-                  <span className="font-medium text-green-600">+${marketValueEstimate.breakdown.singleOwnerPremium.toLocaleString()}</span>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Data Sources */}
-          <div className="mt-4 pt-3 border-t border-blue-200 dark:border-blue-800">
-            <div className="text-xs text-blue-700 dark:text-blue-300 space-y-1">
-              <div>Based on {marketValueEstimate.breakdown.comparableListings} comparable listings and {marketValueEstimate.breakdown.recentSales} recent sales</div>
-              {marketValueEstimate.details.comparableAverage > 0 && (
-                <div>Comparable average: ${marketValueEstimate.details.comparableAverage.toLocaleString()}</div>
-              )}
-              {marketValueEstimate.details.recentSalesAverage > 0 && (
-                <div>Recent sales average: ${marketValueEstimate.details.recentSalesAverage.toLocaleString()}</div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
