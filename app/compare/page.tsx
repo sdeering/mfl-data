@@ -9,6 +9,7 @@ import PlayerStatsGrid from '../../src/components/PlayerStatsGrid';
 import PositionRatingsDisplay from '../../src/components/PositionRatingsDisplay';
 import PlayerProgressionGraph from '../../src/components/PlayerProgressionGraph';
 import PlayerRecentMatches from '../../src/components/PlayerRecentMatches';
+import PlayerSaleHistory from '../../src/components/PlayerSaleHistory';
 import { useLoading } from '../../src/contexts/LoadingContext';
 
 function ComparePageContent() {
@@ -225,6 +226,15 @@ function ComparePageContent() {
                   />
                 </div>
 
+                {/* Sale History Column */}
+                <div className="w-full p-[5px]">
+                  <PlayerSaleHistory 
+                    playerId={player1.id.toString()} 
+                    playerName={`${player1.metadata.firstName} ${player1.metadata.lastName}`}
+                    playerMetadata={player1.metadata}
+                  />
+                </div>
+
                 {/* Recent Matches Column */}
                 <div className="w-full p-[5px]">
                   <PlayerRecentMatches 
@@ -293,6 +303,15 @@ function ComparePageContent() {
                     playerId={player2.id.toString()} 
                     playerName={`${player2.metadata.firstName} ${player2.metadata.lastName}`}
                     playerPositions={player2.metadata.positions}
+                  />
+                </div>
+
+                {/* Sale History Column */}
+                <div className="w-full p-[5px]">
+                  <PlayerSaleHistory 
+                    playerId={player2.id.toString()} 
+                    playerName={`${player2.metadata.firstName} ${player2.metadata.lastName}`}
+                    playerMetadata={player2.metadata}
                   />
                 </div>
 
