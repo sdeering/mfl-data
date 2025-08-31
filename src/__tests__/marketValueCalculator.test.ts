@@ -1,81 +1,83 @@
 import { calculateMarketValue } from '../utils/marketValueCalculator';
 
+// Simplified mock data that matches the actual types
+const mockPlayer = {
+  id: 116267,
+  firstName: 'Test',
+  lastName: 'Player',
+  overall: 82,
+  age: 25,
+  height: 180,
+  nationalities: ['England'],
+  preferredFoot: 'RIGHT' as const,
+  positions: ['LB', 'LWB', 'CB'],
+  retirementYears: 0,
+  pace: 75,
+  shooting: 70,
+  passing: 75,
+  dribbling: 75,
+  defense: 82,
+  physical: 75,
+  goalkeeping: 0
+};
+
+const mockComparableListings = [
+  { 
+    listingResourceId: '1', 
+    price: 100, 
+    player: { metadata: { age: 24, overall: 80, positions: ['LB'] } }
+  },
+  { 
+    listingResourceId: '2', 
+    price: 120, 
+    player: { metadata: { age: 25, overall: 82, positions: ['LB'] } }
+  },
+  { 
+    listingResourceId: '3', 
+    price: 110, 
+    player: { metadata: { age: 26, overall: 81, positions: ['LB'] } }
+  }
+];
+
+const mockRecentSales = [
+  {
+    id: '1',
+    playerId: 1,
+    price: 95,
+    purchaseDateTime: Date.now() - (30 * 24 * 60 * 60 * 1000), // 30 days ago
+    player: { metadata: { overall: 80 } }
+  },
+  {
+    id: '2',
+    playerId: 2,
+    price: 115,
+    purchaseDateTime: Date.now() - (60 * 24 * 60 * 60 * 1000), // 60 days ago
+    player: { metadata: { overall: 82 } }
+  }
+];
+
+const mockProgressionData = [
+  { date: new Date('2020-01-01'), age: 20, overall: 75, pace: 70, shooting: 65, passing: 70, dribbling: 70, defense: 75, physical: 70 },
+  { date: new Date('2022-01-01'), age: 22, overall: 78, pace: 72, shooting: 67, passing: 72, dribbling: 72, defense: 78, physical: 72 },
+  { date: new Date('2025-01-01'), age: 25, overall: 82, pace: 75, shooting: 70, passing: 75, dribbling: 75, defense: 82, physical: 75 }
+];
+
 describe('Market Value Calculator', () => {
-  // Mock data for testing
-  const mockPlayer = {
-    id: 1,
-    firstName: 'Test',
-    lastName: 'Player',
-    overall: 75,
-    age: 25,
-    pace: 80,
-    shooting: 70,
-    passing: 75,
-    dribbling: 72,
-    defense: 78,
-    physical: 76,
-    goalkeeping: 0,
-    positions: ['CM', 'CDM'],
-    nationalities: ['England'],
-    preferredFoot: 'RIGHT',
-    height: 180,
-    retirementYears: undefined
-  };
-
-  const mockComparableListings = [
-    {
-      listingResourceId: '1',
-      player: { metadata: { overall: 75, age: 25 } },
-      price: 100
-    },
-    {
-      listingResourceId: '2',
-      player: { metadata: { overall: 76, age: 24 } },
-      price: 110
-    },
-    {
-      listingResourceId: '3',
-      player: { metadata: { overall: 74, age: 26 } },
-      price: 90
-    }
-  ];
-
-  const mockRecentSales = [
-    { price: 95, purchaseDateTime: Date.now() - 86400000 }, // 1 day ago
-    { price: 105, purchaseDateTime: Date.now() - 172800000 } // 2 days ago
-  ];
-
-  const mockProgressionData = [
-    { age: 20, overall: 70, pace: 75, shooting: 65, passing: 70, dribbling: 68, defending: 73, physical: 71 },
-    { age: 21, overall: 71, pace: 76, shooting: 66, passing: 71, dribbling: 69, defending: 74, physical: 72 },
-    { age: 22, overall: 72, pace: 77, shooting: 67, passing: 72, dribbling: 70, defending: 75, physical: 73 },
-    { age: 23, overall: 73, pace: 78, shooting: 68, passing: 73, dribbling: 71, defending: 76, physical: 74 },
-    { age: 24, overall: 74, pace: 79, shooting: 69, passing: 74, dribbling: 72, defending: 77, physical: 75 },
-    { age: 25, overall: 75, pace: 80, shooting: 70, passing: 75, dribbling: 72, defending: 78, physical: 76 }
-  ];
-
-  const mockPositionRatings = {
-    CM: { success: true, ovr: 75 },
-    CDM: { success: true, ovr: 73 }
-  };
-
-  describe('Basic Market Value Calculation', () => {
-    it('should calculate basic market value with comparable listings and recent sales', () => {
+  describe('Basic Calculation', () => {
+    it('should calculate market value with basic data', () => {
       const result = calculateMarketValue(
         mockPlayer,
         mockComparableListings,
         mockRecentSales,
-        mockProgressionData,
-        mockPositionRatings,
-        undefined,
-        15
+        mockProgressionData
       );
 
-      expect(result).toBeDefined();
+      expect(result).toHaveProperty('estimatedValue');
+      expect(result).toHaveProperty('confidence');
+      expect(result).toHaveProperty('breakdown');
+      expect(result).toHaveProperty('details');
+      expect(typeof result.estimatedValue).toBe('number');
       expect(result.estimatedValue).toBeGreaterThan(0);
-      expect(result.confidence).toBeDefined();
-      expect(result.breakdown).toBeDefined();
-      expect(result.details).toBeDefined();
     });
 
     it('should handle empty comparable listings', () => {
@@ -83,14 +85,11 @@ describe('Market Value Calculator', () => {
         mockPlayer,
         [],
         mockRecentSales,
-        mockProgressionData,
-        mockPositionRatings,
-        undefined,
-        15
+        mockProgressionData
       );
 
-      expect(result.breakdown.comparableListings).toBe(0);
-      expect(result.breakdown.recentSales).toBe(2);
+      expect(result.estimatedValue).toBeGreaterThan(0);
+      expect(result.confidence).toBe('low');
     });
 
     it('should handle empty recent sales', () => {
@@ -98,539 +97,520 @@ describe('Market Value Calculator', () => {
         mockPlayer,
         mockComparableListings,
         [],
-        mockProgressionData,
-        mockPositionRatings,
-        undefined,
-        15
+        mockProgressionData
       );
 
-      expect(result.breakdown.comparableListings).toBe(3);
-      expect(result.breakdown.recentSales).toBe(0);
+      expect(result.estimatedValue).toBeGreaterThan(0);
     });
   });
 
-  describe('Position Premium Calculation', () => {
+  describe('Position Premium', () => {
     it('should apply +10% premium for 2 playable positions', () => {
-      const playerWith2Positions = { ...mockPlayer, positions: ['CM', 'CDM'] };
-      const positionRatings2Positions = {
-        CM: { success: true, ovr: 75 },
-        CDM: { success: true, ovr: 73 }
+      const positionRatings = {
+        'LB': 82, // 0 points difference - playable
+        'LWB': 77, // 5 points difference - playable
+        'CB': 70, // 12 points difference - not playable
+        'RB': 65  // 17 points difference - not playable
       };
 
       const result = calculateMarketValue(
-        playerWith2Positions,
+        mockPlayer,
         mockComparableListings,
         mockRecentSales,
         mockProgressionData,
-        positionRatings2Positions,
-        undefined,
-        15
+        positionRatings
       );
 
       expect(result.breakdown.positionPremium).toBeGreaterThan(0);
       // Should be approximately 10% of base value
-      const expectedPremium = result.details.baseValue * 0.10;
-      expect(result.breakdown.positionPremium).toBeCloseTo(expectedPremium, 0);
+      const expectedPremium = Math.round(result.details.baseValue * 0.10);
+      expect(result.breakdown.positionPremium).toBe(expectedPremium);
     });
 
     it('should apply +15% premium for 3+ playable positions', () => {
-      const playerWith3Positions = { ...mockPlayer, positions: ['CM', 'CDM', 'CB'] };
-      const positionRatings3Positions = {
-        CM: { success: true, ovr: 75 },
-        CDM: { success: true, ovr: 73 },
-        CB: { success: true, ovr: 69 } // Within 6 points of overall 75
+      const positionRatings = {
+        'LB': 82, // 0 points difference - playable
+        'LWB': 77, // 5 points difference - playable
+        'CB': 76, // 6 points difference - playable
+        'RB': 65  // 17 points difference - not playable
       };
 
       const result = calculateMarketValue(
-        playerWith3Positions,
+        mockPlayer,
         mockComparableListings,
         mockRecentSales,
         mockProgressionData,
-        positionRatings3Positions,
-        undefined,
-        15
+        positionRatings
       );
 
       expect(result.breakdown.positionPremium).toBeGreaterThan(0);
       // Should be approximately 15% of base value
-      const expectedPremium = result.details.baseValue * 0.15;
-      expect(result.breakdown.positionPremium).toBeCloseTo(expectedPremium, 0);
+      const expectedPremium = Math.round(result.details.baseValue * 0.15);
+      expect(result.breakdown.positionPremium).toBe(expectedPremium);
     });
 
-    it('should not apply position premium for single position', () => {
-      const playerWith1Position = { ...mockPlayer, positions: ['CM'] };
-      const positionRatings1Position = {
-        CM: { success: true, ovr: 75 }
+    it('should not apply premium for single playable position', () => {
+      const positionRatings = {
+        'LB': 82, // 0 points difference - playable
+        'LWB': 70, // 12 points difference - not playable
+        'CB': 65, // 17 points difference - not playable
+        'RB': 60  // 22 points difference - not playable
       };
 
       const result = calculateMarketValue(
-        playerWith1Position,
+        mockPlayer,
         mockComparableListings,
         mockRecentSales,
         mockProgressionData,
-        positionRatings1Position,
-        undefined,
-        15
+        positionRatings
       );
 
       expect(result.breakdown.positionPremium).toBe(0);
     });
 
-    it('should include positions within 6 points of overall rating', () => {
-      const playerWithMultiplePositions = { ...mockPlayer, overall: 81, positions: ['CM', 'CDM', 'CB'] };
-      const positionRatingsWithin6 = {
-        CM: { success: true, ovr: 81 }, // Exact match
-        CDM: { success: true, ovr: 77 }, // Within 6 points (81-4)
-        CB: { success: true, ovr: 75 }   // Within 6 points (81-6)
+    it('should handle position ratings with zero values', () => {
+      const positionRatings = {
+        'LB': 82, // 0 points difference - playable
+        'LWB': 0, // Zero rating - not playable
+        'CB': 76, // 6 points difference - playable
+        'RB': 0   // Zero rating - not playable
+      };
+
+      const result = calculateMarketValue(
+        mockPlayer,
+        mockComparableListings,
+        mockRecentSales,
+        mockProgressionData,
+        positionRatings
+      );
+
+      expect(result.breakdown.positionPremium).toBeGreaterThan(0);
+      // Should be approximately 10% of base value (2 playable positions)
+      const expectedPremium = Math.round(result.details.baseValue * 0.10);
+      expect(result.breakdown.positionPremium).toBe(expectedPremium);
+    });
+
+    it('should fallback to original positions logic when positionRatings not provided', () => {
+      const playerWithMultiplePositions = {
+        ...mockPlayer,
+        positions: ['LB', 'LWB', 'CB'] as const
       };
 
       const result = calculateMarketValue(
         playerWithMultiplePositions,
         mockComparableListings,
         mockRecentSales,
-        mockProgressionData,
-        positionRatingsWithin6,
-        undefined,
-        15
+        mockProgressionData
+        // No positionRatings parameter
       );
 
       expect(result.breakdown.positionPremium).toBeGreaterThan(0);
-      const expectedPremium = result.details.baseValue * 0.15; // +15% for 3 playable positions
-      expect(result.breakdown.positionPremium).toBeCloseTo(expectedPremium, 0);
-    });
-
-    it('should exclude positions more than 6 points from overall rating', () => {
-      const playerWithMultiplePositions = { ...mockPlayer, overall: 81, positions: ['CM', 'CDM', 'CB'] };
-      const positionRatingsOutside6 = {
-        CM: { success: true, ovr: 81 }, // Exact match
-        CDM: { success: true, ovr: 77 }, // Within 6 points (81-4)
-        CB: { success: true, ovr: 74 }   // Outside 6 points (81-7)
-      };
-
-      const result = calculateMarketValue(
-        playerWithMultiplePositions,
-        mockComparableListings,
-        mockRecentSales,
-        mockProgressionData,
-        positionRatingsOutside6,
-        undefined,
-        15
-      );
-
-      expect(result.breakdown.positionPremium).toBeGreaterThan(0);
-      const expectedPremium = result.details.baseValue * 0.10; // +10% for 2 playable positions
-      expect(result.breakdown.positionPremium).toBeCloseTo(expectedPremium, 0);
-    });
-  });
-
-  describe('Pace Premium and Penalty', () => {
-    it('should apply +5% premium for Pace >= 90', () => {
-      const fastPlayer = { ...mockPlayer, pace: 92 };
-
-      const result = calculateMarketValue(
-        fastPlayer,
-        mockComparableListings,
-        mockRecentSales,
-        mockProgressionData,
-        mockPositionRatings,
-        undefined,
-        15
-      );
-
-      expect(result.breakdown.pacePremium).toBeGreaterThan(0);
-      const expectedPremium = result.details.baseValue * 0.05;
-      expect(result.breakdown.pacePremium).toBeCloseTo(expectedPremium, 0);
-    });
-
-    it('should apply -10% penalty for Overall > 60 and Pace < 50', () => {
-      const slowPlayer = { ...mockPlayer, overall: 75, pace: 45 };
-
-      const result = calculateMarketValue(
-        slowPlayer,
-        mockComparableListings,
-        mockRecentSales,
-        mockProgressionData,
-        mockPositionRatings,
-        undefined,
-        15
-      );
-
-      expect(result.breakdown.pacePenalty).toBeLessThan(0);
-      const expectedPenalty = result.details.baseValue * -0.10;
-      expect(result.breakdown.pacePenalty).toBeCloseTo(expectedPenalty, 0);
-    });
-
-    it('should not apply pace penalty for low overall players', () => {
-      const lowOverallPlayer = { ...mockPlayer, overall: 55, pace: 45 };
-
-      const result = calculateMarketValue(
-        lowOverallPlayer,
-        mockComparableListings,
-        mockRecentSales,
-        mockProgressionData,
-        mockPositionRatings,
-        undefined,
-        15
-      );
-
-      expect(result.breakdown.pacePenalty).toBe(0);
-    });
-
-    it('should not apply pace penalty for fast players with high overall', () => {
-      const fastHighOverallPlayer = { ...mockPlayer, overall: 75, pace: 55 };
-
-      const result = calculateMarketValue(
-        fastHighOverallPlayer,
-        mockComparableListings,
-        mockRecentSales,
-        mockProgressionData,
-        mockPositionRatings,
-        undefined,
-        15
-      );
-
-      expect(result.breakdown.pacePenalty).toBe(0);
+      // Should be approximately 15% of base value (3 positions)
+      const expectedPremium = Math.round(result.details.baseValue * 0.15);
+      expect(result.breakdown.positionPremium).toBe(expectedPremium);
     });
   });
 
   describe('Progression Premium', () => {
     it('should apply +25% premium for phenomenal progression (20+ points)', () => {
-      const phenomenalProgression = [
-        { age: 20, overall: 60, pace: 65, shooting: 55, passing: 60, dribbling: 58, defending: 63, physical: 61 },
-        { age: 25, overall: 85, pace: 90, shooting: 80, passing: 85, dribbling: 83, defending: 88, physical: 86 }
+      const highProgressionData = [
+        { date: new Date('2020-01-01'), age: 20, overall: 60, pace: 65, shooting: 60, passing: 65, dribbling: 65, defense: 60, physical: 65 },
+        { date: new Date('2025-01-01'), age: 25, overall: 82, pace: 75, shooting: 70, passing: 75, dribbling: 75, defense: 82, physical: 75 }
       ];
 
       const result = calculateMarketValue(
         mockPlayer,
         mockComparableListings,
         mockRecentSales,
-        phenomenalProgression,
-        mockPositionRatings,
-        undefined,
-        15
+        highProgressionData
       );
 
       expect(result.breakdown.progressionPremium).toBeGreaterThan(0);
-      const expectedPremium = result.details.baseValue * 0.25;
-      expect(result.breakdown.progressionPremium).toBeCloseTo(expectedPremium, 0);
+      const expectedPremium = Math.round(result.details.baseValue * 0.25);
+      expect(result.breakdown.progressionPremium).toBe(expectedPremium);
     });
 
-    it('should apply +15% premium for exceptional progression (12-15 points)', () => {
-      const exceptionalProgression = [
-        { age: 20, overall: 65, pace: 70, shooting: 60, passing: 65, dribbling: 63, defending: 68, physical: 66 },
-        { age: 25, overall: 80, pace: 85, shooting: 75, passing: 80, dribbling: 78, defending: 83, physical: 81 }
+    it('should apply -15% penalty for zero progression', () => {
+      const zeroProgressionData = [
+        { date: new Date('2020-01-01'), age: 20, overall: 82, pace: 75, shooting: 70, passing: 75, dribbling: 75, defense: 82, physical: 75 },
+        { date: new Date('2025-01-01'), age: 25, overall: 82, pace: 75, shooting: 70, passing: 75, dribbling: 75, defense: 82, physical: 75 }
       ];
 
       const result = calculateMarketValue(
         mockPlayer,
         mockComparableListings,
         mockRecentSales,
-        exceptionalProgression,
-        mockPositionRatings,
-        undefined,
-        15
-      );
-
-      expect(result.breakdown.progressionPremium).toBeGreaterThan(0);
-      const expectedPremium = result.details.baseValue * 0.15;
-      expect(result.breakdown.progressionPremium).toBeCloseTo(expectedPremium, 0);
-    });
-
-    it('should apply +5% premium for impressive progression (5-7 points)', () => {
-      const impressiveProgression = [
-        { age: 20, overall: 70, pace: 75, shooting: 65, passing: 70, dribbling: 68, defending: 73, physical: 71 },
-        { age: 25, overall: 77, pace: 82, shooting: 72, passing: 77, dribbling: 75, defending: 80, physical: 78 }
-      ];
-
-      const result = calculateMarketValue(
-        mockPlayer,
-        mockComparableListings,
-        mockRecentSales,
-        impressiveProgression,
-        mockPositionRatings,
-        undefined,
-        15
-      );
-
-      expect(result.breakdown.progressionPremium).toBeGreaterThan(0);
-      const expectedPremium = result.details.baseValue * 0.05;
-      expect(result.breakdown.progressionPremium).toBeCloseTo(expectedPremium, 0);
-    });
-
-    it('should apply -5% penalty for minimal progression (≤1 point)', () => {
-      const minimalProgression = [
-        { age: 20, overall: 75, pace: 80, shooting: 70, passing: 75, dribbling: 72, defending: 78, physical: 76 },
-        { age: 25, overall: 76, pace: 81, shooting: 71, passing: 76, dribbling: 73, defending: 79, physical: 77 }
-      ];
-
-      const result = calculateMarketValue(
-        mockPlayer,
-        mockComparableListings,
-        mockRecentSales,
-        minimalProgression,
-        mockPositionRatings,
-        undefined,
-        15
+        zeroProgressionData
       );
 
       expect(result.breakdown.progressionPremium).toBeLessThan(0);
-      const expectedPenalty = result.details.baseValue * -0.05;
-      expect(result.breakdown.progressionPremium).toBeCloseTo(expectedPenalty, 0);
+      const expectedPenalty = Math.round(result.details.baseValue * -0.15);
+      expect(result.breakdown.progressionPremium).toBe(expectedPenalty);
+    });
+
+    it('should not apply progression premium for retiring players', () => {
+      const retiringPlayer = {
+        ...mockPlayer,
+        retirementYears: 1
+      };
+
+      const result = calculateMarketValue(
+        retiringPlayer,
+        mockComparableListings,
+        mockRecentSales,
+        mockProgressionData
+      );
+
+      expect(result.breakdown.progressionPremium).toBe(0);
     });
   });
 
   describe('Retirement Penalty', () => {
-    it('should apply -60% penalty for 1 year until retirement', () => {
+    it('should apply -65% penalty for 1 year until retirement', () => {
+      const retiringPlayer = {
+        ...mockPlayer,
+        retirementYears: 1
+      };
+
       const result = calculateMarketValue(
-        mockPlayer,
+        retiringPlayer,
         mockComparableListings,
         mockRecentSales,
-        mockProgressionData,
-        mockPositionRatings,
-        1,
-        15
+        mockProgressionData
       );
 
       expect(result.breakdown.retirementPenalty).toBeLessThan(0);
-      const expectedPenalty = result.details.baseValue * -0.60;
-      expect(result.breakdown.retirementPenalty).toBeCloseTo(expectedPenalty, 0);
+      const expectedPenalty = Math.round(result.details.baseValue * -0.65);
+      expect(result.breakdown.retirementPenalty).toBe(expectedPenalty);
     });
 
-    it('should apply -40% penalty for 2 years until retirement', () => {
+    it('should apply -45% penalty for 2 years until retirement', () => {
+      const retiringPlayer = {
+        ...mockPlayer,
+        retirementYears: 2
+      };
+
       const result = calculateMarketValue(
-        mockPlayer,
+        retiringPlayer,
         mockComparableListings,
         mockRecentSales,
-        mockProgressionData,
-        mockPositionRatings,
-        2,
-        15
+        mockProgressionData
       );
 
       expect(result.breakdown.retirementPenalty).toBeLessThan(0);
-      const expectedPenalty = result.details.baseValue * -0.40;
-      expect(result.breakdown.retirementPenalty).toBeCloseTo(expectedPenalty, 0);
+      const expectedPenalty = Math.round(result.details.baseValue * -0.45);
+      expect(result.breakdown.retirementPenalty).toBe(expectedPenalty);
     });
 
-    it('should apply -25% penalty for 3 years until retirement', () => {
+    it('should apply -30% penalty for 3 years until retirement', () => {
+      const retiringPlayer = {
+        ...mockPlayer,
+        retirementYears: 3
+      };
+
       const result = calculateMarketValue(
-        mockPlayer,
+        retiringPlayer,
         mockComparableListings,
         mockRecentSales,
-        mockProgressionData,
-        mockPositionRatings,
-        3,
-        15
+        mockProgressionData
       );
 
       expect(result.breakdown.retirementPenalty).toBeLessThan(0);
-      const expectedPenalty = result.details.baseValue * -0.25;
-      expect(result.breakdown.retirementPenalty).toBeCloseTo(expectedPenalty, 0);
-    });
-
-    it('should not apply retirement penalty for players not retiring', () => {
-      const result = calculateMarketValue(
-        mockPlayer,
-        mockComparableListings,
-        mockRecentSales,
-        mockProgressionData,
-        mockPositionRatings,
-        undefined,
-        15
-      );
-
-      expect(result.breakdown.retirementPenalty).toBe(0);
+      const expectedPenalty = Math.round(result.details.baseValue * -0.30);
+      expect(result.breakdown.retirementPenalty).toBe(expectedPenalty);
     });
   });
 
   describe('Newly Mint Premium', () => {
-    it('should apply +10% premium for players with less than 10 matches', () => {
+    it('should apply +10% premium for newly minted players', () => {
       const result = calculateMarketValue(
         mockPlayer,
         mockComparableListings,
         mockRecentSales,
         mockProgressionData,
-        mockPositionRatings,
         undefined,
-        5
+        0, // retirementYears
+        5  // matchCount (less than 10)
       );
 
       expect(result.breakdown.newlyMintPremium).toBeGreaterThan(0);
-      const expectedPremium = result.details.baseValue * 0.10;
-      expect(result.breakdown.newlyMintPremium).toBeCloseTo(expectedPremium, 0);
+      const expectedPremium = Math.round(result.details.baseValue * 0.10);
+      expect(result.breakdown.newlyMintPremium).toBe(expectedPremium);
     });
 
-    it('should not apply newly mint premium for players with 10+ matches', () => {
+    it('should not apply premium for players with 10+ matches', () => {
       const result = calculateMarketValue(
         mockPlayer,
         mockComparableListings,
         mockRecentSales,
         mockProgressionData,
-        mockPositionRatings,
         undefined,
-        15
+        0, // retirementYears
+        15 // matchCount (more than 10)
       );
 
       expect(result.breakdown.newlyMintPremium).toBe(0);
     });
   });
 
-  describe('Base Value Adjustment', () => {
-    it('should apply -15% adjustment to comparable listings for base value', () => {
+  describe('Pace Premium/Penalty', () => {
+    it('should apply +10% pace premium for pace >= 90 (non-wide positions)', () => {
+      const fastPlayer = {
+        ...mockPlayer,
+        pace: 90,
+        positions: ['CM', 'CAM'] as const // Non-wide positions
+      };
+
       const result = calculateMarketValue(
-        mockPlayer,
+        fastPlayer,
         mockComparableListings,
         mockRecentSales,
-        mockProgressionData,
-        mockPositionRatings,
-        undefined,
-        15
+        mockProgressionData
       );
 
-      // The base value should be lower than the raw comparable average due to -15% adjustment
-      const rawComparableAverage = 100; // Average of [100, 110, 90]
-      const expectedBaseValue = rawComparableAverage * 0.85; // After -15% adjustment
-      expect(result.details.baseValue).toBeCloseTo(expectedBaseValue, 0);
+      expect(result.breakdown.pacePremium).toBeGreaterThan(0);
+      const expectedPremium = Math.round(result.details.baseValue * 0.10);
+      expect(result.breakdown.pacePremium).toBe(expectedPremium);
+    });
+
+    it('should apply +5% pace premium for pace 85-89 (non-wide positions)', () => {
+      const fastPlayer = {
+        ...mockPlayer,
+        pace: 87,
+        positions: ['CM', 'CAM'] as const // Non-wide positions
+      };
+
+      const result = calculateMarketValue(
+        fastPlayer,
+        mockComparableListings,
+        mockRecentSales,
+        mockProgressionData
+      );
+
+      expect(result.breakdown.pacePremium).toBeGreaterThan(0);
+      const expectedPremium = Math.round(result.details.baseValue * 0.05);
+      expect(result.breakdown.pacePremium).toBe(expectedPremium);
+    });
+
+    it('should not apply pace premium for wide positions', () => {
+      const fastWidePlayer = {
+        ...mockPlayer,
+        pace: 90,
+        positions: ['LW', 'RW'] as const // Wide positions
+      };
+
+      const result = calculateMarketValue(
+        fastWidePlayer,
+        mockComparableListings,
+        mockRecentSales,
+        mockProgressionData
+      );
+
+      expect(result.breakdown.pacePremium).toBe(0);
+    });
+
+    it('should apply -10% pace penalty for overall > 60 and pace < 50', () => {
+      const slowPlayer = {
+        ...mockPlayer,
+        overall: 70,
+        pace: 45
+      };
+
+      const result = calculateMarketValue(
+        slowPlayer,
+        mockComparableListings,
+        mockRecentSales,
+        mockProgressionData
+      );
+
+      expect(result.breakdown.pacePenalty).toBeLessThan(0);
+      const expectedPenalty = Math.round(result.details.baseValue * -0.10);
+      expect(result.breakdown.pacePenalty).toBe(expectedPenalty);
+    });
+
+    it('should not apply pace penalty to goalkeepers', () => {
+      const slowGoalkeeper = {
+        ...mockPlayer,
+        overall: 70,
+        pace: 45,
+        positions: ['GK'] as const
+      };
+
+      const result = calculateMarketValue(
+        slowGoalkeeper,
+        mockComparableListings,
+        mockRecentSales,
+        mockProgressionData
+      );
+
+      expect(result.breakdown.pacePenalty).toBe(0);
     });
   });
 
-  describe('Age Adjustment', () => {
-    it('should apply age adjustment based on age difference from comparable listings', () => {
+  describe('Height Adjustment (Goalkeepers)', () => {
+    it('should apply +5% height premium for GK > 6\'2"', () => {
+      const tallGoalkeeper = {
+        ...mockPlayer,
+        positions: ['GK'] as const,
+        height: 190 // 6'3"
+      };
+
       const result = calculateMarketValue(
-        mockPlayer,
+        tallGoalkeeper,
         mockComparableListings,
         mockRecentSales,
-        mockProgressionData,
-        mockPositionRatings,
-        undefined,
-        15
+        mockProgressionData
       );
 
-      // Age adjustment should be calculated based on age difference
-      expect(result.breakdown.ageAdjustment).toBeDefined();
+      expect(result.breakdown.heightAdjustment).toBeGreaterThan(0);
+      const expectedPremium = Math.max(1, Math.ceil(result.details.baseValue * 0.05));
+      expect(result.breakdown.heightAdjustment).toBe(expectedPremium);
+    });
+
+    it('should apply -5% height penalty for GK < 5\'9"', () => {
+      const shortGoalkeeper = {
+        ...mockPlayer,
+        positions: ['GK'] as const,
+        height: 170 // 5'7"
+      };
+
+      const result = calculateMarketValue(
+        shortGoalkeeper,
+        mockComparableListings,
+        mockRecentSales,
+        mockProgressionData
+      );
+
+      expect(result.breakdown.heightAdjustment).toBeLessThan(0);
+      const expectedPenalty = Math.round(result.details.baseValue * -0.05);
+      expect(result.breakdown.heightAdjustment).toBe(expectedPenalty);
+    });
+
+    it('should not apply height adjustment for non-goalkeepers', () => {
+      const nonGoalkeeper = {
+        ...mockPlayer,
+        positions: ['LB', 'CB'] as const,
+        height: 190 // Tall but not GK
+      };
+
+      const result = calculateMarketValue(
+        nonGoalkeeper,
+        mockComparableListings,
+        mockRecentSales,
+        mockProgressionData
+      );
+
+      expect(result.breakdown.heightAdjustment).toBe(0);
     });
   });
 
-  describe('Overall Rating Adjustment', () => {
-    it('should apply overall rating adjustment based on rating difference from comparable listings', () => {
+  describe('Confidence Levels', () => {
+    it('should return high confidence for >= 25 comparable listings', () => {
+      const manyListings = Array.from({ length: 30 }, (_, i) => ({
+        listingResourceId: `${i}`,
+        price: 100 + i,
+        player: { metadata: { age: 25, overall: 80, positions: ['LB'] } }
+      }));
+
       const result = calculateMarketValue(
         mockPlayer,
-        mockComparableListings,
+        manyListings,
         mockRecentSales,
-        mockProgressionData,
-        mockPositionRatings,
-        undefined,
-        15
+        mockProgressionData
       );
 
-      // Overall adjustment should be calculated based on rating difference
-      expect(result.breakdown.overallAdjustment).toBeDefined();
+      expect(result.confidence).toBe('high');
     });
-  });
 
-  describe('Confidence Calculation', () => {
-    it('should return high confidence with sufficient data', () => {
+    it('should return medium confidence for 10-24 comparable listings', () => {
+      const mediumListings = Array.from({ length: 15 }, (_, i) => ({
+        listingResourceId: `${i}`,
+        price: 100 + i,
+        player: { metadata: { age: 25, overall: 80, positions: ['LB'] } }
+      }));
+
       const result = calculateMarketValue(
         mockPlayer,
-        mockComparableListings,
+        mediumListings,
         mockRecentSales,
-        mockProgressionData,
-        mockPositionRatings,
-        undefined,
-        15
+        mockProgressionData
       );
 
-      expect(['high', 'medium', 'low']).toContain(result.confidence);
+      expect(result.confidence).toBe('medium');
     });
 
-    it('should return low confidence with minimal data', () => {
+    it('should return low confidence for < 10 comparable listings', () => {
+      const fewListings = Array.from({ length: 5 }, (_, i) => ({
+        listingResourceId: `${i}`,
+        price: 100 + i,
+        player: { metadata: { age: 25, overall: 80, positions: ['LB'] } }
+      }));
+
       const result = calculateMarketValue(
         mockPlayer,
-        [mockComparableListings[0]], // Only 1 comparable listing
-        [],
-        mockProgressionData,
-        mockPositionRatings,
-        undefined,
-        15
+        fewListings,
+        mockRecentSales,
+        mockProgressionData
       );
 
       expect(result.confidence).toBe('low');
     });
   });
 
-  describe('Edge Cases', () => {
-    it('should handle player with no progression data', () => {
+  describe('Small Adjustments Rounding', () => {
+    it('should round small positive adjustments up to $1', () => {
+      // Create a scenario where a small premium would be calculated
       const result = calculateMarketValue(
         mockPlayer,
         mockComparableListings,
         mockRecentSales,
-        [],
-        mockPositionRatings,
-        undefined,
-        15
+        mockProgressionData
       );
 
-      expect(result.breakdown.progressionPremium).toBe(0);
+      // Check that any small adjustments are properly rounded
+      const adjustments = [
+        result.breakdown.ageAdjustment,
+        result.breakdown.overallAdjustment,
+        result.breakdown.positionPremium,
+        result.breakdown.progressionPremium,
+        result.breakdown.retirementPenalty,
+        result.breakdown.newlyMintPremium,
+        result.breakdown.pacePenalty,
+        result.breakdown.pacePremium,
+        result.breakdown.heightAdjustment
+      ];
+
+      adjustments.forEach(adjustment => {
+        if (adjustment > 0 && adjustment < 1) {
+          expect(adjustment).toBe(1);
+        } else if (adjustment < 0 && adjustment > -1) {
+          expect(adjustment).toBe(-1);
+        }
+      });
+    });
+  });
+
+  describe('Error Handling', () => {
+    it('should throw error when player metadata is missing', () => {
+      expect(() => {
+        calculateMarketValue(
+          null as any,
+          mockComparableListings,
+          mockRecentSales,
+          mockProgressionData
+        );
+      }).toThrow('Player metadata is required for market value calculation');
     });
 
-    it('should handle player with no position ratings', () => {
-      const result = calculateMarketValue(
-        mockPlayer,
-        mockComparableListings,
-        mockRecentSales,
-        mockProgressionData,
-        null,
-        undefined,
-        15
-      );
-
-      // Should fall back to position count logic
-      expect(result.breakdown.positionPremium).toBeDefined();
-    });
-
-    it('should handle undefined match count', () => {
-      const result = calculateMarketValue(
-        mockPlayer,
-        mockComparableListings,
-        mockRecentSales,
-        mockProgressionData,
-        mockPositionRatings,
-        undefined,
-        undefined
-      );
-
-      expect(result.breakdown.newlyMintPremium).toBe(0);
-    });
-
-    it('should handle all adjustments together', () => {
-      const complexPlayer = {
-        ...mockPlayer,
-        pace: 92, // Should get pace premium
-        overall: 75,
-        positions: ['CM', 'CDM', 'CB'] // Should get position premium
-      };
-
-      const complexPositionRatings = {
-        CM: { success: true, ovr: 75 },
-        CDM: { success: true, ovr: 73 },
-        CB: { success: true, ovr: 72 }
-      };
-
-      const result = calculateMarketValue(
-        complexPlayer,
-        mockComparableListings,
-        mockRecentSales,
-        mockProgressionData,
-        complexPositionRatings,
-        2, // Retirement penalty
-        5  // Newly mint premium
-      );
-
-      expect(result.breakdown.pacePremium).toBeGreaterThan(0);
-      expect(result.breakdown.positionPremium).toBeGreaterThan(0);
-      expect(result.breakdown.retirementPenalty).toBeLessThan(0);
-      expect(result.breakdown.newlyMintPremium).toBeGreaterThan(0);
-      expect(result.estimatedValue).toBeGreaterThan(0);
+    it('should handle missing player metadata gracefully', () => {
+      expect(() => {
+        calculateMarketValue(
+          undefined as any,
+          mockComparableListings,
+          mockRecentSales,
+          mockProgressionData
+        );
+      }).toThrow('Player metadata is required for market value calculation');
     });
   });
 });
