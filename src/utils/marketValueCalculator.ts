@@ -138,20 +138,13 @@ export function calculateMarketValue(
   
   if (positionRatings) {
     // Count positions where the calculated rating is within 6 points of overall
-    const playablePositions = Object.entries(positionRatings).filter(([position, result]) => {
-      return result.success && Math.abs(result.ovr - player.overall) <= 6;
+    const playablePositions = Object.entries(positionRatings).filter(([position, rating]) => {
+      return rating > 0 && Math.abs(rating - player.overall) <= 6;
     });
     
     const playablePositionCount = playablePositions.length;
     
-    // Debug logging for position premium calculation
-    if (playerId === 116267) {
-      console.log('=== POSITION PREMIUM DEBUG FOR PLAYER 116267 ===');
-      console.log('Player overall:', player.overall);
-      console.log('Position ratings:', positionRatings);
-      console.log('Playable positions:', playablePositions);
-      console.log('Playable position count:', playablePositionCount);
-    }
+
     
     if (playablePositionCount > 1) {
       // Position premium based on number of playable positions
