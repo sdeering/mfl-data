@@ -145,7 +145,13 @@ export function calculateMarketValue(
     const playablePositionCount = playablePositions.length;
     
     // Debug logging for position premium calculation
-    
+    if (playerId === 116267) {
+      console.log('=== POSITION PREMIUM DEBUG FOR PLAYER 116267 ===');
+      console.log('Player overall:', player.overall);
+      console.log('Position ratings:', positionRatings);
+      console.log('Playable positions:', playablePositions);
+      console.log('Playable position count:', playablePositionCount);
+    }
     
     if (playablePositionCount > 1) {
       // Position premium based on number of playable positions
