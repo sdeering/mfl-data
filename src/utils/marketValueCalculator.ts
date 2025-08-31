@@ -278,13 +278,7 @@ export function calculateMarketValue(
     const inches = Math.round((heightInFeet - feet) * 12);
     
     // Debug logging for height calculation
-    if (playerId === 67855) {
-      console.log('=== HEIGHT CALCULATION FOR PLAYER 67855 ===');
-      console.log('Player height (cm):', heightInCm);
-      console.log('Player height (feet):', heightInFeet);
-      console.log('Player height (feet and inches):', `${feet}' ${inches}"`);
-      console.log('Rounded base value:', roundedBaseValue);
-    }
+
     
     // Apply height adjustments for goalkeepers
     if (heightInFeet > 6.167) { // 6' 2" = 6.167 feet
@@ -294,20 +288,12 @@ export function calculateMarketValue(
       if (heightAdjustment > 0) {
         heightAdjustment = Math.max(1, Math.ceil(heightAdjustment));
       }
-      if (playerId === 67855) {
-        console.log('Height premium applied: +5% =', heightAdjustment);
-      }
+
     } else if (heightInFeet < 5.75) { // 5' 9" = 5.75 feet
       // Height < 5' 9" (apply Height penalty -5%)
       heightAdjustment = roundedBaseValue * -0.05;
-      if (playerId === 67855) {
-        console.log('Height penalty applied: -5% =', heightAdjustment);
-      }
-    } else {
-      if (playerId === 67855) {
-        console.log('No height adjustment (height between 5\'9" and 6\'2")');
-      }
-    }
+
+          }
     
     totalAdjustments += heightAdjustment;
   }
