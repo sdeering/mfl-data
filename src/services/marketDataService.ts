@@ -2,7 +2,7 @@
 // Used for market value estimation
 
 export interface MarketListing {
-  id: string;
+  listingResourceId: string;
   price: number;
   player: {
     metadata: {
@@ -58,7 +58,7 @@ export async function fetchMarketData(params: {
     
     return {
       success: true,
-      data: data.data || []
+      data: Array.isArray(data) ? data : []
     };
   } catch (error) {
     console.error('Error fetching market data:', error);
