@@ -186,7 +186,7 @@ export function calculateMarketValue(
                 // Find progression points within the past 10 age years
                 const recentProgression = progressionData.filter(point => {
                   const pointAge = point.age;
-                  return pointAge >= tenYearsAgo && pointAge <= currentAge;
+                  return pointAge !== undefined && pointAge >= tenYearsAgo && pointAge <= currentAge;
                 });
 
                 if (recentProgression.length >= 2) {
