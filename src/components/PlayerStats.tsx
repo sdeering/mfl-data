@@ -60,6 +60,7 @@ interface PlayerStatsProps {
       newlyMintPremium: number;
       pacePenalty: number;
       pacePremium: number;
+      heightAdjustment: number;
       totalAdjustments: number;
     };
     details: {
