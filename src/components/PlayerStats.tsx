@@ -319,6 +319,9 @@ export default function PlayerStats({ player, marketValueEstimate, progressionDa
                         ))}
                       </div>
                     ) : null
+                  ) : stat.isTags ? (
+                    // Don't show anything for empty tags
+                    null
                   ) : (
                     <span 
                       className="font-bold px-3 py-2 rounded-lg shadow-sm text-gray-900 dark:text-white bg-gradient-to-r from-white to-gray-100 dark:from-gray-400 dark:to-gray-500"
