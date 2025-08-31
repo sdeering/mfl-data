@@ -396,7 +396,7 @@ export default function PlayerProgressionGraph({ playerId, playerName, playerPos
       <div className="relative">
         <svg
           width="100%"
-          height="500"
+          height="auto"
           className="w-full max-w-full"
           viewBox="0 0 1200 500"
         >
