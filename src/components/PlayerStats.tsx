@@ -324,7 +324,7 @@ export default function PlayerStats({ player, marketValueEstimate, progressionDa
                       className="font-bold px-3 py-2 rounded-lg shadow-sm text-gray-900 dark:text-white bg-gradient-to-r from-white to-gray-100 dark:from-gray-400 dark:to-gray-500"
                       style={{ fontSize: '18px' }}
                     >
-                      {stat.value}
+                      {Array.isArray(stat.value) ? null : stat.value}
                     </span>
                   )}
 
