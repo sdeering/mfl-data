@@ -101,7 +101,7 @@ export default function PlayerStats({ player, marketValueEstimate, progressionDa
     }
     
     // Multiple positions tag (check if player has multiple playable positions)
-    if (marketValueEstimate?.breakdown?.positionPremium > 0) {
+    if (marketValueEstimate?.breakdown?.positionPremium && marketValueEstimate.breakdown.positionPremium > 0) {
       tags.push({
         text: 'Multiple positions',
         type: 'positions'
