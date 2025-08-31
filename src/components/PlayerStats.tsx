@@ -109,7 +109,7 @@ export default function PlayerStats({ player, marketValueEstimate, progressionDa
     }
     
     // Single owner tag (check if player has no sales history)
-    if (marketValueEstimate?.breakdown?.singleOwnerPremium > 0) {
+    if (marketValueEstimate?.details?.recentSales?.length === 0) {
       tags.push({
         text: 'Single owner',
         type: 'singleOwner'
@@ -266,9 +266,7 @@ export default function PlayerStats({ player, marketValueEstimate, progressionDa
                           {stat.breakdown.positionPremium > 0 && (
                             <div>Positions premium: +${stat.breakdown.positionPremium.toLocaleString()}</div>
                           )}
-                          {stat.breakdown.singleOwnerPremium > 0 && (
-                            <div>Single owner premium: +${stat.breakdown.singleOwnerPremium.toLocaleString()}</div>
-                          )}
+
                           {stat.breakdown.progressionPremium !== 0 && (
                             <div>{stat.breakdown.progressionPremium > 0 ? 'Progression premium' : 'Progression penalty'}: {stat.breakdown.progressionPremium > 0 ? '+' : '-'}${Math.abs(stat.breakdown.progressionPremium).toLocaleString()}</div>
                           )}

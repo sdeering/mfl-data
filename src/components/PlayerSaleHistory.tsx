@@ -140,12 +140,7 @@ export default function PlayerSaleHistory({ playerId, playerName, playerMetadata
                   <span className="font-medium text-green-600">+${marketValueEstimate.breakdown.positionPremium.toLocaleString()}</span>
                 </div>
               )}
-              {marketValueEstimate.breakdown.singleOwnerPremium > 0 && (
-                <div className="flex justify-between">
-                  <span className="text-gray-600 dark:text-gray-400">Single owner premium:</span>
-                  <span className="font-medium text-green-600">+${marketValueEstimate.breakdown.singleOwnerPremium.toLocaleString()}</span>
-                </div>
-              )}
+
               {marketValueEstimate.breakdown.progressionPremium !== 0 && (
                 <div className="flex justify-between">
                   <span className="text-gray-600 dark:text-gray-400">{marketValueEstimate.breakdown.progressionPremium > 0 ? 'Progression premium' : 'Progression penalty'}:</span>
@@ -271,12 +266,7 @@ export default function PlayerSaleHistory({ playerId, playerName, playerMetadata
                 <span className="font-medium text-green-600">+${marketValueEstimate.breakdown.positionPremium.toLocaleString()}</span>
               </div>
             )}
-            {marketValueEstimate.breakdown.singleOwnerPremium > 0 && (
-              <div className="flex justify-between">
-                <span className="text-gray-600 dark:text-gray-400">Single owner premium:</span>
-                <span className="font-medium text-green-600">+${marketValueEstimate.breakdown.singleOwnerPremium.toLocaleString()}</span>
-              </div>
-            )}
+            
             {marketValueEstimate.breakdown.progressionPremium !== 0 && (
               <div className="flex justify-between">
                 <span className="text-gray-600 dark:text-gray-400">{marketValueEstimate.breakdown.progressionPremium > 0 ? 'Progression premium' : 'Progression penalty'}:</span>
