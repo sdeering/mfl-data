@@ -3,7 +3,14 @@
 import React, { useState, useEffect, Suspense, useCallback } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { mflApi } from '../../src/services/mflApi';
+import { fetchMarketData } from '../../src/services/marketDataService';
+import { calculateMarketValue } from '../../src/utils/marketValueCalculator';
+import { fetchPlayerSaleHistory } from '../../src/services/playerSaleHistoryService';
+import { fetchPlayerExperienceHistory, processProgressionData } from '../../src/services/playerExperienceService';
+import { fetchPlayerMatches } from '../../src/services/playerMatchesService';
+import { calculateAllPositionOVRs } from '../../src/utils/ruleBasedPositionCalculator';
 import type { MFLPlayer } from '../../src/types/mflApi';
+import type { MarketValueEstimate } from '../../src/utils/marketValueCalculator';
 import PlayerImage from '../../src/components/PlayerImage';
 import PlayerStatsGrid from '../../src/components/PlayerStatsGrid';
 import PositionRatingsDisplay from '../../src/components/PositionRatingsDisplay';
@@ -23,6 +30,8 @@ function ComparePageContent() {
   const [isLoading2, setIsLoading2] = useState(false);
   const [error1, setError1] = useState<string | null>(null);
   const [error2, setError2] = useState<string | null>(null);
+  const [marketValueEstimate1, setMarketValueEstimate1] = useState<MarketValueEstimate | null>(null);
+  const [marketValueEstimate2, setMarketValueEstimate2] = useState<MarketValueEstimate | null>(null);
   const { setIsLoading: setGlobalLoading } = useLoading();
 
   // Get player IDs from URL search params
@@ -44,6 +53,9 @@ function ComparePageContent() {
     try {
       const player = await mflApi.getPlayer(playerId);
       setPlayer(player);
+      
+      // Calculate market value for the player
+      await calculateMarketValueForPlayer(player, playerNumber);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to fetch player data';
       setError(errorMessage);
@@ -82,6 +94,78 @@ function ComparePageContent() {
       }
     }
   };
+
+  const calculateMarketValueForPlayer = useCallback(async (player: MFLPlayer, playerNumber: 1 | 2) => {
+    try {
+      // Validate that player and metadata exist
+      if (!player || !player.metadata) {
+        console.warn('Player or player metadata not available for market value calculation');
+        return;
+      }
+
+      const [marketResponse, historyResponse, progressionResponse, matchesResponse] = await Promise.all([
+        fetchMarketData({
+          positions: player.metadata.positions,
+          ageMin: Math.max(1, player.metadata.age - 1),
+          ageMax: player.metadata.age + 1,
+          overallMin: Math.max(1, player.metadata.overall - 1),
+          overallMax: player.metadata.overall + 1,
+          limit: 50
+        }),
+        fetchPlayerSaleHistory(player.id.toString()),
+        fetchPlayerExperienceHistory(player.id.toString()),
+        fetchPlayerMatches(player.id.toString())
+      ]);
+
+      // Calculate position ratings
+      const playerForOVR = {
+        id: player.id,
+        name: `${player.metadata.firstName} ${player.metadata.lastName}`,
+        attributes: {
+          PAC: player.metadata.pace,
+          SHO: player.metadata.shooting,
+          PAS: player.metadata.passing,
+          DRI: player.metadata.dribbling,
+          DEF: player.metadata.defense,
+          PHY: player.metadata.physical,
+          GK: player.metadata.goalkeeping || 0
+        },
+        positions: player.metadata.positions,
+        overall: player.metadata.overall
+      };
+      const positionRatingsResult = calculateAllPositionOVRs(playerForOVR);
+      const positionRatings = positionRatingsResult.results;
+
+      if (marketResponse.success && player.metadata) {
+        // Convert position ratings to the expected format
+        const positionRatingsForMarketValue = Object.entries(positionRatings).reduce((acc, [position, result]) => {
+          if (result.success) {
+            acc[position] = result.ovr;
+          }
+          return acc;
+        }, {} as { [position: string]: number });
+
+        const estimate = calculateMarketValue(
+          player.metadata,
+          marketResponse.data,
+          historyResponse.success ? historyResponse.data : [],
+          progressionResponse.success ? processProgressionData(progressionResponse.data) : [],
+          positionRatingsForMarketValue,
+          player.metadata.retirementYears,
+          matchesResponse.success ? matchesResponse.data.length : undefined,
+          player.id // Pass the actual player ID
+        );
+
+        if (playerNumber === 1) {
+          setMarketValueEstimate1(estimate);
+        } else {
+          setMarketValueEstimate2(estimate);
+        }
+      }
+    } catch (error) {
+      console.error('Failed to calculate market value:', error);
+    }
+  }, []);
 
   // Load players from URL on component mount
   useEffect(() => {
@@ -232,6 +316,7 @@ function ComparePageContent() {
                     playerId={player1.id.toString()} 
                     playerName={`${player1.metadata.firstName} ${player1.metadata.lastName}`}
                     playerMetadata={player1.metadata}
+                    marketValueEstimate={marketValueEstimate1}
                   />
                 </div>
 
@@ -312,6 +397,7 @@ function ComparePageContent() {
                     playerId={player2.id.toString()} 
                     playerName={`${player2.metadata.firstName} ${player2.metadata.lastName}`}
                     playerMetadata={player2.metadata}
+                    marketValueEstimate={marketValueEstimate2}
                   />
                 </div>
 
