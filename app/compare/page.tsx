@@ -310,6 +310,14 @@ function ComparePageContent() {
                   />
                 </div>
 
+                {/* Recent Matches Column */}
+                <div className="w-full p-[5px]">
+                  <PlayerRecentMatches 
+                    playerId={player1.id.toString()} 
+                    playerName={`${player1.metadata.firstName} ${player1.metadata.lastName}`}
+                  />
+                </div>
+
                 {/* Sale History Column */}
                 <div className="w-full p-[5px]">
                   <PlayerSaleHistory 
@@ -317,14 +325,6 @@ function ComparePageContent() {
                     playerName={`${player1.metadata.firstName} ${player1.metadata.lastName}`}
                     playerMetadata={player1.metadata}
                     marketValueEstimate={marketValueEstimate1}
-                  />
-                </div>
-
-                {/* Recent Matches Column */}
-                <div className="w-full p-[5px]">
-                  <PlayerRecentMatches 
-                    playerId={player1.id.toString()} 
-                    playerName={`${player1.metadata.firstName} ${player1.metadata.lastName}`}
                   />
                 </div>
               </div>
@@ -391,6 +391,14 @@ function ComparePageContent() {
                   />
                 </div>
 
+                {/* Recent Matches Column */}
+                <div className="w-full p-[5px]">
+                  <PlayerRecentMatches 
+                    playerId={player2.id.toString()} 
+                    playerName={`${player2.metadata.firstName} ${player2.metadata.lastName}`}
+                  />
+                </div>
+
                 {/* Sale History Column */}
                 <div className="w-full p-[5px]">
                   <PlayerSaleHistory 
@@ -398,14 +406,6 @@ function ComparePageContent() {
                     playerName={`${player2.metadata.firstName} ${player2.metadata.lastName}`}
                     playerMetadata={player2.metadata}
                     marketValueEstimate={marketValueEstimate2}
-                  />
-                </div>
-
-                {/* Recent Matches Column */}
-                <div className="w-full p-[5px]">
-                  <PlayerRecentMatches 
-                    playerId={player2.id.toString()} 
-                    playerName={`${player2.metadata.firstName} ${player2.metadata.lastName}`}
                   />
                 </div>
               </div>
