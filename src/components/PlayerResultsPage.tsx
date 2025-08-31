@@ -214,7 +214,7 @@ const PlayerResultsPage: React.FC<PlayerResultsPageProps> = ({ propPlayerId }) =
     return (
       <div className="min-h-screen">
         <div className="p-6 bg-white dark:bg-[#121213] pt-8">
-          <div className="flex items-center justify-center min-h-[calc(100vh-6rem)]">
+          <div className="flex items-start justify-center min-h-[calc(100vh-6rem)]">
             <div className="text-center max-w-md">
               <div className="mb-6">
                 <svg className="w-16 h-16 text-red-500 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
