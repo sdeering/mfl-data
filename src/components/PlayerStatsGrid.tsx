@@ -65,7 +65,7 @@ export const PlayerStatsGrid: React.FC<PlayerStatsGridProps> = ({ player }) => {
     <div className={`grid grid-flow-row ${isGoalkeeper ? 'grid-cols-1' : 'grid-cols-6'} items-start justify-center`}>
       {/* Header row */}
       {stats.map((stat) => (
-        <div key={`header-${stat.label}`} className="border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 border-b px-2 py-1.5 text-center text-base font-semibold tracking-wide whitespace-nowrap uppercase" style={{ paddingBottom: '2px' }}>
+        <div key={`header-${stat.label}`} className="border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 border-b px-2 py-1.5 text-center text-base font-semibold tracking-wide whitespace-nowrap uppercase" style={{ paddingBottom: '2px', marginBottom: '4px' }}>
           {stat.label}
         </div>
       ))}
