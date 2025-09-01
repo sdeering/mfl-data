@@ -76,7 +76,6 @@ const ThemeToggle: React.FC<ThemeToggleProps> = ({
   const { theme, toggleTheme, isClient } = useTheme();
 
   const handleToggle = () => {
-    console.log('ThemeToggle clicked, current theme:', theme);
     toggleTheme();
     if (onToggle) {
       // Call onToggle with the new theme (opposite of current)

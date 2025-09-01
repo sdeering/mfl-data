@@ -18,16 +18,13 @@ export const ThemeProvider: React.FC<ThemeProviderProps> = ({
 
   // Handle client-side initialization after hydration
   useEffect(() => {
-    console.log('ThemeProvider useEffect running, setting isClient to true');
     setIsClient(true);
     
     // Get the actual theme preference after hydration
     const actualTheme = initialTheme || getInitialThemePreference();
-    console.log('Actual theme preference:', actualTheme);
     
     // Only update if it's different from the default 'light'
     if (actualTheme !== 'light') {
-      console.log('Updating theme from light to:', actualTheme);
       setTheme(actualTheme);
     }
   }, []); // Remove initialTheme dependency to ensure it runs
@@ -35,8 +32,6 @@ export const ThemeProvider: React.FC<ThemeProviderProps> = ({
   // Apply theme to document element
   useEffect(() => {
     const html = document.documentElement;
-    
-    console.log('Applying theme to document:', theme);
     
     // Remove existing theme classes
     html.classList.remove('light', 'dark');
@@ -46,15 +41,12 @@ export const ThemeProvider: React.FC<ThemeProviderProps> = ({
     
     // Also set data attribute for additional styling if needed
     html.setAttribute('data-theme', theme);
-    
-    console.log('Document classes after theme change:', html.classList.toString());
   }, [theme]);
 
   // Toggle theme function
   const toggleTheme = (): void => {
     setTheme(prevTheme => {
       const newTheme = prevTheme === 'light' ? 'dark' : 'light';
-      console.log('Theme toggled from', prevTheme, 'to', newTheme);
       // Save the new theme preference to sessionStorage
       saveThemePreference(newTheme);
       return newTheme;
@@ -67,8 +59,6 @@ export const ThemeProvider: React.FC<ThemeProviderProps> = ({
     toggleTheme,
     isClient, // Add this to help components know if we're hydrated
   };
-
-  console.log('ThemeProvider rendering with isClient:', isClient, 'theme:', theme);
 
   return (
     <ThemeContext.Provider value={value}>
