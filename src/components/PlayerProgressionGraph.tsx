@@ -541,7 +541,7 @@ export default function PlayerProgressionGraph({ playerId, playerName, playerPos
          
                  
                  return (
-                   <div key={stat} className="flex items-center space-x-2 text-base font-semibold text-gray-700">
+                   <div key={stat} className="flex items-center space-x-2 text-base font-semibold text-gray-700 dark:text-white">
                      <div 
                        className="w-3 h-3 rounded-full" 
                        style={{ backgroundColor: stat === 'overall' ? getOverallLineColor(displayValue) : STAT_COLORS[stat] }}
