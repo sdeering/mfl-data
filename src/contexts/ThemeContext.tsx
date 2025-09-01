@@ -22,6 +22,8 @@ export const ThemeProvider: React.FC<ThemeProviderProps> = ({
   useEffect(() => {
     const html = document.documentElement;
     
+    console.log('Applying theme to document:', theme);
+    
     // Remove existing theme classes
     html.classList.remove('light', 'dark');
     
@@ -30,12 +32,15 @@ export const ThemeProvider: React.FC<ThemeProviderProps> = ({
     
     // Also set data attribute for additional styling if needed
     html.setAttribute('data-theme', theme);
+    
+    console.log('Document classes after theme change:', html.classList.toString());
   }, [theme]);
 
   // Toggle theme function
   const toggleTheme = (): void => {
     setTheme(prevTheme => {
       const newTheme = prevTheme === 'light' ? 'dark' : 'light';
+      console.log('Theme toggled from', prevTheme, 'to', newTheme);
       // Save the new theme preference to sessionStorage
       saveThemePreference(newTheme);
       return newTheme;
