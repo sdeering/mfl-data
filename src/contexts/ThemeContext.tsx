@@ -12,11 +12,25 @@ export const ThemeProvider: React.FC<ThemeProviderProps> = ({
   children, 
   initialTheme 
 }) => {
-  // Initialize theme state
-  const [theme, setTheme] = useState<Theme>(() => {
-    // Use initialTheme if provided, otherwise get from storage/system preference
-    return initialTheme || getInitialThemePreference();
-  });
+  // Initialize theme state - always start with 'light' to prevent hydration mismatch
+  const [theme, setTheme] = useState<Theme>('light');
+  const [isClient, setIsClient] = useState(false);
+
+  // Handle client-side initialization after hydration
+  useEffect(() => {
+    console.log('ThemeProvider useEffect running, setting isClient to true');
+    setIsClient(true);
+    
+    // Get the actual theme preference after hydration
+    const actualTheme = initialTheme || getInitialThemePreference();
+    console.log('Actual theme preference:', actualTheme);
+    
+    // Only update if it's different from the default 'light'
+    if (actualTheme !== 'light') {
+      console.log('Updating theme from light to:', actualTheme);
+      setTheme(actualTheme);
+    }
+  }, []); // Remove initialTheme dependency to ensure it runs
 
   // Apply theme to document element
   useEffect(() => {
@@ -51,7 +65,10 @@ export const ThemeProvider: React.FC<ThemeProviderProps> = ({
   const value: ThemeContextValue = {
     theme,
     toggleTheme,
+    isClient, // Add this to help components know if we're hydrated
   };
+
+  console.log('ThemeProvider rendering with isClient:', isClient, 'theme:', theme);
 
   return (
     <ThemeContext.Provider value={value}>

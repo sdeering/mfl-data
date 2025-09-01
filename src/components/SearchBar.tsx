@@ -137,7 +137,7 @@ export const SearchBar: React.FC<SearchBarProps> = ({ isLoading = false }) => {
           onFocus={handleSearchInputFocus}
           placeholder="Enter Player ID (numbers only)..."
           disabled={isSearching}
-          className={`w-full lg:w-80 px-3 py-2 pr-10 bg-white dark:bg-[#121213] border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 ${
+          className={`w-full lg:w-80 px-3 py-2 pr-10 bg-white dark:bg-[#111827] border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 ${
             isSearching ? 'opacity-50 cursor-not-allowed' : ''
           }`}
         />
@@ -164,7 +164,7 @@ export const SearchBar: React.FC<SearchBarProps> = ({ isLoading = false }) => {
       {showRecentSearches && recentSearches.length > 0 && (
         <div 
           ref={dropdownRef}
-          className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-[#121213] border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-50 max-h-80 flex flex-col"
+          className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-[#111827] border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-50 max-h-80 flex flex-col"
         >
           <div className="flex-1 overflow-y-auto p-2">
             <div className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2 px-2">
@@ -193,7 +193,7 @@ export const SearchBar: React.FC<SearchBarProps> = ({ isLoading = false }) => {
               </div>
             ))}
           </div>
-          <div className="border-t border-gray-200 dark:border-gray-700 p-2 bg-white dark:bg-[#121213]">
+          <div className="border-t border-gray-200 dark:border-gray-700 p-2 bg-white dark:bg-[#111827]">
             <button
               onClick={clearAllRecentSearches}
               className="w-full px-3 py-2 text-sm text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-all duration-200 hover:scale-110 hover:bg-gray-100 dark:hover:bg-gray-700 rounded hover:cursor-pointer"

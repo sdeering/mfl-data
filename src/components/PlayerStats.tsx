@@ -200,7 +200,7 @@ export default function PlayerStats({ player, marketValueEstimate, progressionDa
               {stat.value !== undefined && stat.value !== null ? (
                 <>
                   {stat.isCountry ? (
-                    <span className="text-lg font-bold px-3 py-2 rounded-lg shadow-sm text-gray-900 dark:text-white bg-gradient-to-r from-white to-gray-100 dark:from-gray-400 dark:to-gray-500">
+                    <span className="text-lg font-bold px-3 py-2 rounded-lg shadow-sm text-gray-900 dark:text-gray-900 bg-gradient-to-r from-white to-gray-100 dark:from-white dark:to-gray-100">
                       <span className="text-xl mr-2">{getCountryFlag(stat.value as string)}</span>
                       {formatCountryName(stat.value as string)}
                     </span>
@@ -209,17 +209,17 @@ export default function PlayerStats({ player, marketValueEstimate, progressionDa
                       href={`https://app.playmfl.com/users/${player.ownedBy.walletAddress}`}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className={`text-lg font-bold px-3 py-2 rounded-lg shadow-sm text-gray-900 dark:text-white bg-gradient-to-r from-white to-gray-100 dark:from-gray-400 dark:to-gray-500 hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors cursor-pointer`}
+                      className={`text-lg font-bold px-3 py-2 rounded-lg shadow-sm text-gray-900 dark:text-gray-900 bg-gradient-to-r from-white to-gray-100 dark:from-white dark:to-gray-100 hover:bg-gray-50 dark:hover:bg-gray-50 transition-colors cursor-pointer`}
                     >
                       {stat.value}
                     </a>
                   ) : stat.isTeam ? (
                     stat.isFreeAgent ? (
-                      <span className="text-lg font-bold px-3 py-2 rounded-lg shadow-sm text-gray-900 dark:text-white bg-gradient-to-r from-white to-gray-100 dark:from-gray-400 dark:to-gray-500">
+                      <span className="text-lg font-bold px-3 py-2 rounded-lg shadow-sm text-gray-900 dark:text-gray-900 bg-gradient-to-r from-white to-gray-100 dark:from-white dark:to-gray-100">
                         {stat.value}
                       </span>
                     ) : stat.isDevCentre ? (
-                      <span className="text-lg font-bold px-3 py-2 rounded-lg shadow-sm text-gray-900 dark:text-white bg-gradient-to-r from-white to-gray-100 dark:from-gray-400 dark:to-gray-500">
+                      <span className="text-lg font-bold px-3 py-2 rounded-lg shadow-sm text-gray-900 dark:text-gray-900 bg-gradient-to-r from-white to-gray-100 dark:from-white dark:to-gray-100">
                         {stat.value}
                       </span>
                     ) : stat.teamId ? (
@@ -227,18 +227,18 @@ export default function PlayerStats({ player, marketValueEstimate, progressionDa
                         href={`https://app.playmfl.com/clubs/${stat.teamId}`}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-lg font-bold px-3 py-2 rounded-lg shadow-sm text-gray-900 dark:text-white bg-gradient-to-r from-white to-gray-100 dark:from-gray-400 dark:to-gray-500 hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors cursor-pointer"
+                        className="text-lg font-bold px-3 py-2 rounded-lg shadow-sm text-gray-900 dark:text-gray-900 bg-gradient-to-r from-white to-gray-100 dark:from-white dark:to-gray-100 hover:bg-gray-50 dark:hover:bg-gray-50 transition-colors cursor-pointer"
                       >
                         {stat.value}
                       </a>
                     ) : (
-                      <span className="text-lg font-bold px-3 py-2 rounded-lg shadow-sm text-gray-900 dark:text-white bg-gradient-to-r from-white to-gray-100 dark:from-gray-400 dark:to-gray-500">
+                      <span className="text-lg font-bold px-3 py-2 rounded-lg shadow-sm text-gray-900 dark:text-gray-900 bg-gradient-to-r from-white to-gray-100 dark:from-white dark:to-gray-100">
                         {stat.value}
                       </span>
                     )
                   ) : stat.isMarketValue ? (
                     <div className="flex items-center space-x-2">
-                      <div className="flex items-center space-x-1 px-3 py-2 rounded-lg shadow-sm text-gray-900 dark:text-white bg-gradient-to-r from-white to-gray-100 dark:from-gray-400 dark:to-gray-500">
+                      <div className="flex items-center space-x-1 px-3 py-2 rounded-lg shadow-sm text-gray-900 dark:text-gray-900 bg-gradient-to-r from-white to-gray-100 dark:from-white dark:to-gray-100">
                         <span className="text-lg font-bold">
                           {stat.value}
                         </span>
@@ -298,6 +298,14 @@ export default function PlayerStats({ player, marketValueEstimate, progressionDa
                         )}
                       </div>
                     </div>
+                  ) : stat.isHeight ? (
+                    <span className="text-lg font-bold px-3 py-2 rounded-lg shadow-sm text-gray-900 dark:text-gray-900 bg-gradient-to-r from-white to-gray-100 dark:from-white dark:to-gray-100">
+                      {stat.value}
+                    </span>
+                  ) : stat.isPositions ? (
+                    <span className="text-lg font-bold px-3 py-2 rounded-lg shadow-sm text-gray-900 dark:text-gray-900 bg-gradient-to-r from-white to-gray-100 dark:from-white dark:to-gray-100">
+                      {stat.value}
+                    </span>
                   ) : stat.isTags ? (
                     stat.value && stat.value.length > 0 ? (
                       <div className="flex flex-wrap gap-1">
@@ -321,7 +329,7 @@ export default function PlayerStats({ player, marketValueEstimate, progressionDa
                     ) : null
                   ) : (
                     <span 
-                      className="font-bold px-3 py-2 rounded-lg shadow-sm text-gray-900 dark:text-white bg-gradient-to-r from-white to-gray-100 dark:from-gray-400 dark:to-gray-500"
+                      className="font-bold px-3 py-2 rounded-lg shadow-sm text-gray-900 dark:text-gray-900 bg-gradient-to-r from-white to-gray-100 dark:from-white dark:to-gray-100"
                       style={{ fontSize: '18px' }}
                     >
                       {Array.isArray(stat.value) ? null : stat.value}

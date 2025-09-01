@@ -6,6 +6,7 @@ export type Theme = 'light' | 'dark';
 export interface ThemeContextValue {
   theme: Theme;
   toggleTheme: () => void;
+  isClient: boolean; // Add this to track hydration state
 }
 
 export interface ThemeProviderProps {

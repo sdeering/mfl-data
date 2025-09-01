@@ -275,7 +275,7 @@ function PositionRatingItem({ rating, player, matchRating }: {
     >
       <div className="flex items-center justify-between">
         <div className="flex items-center space-x-2">
-          <span className={`text-lg font-bold px-3 py-2 rounded-lg shadow-sm text-gray-900 dark:text-white bg-gradient-to-r from-gray-100 to-gray-200 dark:from-gray-600 dark:to-gray-700 ${
+          <span className={`text-lg font-bold px-3 py-2 rounded-lg shadow-sm text-gray-900 dark:text-gray-900 bg-gradient-to-r from-gray-100 to-gray-200 dark:from-gray-100 dark:to-gray-200 ${
             familiarity === 'PRIMARY' ? 'border-4 border-green-500' : 
             familiarity === 'SECONDARY' ? 'border-4 border-orange-500' : ''
           }`}>
@@ -296,12 +296,12 @@ function PositionRatingItem({ rating, player, matchRating }: {
             </div>
           )}
           {familiarity === 'PRIMARY' && (
-            <span className="text-xs font-semibold text-black dark:text-white" style={{ marginLeft: '4px' }}>
+            <span className="text-xs font-semibold text-black dark:text-black" style={{ marginLeft: '4px' }}>
               Primary
             </span>
           )}
           {familiarity === 'SECONDARY' && (
-            <span className="text-xs font-semibold text-black dark:text-white" style={{ marginLeft: '4px' }}>
+            <span className="text-xs font-semibold text-black dark:text-black" style={{ marginLeft: '4px' }}>
               Secondary
             </span>
           )}

@@ -197,7 +197,7 @@ const PlayerResultsPage: React.FC<PlayerResultsPageProps> = ({ propPlayerId }) =
   if (isLoading) {
     return (
       <div className="min-h-screen">
-        <div className="p-6 bg-white dark:bg-[#121213]">
+        <div className="p-6 bg-white dark:bg-[#111827]">
           <div className="flex items-center justify-center h-64">
             <div className="text-center">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
@@ -213,7 +213,7 @@ const PlayerResultsPage: React.FC<PlayerResultsPageProps> = ({ propPlayerId }) =
   if (error) {
     return (
       <div className="min-h-screen">
-        <div className="p-6 bg-white dark:bg-[#121213] pt-8">
+        <div className="p-6 bg-white dark:bg-[#111827] pt-8">
           <div className="flex items-start justify-center min-h-[calc(100vh-6rem)]">
             <div className="text-center max-w-md">
               <div className="mb-6">
@@ -258,9 +258,9 @@ const PlayerResultsPage: React.FC<PlayerResultsPageProps> = ({ propPlayerId }) =
   }
 
   return (
-    <div className="min-h-screen bg-white dark:bg-[#121213]">
+    <div className="min-h-screen bg-white dark:bg-[#111827]">
       {/* Main Content Area - Responsive Layout */}
-      <div className="px-4 lg:px-0 bg-white dark:bg-[#121213] rounded-lg">
+              <div className="px-4 lg:px-0 bg-white dark:bg-[#111827] rounded-lg">
         {player ? (
           <>
             {/* Row 1 - Main player information */}
@@ -288,7 +288,7 @@ const PlayerResultsPage: React.FC<PlayerResultsPageProps> = ({ propPlayerId }) =
               {/* Column 3 - Player Information (Mobile: Third, Desktop: First) */}
               <div className="w-full lg:w-[350px] lg:flex-shrink-0 order-3 lg:order-1">
                 <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4 hidden">Player Information</h2>
-                <div className="w-full bg-white dark:bg-[#121213] p-[5px]">
+                <div className="w-full bg-white dark:bg-[#111827] p-[5px]">
                   <PlayerStats 
                     player={player!} 
                     marketValueEstimate={marketValueEstimate}

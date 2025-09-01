@@ -73,7 +73,7 @@ const ThemeToggle: React.FC<ThemeToggleProps> = ({
   onToggle,
   'aria-label': ariaLabel = 'Toggle theme',
 }) => {
-  const { theme, toggleTheme } = useTheme();
+  const { theme, toggleTheme, isClient } = useTheme();
 
   const handleToggle = () => {
     console.log('ThemeToggle clicked, current theme:', theme);
@@ -102,6 +102,21 @@ const ThemeToggle: React.FC<ThemeToggleProps> = ({
     variantClasses[variant],
     className,
   ].join(' ');
+
+  // Show loading state until client is hydrated to prevent hydration mismatch
+  if (!isClient) {
+    return (
+      <button
+        type="button"
+        className={baseClasses}
+        disabled
+        aria-label="Loading theme..."
+        title="Loading theme..."
+      >
+        <SunIcon className={iconSizeClasses[size]} />
+      </button>
+    );
+  }
 
   return (
     <button

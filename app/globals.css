@@ -36,4 +36,84 @@ body {
   font-family: var(--font-titillium-web), Arial, Helvetica, sans-serif;
 }
 
-/* Theme classes removed to allow Tailwind classes to work */
+/* Force dark mode styles to work */
+.dark [class*="dark:bg-[#111827]"] {
+  background-color: #111827 !important;
+}
+
+.dark [class*="dark:text-white"] {
+  color: white !important;
+}
+
+.dark [class*="dark:text-gray-400"] {
+  color: #9ca3af !important;
+}
+
+.dark [class*="dark:border-gray-600"] {
+  border-color: #4b5563 !important;
+}
+
+.dark [class*="dark:bg-gray-700"] {
+  background-color: #374151 !important;
+}
+
+.dark [class*="dark:hover:text-blue-400"]:hover {
+  color: #60a5fa !important;
+}
+
+.dark [class*="dark:hover:bg-gray-700"]:hover {
+  background-color: #374151 !important;
+}
+
+.dark [class*="dark:hover:bg-gray-900"]:hover {
+  background-color: #111827 !important;
+}
+
+/* Additional dark mode styles for specific components */
+.dark [class*="dark:bg-gray-800"] {
+  background-color: #1f2937 !important;
+}
+
+.dark [class*="dark:bg-gray-900"] {
+  background-color: #111827 !important;
+}
+
+.dark [class*="dark:text-gray-300"] {
+  color: #d1d5db !important;
+}
+
+.dark [class*="dark:border-gray-700"] {
+  border-color: #374151 !important;
+}
+
+.dark [class*="dark:bg-blue-900/20"] {
+  background-color: rgba(30, 58, 138, 0.2) !important;
+}
+
+.dark [class*="dark:border-blue-800"] {
+  border-color: #1e40af !important;
+}
+
+.dark [class*="dark:text-blue-100"] {
+  color: #dbeafe !important;
+}
+
+.dark [class*="dark:text-blue-300"] {
+  color: #93c5fd !important;
+}
+
+.dark [class*="dark:text-blue-400"] {
+  color: #60a5fa !important;
+}
+
+.dark [class*="dark:text-green-400"] {
+  color: #4ade80 !important;
+}
+
+.dark [class*="dark:text-yellow-400"] {
+  color: #facc15 !important;
+}
+
+.dark [class*="dark:text-red-400"] {
+  color: #f87171 !important;
+}

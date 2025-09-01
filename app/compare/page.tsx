@@ -189,8 +189,8 @@ function ComparePageContent() {
   }, [urlPlayerId, urlPlayer1Id, urlPlayer2Id]);
 
   return (
-    <div className="min-h-screen bg-white dark:bg-[#121213]">
-      <div className="px-4 lg:px-0 bg-white dark:bg-[#121213] rounded-lg">
+    <div className="min-h-screen bg-white dark:bg-[#111827]">
+              <div className="px-4 lg:px-0 bg-white dark:bg-[#111827] rounded-lg">
         {/* Page Title */}
         <div className="mb-6">
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Compare Players</h1>
@@ -426,7 +426,7 @@ function ComparePageContent() {
 const ComparePage = () => {
   return (
     <Suspense fallback={
-      <div className="min-h-screen bg-white dark:bg-[#121213] flex items-center justify-center">
+      <div className="min-h-screen bg-white dark:bg-[#111827] flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
           <p className="text-gray-500 dark:text-gray-400">Loading compare page...</p>
