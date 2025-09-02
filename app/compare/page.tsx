@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, Suspense, useCallback } from 'react';
+import React, { useState, useEffect, Suspense, useCallback, useRef } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { mflApi } from '../../src/services/mflApi';
 import { fetchMarketData } from '../../src/services/marketDataService';
@@ -33,6 +33,10 @@ function ComparePageContent() {
   const [marketValueEstimate1, setMarketValueEstimate1] = useState<MarketValueEstimate | null>(null);
   const [marketValueEstimate2, setMarketValueEstimate2] = useState<MarketValueEstimate | null>(null);
   const { setIsLoading: setGlobalLoading } = useLoading();
+  
+  // Use refs to track if we've already loaded players to prevent unnecessary re-fetches
+  const hasLoadedPlayer1 = useRef(false);
+  const hasLoadedPlayer2 = useRef(false);
 
   // Get player IDs from URL search params
   const urlPlayer1Id = searchParams.get('player1Id');
@@ -77,11 +81,13 @@ function ComparePageContent() {
 
   const handlePlayer1Search = () => {
     fetchPlayer(player1Id, 1);
+    hasLoadedPlayer1.current = true;
     updateURL(player1Id, player2Id);
   };
 
   const handlePlayer2Search = () => {
     fetchPlayer(player2Id, 2);
+    hasLoadedPlayer2.current = true;
     updateURL(player1Id, player2Id);
   };
 
@@ -91,6 +97,36 @@ function ComparePageContent() {
         handlePlayer1Search();
       } else {
         handlePlayer2Search();
+      }
+    }
+  };
+
+  const handlePaste = (e: React.ClipboardEvent, playerNumber: 1 | 2) => {
+    // Prevent the default paste behavior to avoid duplicate values
+    e.preventDefault();
+    
+    // Get the pasted text
+    const pastedText = e.clipboardData.getData('text');
+    
+    // Check if it looks like a player ID (numeric)
+    if (/^\d+$/.test(pastedText.trim())) {
+      // Set the player ID
+      if (playerNumber === 1) {
+        setPlayer1Id(pastedText.trim());
+        // Trigger search after a short delay to allow the state to update
+        setTimeout(() => {
+          fetchPlayer(pastedText.trim(), 1);
+          hasLoadedPlayer1.current = true;
+          updateURL(pastedText.trim(), player2Id);
+        }, 100);
+      } else {
+        setPlayer2Id(pastedText.trim());
+        // Trigger search after a short delay to allow the state to update
+        setTimeout(() => {
+          fetchPlayer(pastedText.trim(), 2);
+          hasLoadedPlayer2.current = true;
+          updateURL(player1Id, pastedText.trim());
+        }, 100);
       }
     }
   };
@@ -167,26 +203,29 @@ function ComparePageContent() {
     }
   }, []);
 
-  // Load players from URL on component mount
+  // Load players from URL on component mount only
   useEffect(() => {
     // Handle legacy playerId parameter
-    if (urlPlayerId && !urlPlayer1Id) {
+    if (urlPlayerId && !urlPlayer1Id && !hasLoadedPlayer1.current) {
       setPlayer1Id(urlPlayerId);
       fetchPlayer(urlPlayerId, 1);
+      hasLoadedPlayer1.current = true;
     }
     
     // Handle player1Id parameter
-    if (urlPlayer1Id) {
+    if (urlPlayer1Id && !hasLoadedPlayer1.current) {
       setPlayer1Id(urlPlayer1Id);
       fetchPlayer(urlPlayer1Id, 1);
+      hasLoadedPlayer1.current = true;
     }
     
     // Handle player2Id parameter
-    if (urlPlayer2Id) {
+    if (urlPlayer2Id && !hasLoadedPlayer2.current) {
       setPlayer2Id(urlPlayer2Id);
       fetchPlayer(urlPlayer2Id, 2);
+      hasLoadedPlayer2.current = true;
     }
-  }, [urlPlayerId, urlPlayer1Id, urlPlayer2Id]);
+  }, []); // Empty dependency array - only run on mount
 
   return (
     <div className="min-h-screen bg-white dark:bg-[#111827]">
@@ -211,6 +250,7 @@ function ComparePageContent() {
                 value={player1Id}
                 onChange={(e) => setPlayer1Id(e.target.value)}
                 onKeyPress={(e) => handleKeyPress(e, 1)}
+                onPaste={(e) => handlePaste(e, 1)}
                 placeholder="Enter player ID..."
                 className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
@@ -239,6 +279,7 @@ function ComparePageContent() {
                 value={player2Id}
                 onChange={(e) => setPlayer2Id(e.target.value)}
                 onKeyPress={(e) => handleKeyPress(e, 2)}
+                onPaste={(e) => handlePaste(e, 2)}
                 placeholder="Enter player ID..."
                 className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />

@@ -341,6 +341,117 @@ describe('ComparePage', () => {
     });
   });
 
+  it('does not search when pasting non-numeric text', async () => {
+    const { mflApi } = require('../../src/services/mflApi');
+    
+    render(<ComparePage />);
+    
+    const player1Input = screen.getByLabelText('Player 1 ID');
+    
+    // Simulate pasting non-numeric text
+    const pasteEvent = new Event('paste', { bubbles: true });
+    Object.defineProperty(pasteEvent, 'clipboardData', {
+      value: {
+        getData: () => 'abc123'
+      }
+    });
+    
+    fireEvent(player1Input, pasteEvent);
+    
+    // Wait a bit to ensure no API call is made
+    await new Promise(resolve => setTimeout(resolve, 200));
+    
+    // Verify no API call was made
+    expect(mflApi.getPlayer).not.toHaveBeenCalled();
+  });
+
+  it('does not duplicate values when pasting player IDs', async () => {
+    const { mflApi } = require('../../src/services/mflApi');
+    mflApi.getPlayer.mockResolvedValue(mockPlayer1);
+    
+    render(<ComparePage />);
+    
+    const player1Input = screen.getByLabelText('Player 1 ID');
+    
+    // Simulate pasting a player ID
+    const pasteEvent = new Event('paste', { bubbles: true });
+    Object.defineProperty(pasteEvent, 'clipboardData', {
+      value: {
+        getData: () => '9123'
+      }
+    });
+    
+    fireEvent(player1Input, pasteEvent);
+    
+    // Wait for the state to update
+    await waitFor(() => {
+      expect(player1Input).toHaveValue('9123');
+    });
+    
+    // Verify the value is exactly what was pasted, not duplicated
+    expect(player1Input).toHaveValue('9123');
+    expect(player1Input).not.toHaveValue('91239123');
+    
+    // Verify the API was called with the correct value
+    await waitFor(() => {
+      expect(mflApi.getPlayer).toHaveBeenCalledWith('9123');
+    });
+  });
+
+  it('automatically searches when pasting a valid player ID into player 1 input', async () => {
+    const { mflApi } = require('../../src/services/mflApi');
+    mflApi.getPlayer.mockResolvedValue(mockPlayer1);
+    
+    render(<ComparePage />);
+    
+    const player1Input = screen.getByLabelText('Player 1 ID');
+    
+    // Simulate pasting a player ID
+    const pasteEvent = new Event('paste', { bubbles: true });
+    Object.defineProperty(pasteEvent, 'clipboardData', {
+      value: {
+        getData: () => '12345'
+      }
+    });
+    
+    fireEvent(player1Input, pasteEvent);
+    
+    // Wait for the API call to complete
+    await waitFor(() => {
+      expect(mflApi.getPlayer).toHaveBeenCalledWith('12345');
+    });
+    
+    // Verify the input is populated
+    expect(player1Input).toHaveValue('12345');
+  });
+
+  it('automatically searches when pasting a valid player ID into player 2 input', async () => {
+    const { mflApi } = require('../../src/services/mflApi');
+    mflApi.getPlayer.mockResolvedValue(mockPlayer2);
+    
+    render(<ComparePage />);
+    
+    const player2Input = screen.getByLabelText('Player 2 ID');
+    
+    // Simulate pasting a player ID
+    const pasteEvent = new Event('paste', { bubbles: true });
+    Object.defineProperty(pasteEvent, 'clipboardData', {
+      value: {
+        getData: () => '67890'
+      }
+    });
+    
+    fireEvent(player2Input, pasteEvent);
+    
+    // Wait for the API call to complete
+    await waitFor(() => {
+      expect(mflApi.getPlayer).toHaveBeenCalledWith('67890');
+    });
+    
+    // Verify the input is populated
+    expect(player2Input).toHaveValue('67890');
+  });
+
   it('disables search button when input is empty', () => {
     render(<ComparePage />);
     

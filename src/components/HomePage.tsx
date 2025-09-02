@@ -2,18 +2,26 @@
 
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { useLoading } from '@/src/contexts/LoadingContext';
+import LoadingSpinner from '@/src/components/LoadingSpinner';
 
 export const HomePage: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
+  const [isSearching, setIsSearching] = useState(false);
   const router = useRouter();
+  const { setIsLoading } = useLoading();
 
-  const handleSearch = (e: React.FormEvent) => {
+  const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
     if (searchQuery.trim()) {
+      setIsSearching(true);
+      setIsLoading(true);
+      
+      // Small delay to show loading state
+      await new Promise(resolve => setTimeout(resolve, 300));
+      
       // Navigate to new player route
       router.push(`/players/${encodeURIComponent(searchQuery.trim())}`);
-      // Clear the search box after navigation
-      setSearchQuery('');
     }
   };
 
@@ -22,18 +30,26 @@ export const HomePage: React.FC = () => {
     setSearchQuery(value);
   };
 
-  const handlePaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
+  const handlePaste = async (e: React.ClipboardEvent<HTMLInputElement>) => {
     const pastedValue = e.clipboardData.getData('text');
     const playerIdPattern = /^\d{4,6}$/;
     
     if (playerIdPattern.test(pastedValue.trim())) {
-      // Auto-search for pasted player IDs
-      setTimeout(() => {
-        router.push(`/players/${encodeURIComponent(pastedValue.trim())}`);
-        setSearchQuery('');
-      }, 100);
+      // Set the pasted value in the input
+      setSearchQuery(pastedValue.trim());
+      
+      // Show loading state
+      setIsSearching(true);
+      setIsLoading(true);
+      
+      // Small delay to show loading state and keep the number visible
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      // Navigate to player page
+      router.push(`/players/${encodeURIComponent(pastedValue.trim())}`);
     }
   };
+
   return (
     <div className="min-h-screen">
 
@@ -55,15 +71,28 @@ export const HomePage: React.FC = () => {
                 onPaste={handlePaste}
                 placeholder="Search for a player by id..."
                 className="w-full px-4 py-3 text-lg bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none text-gray-900 dark:text-white"
+                disabled={isSearching}
               />
+              {isSearching && (
+                <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                  <LoadingSpinner size="sm" />
+                </div>
+              )}
             </div>
             
             <button
               type="submit"
-              disabled={!searchQuery.trim()}
-              className="w-full py-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer transition-all duration-200 hover:scale-[1.02] hover:shadow-lg"
+              disabled={!searchQuery.trim() || isSearching}
+              className="w-full py-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer transition-all duration-200 hover:scale-[1.02] hover:shadow-lg flex items-center justify-center gap-2"
             >
-              Search Player
+              {isSearching ? (
+                <>
+                  <LoadingSpinner size="sm" />
+                  Searching...
+                </>
+              ) : (
+                'Search Player'
+              )}
             </button>
             
             {/* Quick Search Links */}
@@ -76,6 +105,7 @@ export const HomePage: React.FC = () => {
                   onClick={() => router.push(`/players/${playerId}`)}
                   className="text-black dark:text-white hover:text-gray-600 dark:hover:text-gray-300 underline text-sm cursor-pointer"
                   style={{ fontSize: '14px' }}
+                  disabled={isSearching}
                 >
                   {playerId}
                 </button>
