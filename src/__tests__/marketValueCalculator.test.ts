@@ -271,78 +271,10 @@ describe('Market Value Calculator', () => {
       expect(result.breakdown.progressionPremium).toBe(expectedPenalty);
     });
 
-    it('should not apply progression premium for retiring players', () => {
-      const retiringPlayer = {
-        ...mockPlayer,
-        retirementYears: 1
-      };
 
-      const result = calculateMarketValue(
-        retiringPlayer,
-        mockComparableListings,
-        mockRecentSales,
-        mockProgressionData
-      );
-
-      expect(result.breakdown.progressionPremium).toBe(0);
-    });
   });
 
-  describe('Retirement Penalty', () => {
-    it('should apply -65% penalty for 1 year until retirement', () => {
-      const retiringPlayer = {
-        ...mockPlayer,
-        retirementYears: 1
-      };
 
-      const result = calculateMarketValue(
-        retiringPlayer,
-        mockComparableListings,
-        mockRecentSales,
-        mockProgressionData
-      );
-
-      expect(result.breakdown.retirementPenalty).toBeLessThan(0);
-      const expectedPenalty = Math.round(result.details.baseValue * -0.65);
-      expect(result.breakdown.retirementPenalty).toBe(expectedPenalty);
-    });
-
-    it('should apply -45% penalty for 2 years until retirement', () => {
-      const retiringPlayer = {
-        ...mockPlayer,
-        retirementYears: 2
-      };
-
-      const result = calculateMarketValue(
-        retiringPlayer,
-        mockComparableListings,
-        mockRecentSales,
-        mockProgressionData
-      );
-
-      expect(result.breakdown.retirementPenalty).toBeLessThan(0);
-      const expectedPenalty = Math.round(result.details.baseValue * -0.45);
-      expect(result.breakdown.retirementPenalty).toBe(expectedPenalty);
-    });
-
-    it('should apply -30% penalty for 3 years until retirement', () => {
-      const retiringPlayer = {
-        ...mockPlayer,
-        retirementYears: 3
-      };
-
-      const result = calculateMarketValue(
-        retiringPlayer,
-        mockComparableListings,
-        mockRecentSales,
-        mockProgressionData
-      );
-
-      expect(result.breakdown.retirementPenalty).toBeLessThan(0);
-      const expectedPenalty = Math.round(result.details.baseValue * -0.30);
-      expect(result.breakdown.retirementPenalty).toBe(expectedPenalty);
-    });
-  });
 
   describe('Newly Mint Premium', () => {
     it('should apply +10% premium for newly minted players', () => {

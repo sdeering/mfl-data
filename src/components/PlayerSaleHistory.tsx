@@ -79,7 +79,7 @@ export default function PlayerSaleHistory({ playerId, playerName, playerMetadata
     return (
       <div className="w-full p-4 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
         <div className="flex items-center justify-center h-48">
-          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+          <div data-testid="loading-spinner" className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
         </div>
       </div>
     );
