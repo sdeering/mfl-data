@@ -69,6 +69,28 @@ class MatchesService {
     return Date.now() - timestamp < this.CACHE_DURATION;
   }
 
+  async fetchClubDetails(clubId: string): Promise<any> {
+    const cacheKey = `club_details_${clubId}`;
+    const cached = this.cache.get(cacheKey);
+
+    if (cached && this.isCacheValid(cached.timestamp)) {
+      return cached.data;
+    }
+
+    try {
+      const url = `https://z519wdyajg.execute-api.us-east-1.amazonaws.com/prod/clubs/${clubId}`;
+      
+      const response = await axios.get(url);
+      
+      const data = response.data;
+      this.cache.set(cacheKey, { data, timestamp: Date.now() });
+      return data;
+    } catch (error) {
+      console.error('Error fetching club details:', error);
+      throw new Error('Failed to fetch club details');
+    }
+  }
+
   async fetchPastMatches(clubId: string): Promise<MFLMatch[]> {
     const cacheKey = this.getCacheKey(clubId, 'past');
     const cached = this.cache.get(cacheKey);
@@ -78,9 +100,31 @@ class MatchesService {
     }
 
     try {
+      // First get club details to find the squad ID
+      const clubDetails = await this.fetchClubDetails(clubId);
+      
+      // Try different possible locations for squad ID
+      let squadId = clubDetails.squad?.id || 
+                   clubDetails.squads?.[0]?.id || 
+                   clubDetails.id; // Sometimes the club ID is the squad ID
+      
+      console.log('Looking for squad ID in club details:', {
+        'clubDetails.squad?.id': clubDetails.squad?.id,
+        'clubDetails.squads?.[0]?.id': clubDetails.squads?.[0]?.id,
+        'clubDetails.id': clubDetails.id,
+        'final squadId': squadId
+      });
+      
+      if (!squadId) {
+        console.log('No squad ID found for club:', clubId);
+        return [];
+      }
+      
+      console.log('Found squad ID:', squadId, 'for club:', clubId);
+      
       const url = `https://z519wdyajg.execute-api.us-east-1.amazonaws.com/prod/matches`;
       const params = {
-        clubId,
+        squadId: squadId.toString(),
         past: true,
         onlyCompetitions: true,
         limit: 15
@@ -91,6 +135,22 @@ class MatchesService {
       const response = await axios.get(url, { params });
       
       console.log('Past matches response:', response.data);
+      console.log('Past matches count:', response.data?.length);
+      if (response.data?.length > 0) {
+        console.log('First match details:', {
+          homeTeam: response.data[0].homeTeamName,
+          awayTeam: response.data[0].awayTeamName,
+          status: response.data[0].status
+        });
+        
+        // Log all unique team names in past matches
+        const allTeamNames = new Set();
+        response.data.forEach(match => {
+          allTeamNames.add(match.homeTeamName);
+          allTeamNames.add(match.awayTeamName);
+        });
+        console.log('All team names in past matches:', Array.from(allTeamNames).sort());
+      }
 
       const data = response.data;
       this.cache.set(cacheKey, { data, timestamp: Date.now() });
@@ -110,9 +170,31 @@ class MatchesService {
     }
 
     try {
+      // First get club details to find the squad ID
+      const clubDetails = await this.fetchClubDetails(clubId);
+      
+      // Try different possible locations for squad ID
+      let squadId = clubDetails.squad?.id || 
+                   clubDetails.squads?.[0]?.id || 
+                   clubDetails.id; // Sometimes the club ID is the squad ID
+      
+      console.log('Looking for squad ID in club details (upcoming):', {
+        'clubDetails.squad?.id': clubDetails.squad?.id,
+        'clubDetails.squads?.[0]?.id': clubDetails.squads?.[0]?.id,
+        'clubDetails.id': clubDetails.id,
+        'final squadId': squadId
+      });
+      
+      if (!squadId) {
+        console.log('No squad ID found for club:', clubId);
+        return [];
+      }
+      
+      console.log('Found squad ID:', squadId, 'for club:', clubId);
+      
       const url = `https://z519wdyajg.execute-api.us-east-1.amazonaws.com/prod/matches`;
       const params = {
-        clubId,
+        squadId: squadId.toString(),
         upcoming: true,
         live: true,
         limit: 30
@@ -123,6 +205,22 @@ class MatchesService {
       const response = await axios.get(url, { params });
       
       console.log('Upcoming matches response:', response.data);
+      console.log('Upcoming matches count:', response.data?.length);
+      if (response.data?.length > 0) {
+        console.log('First upcoming match details:', {
+          homeTeam: response.data[0].homeTeamName,
+          awayTeam: response.data[0].awayTeamName,
+          status: response.data[0].status
+        });
+        
+        // Log all unique team names in upcoming matches
+        const allTeamNames = new Set();
+        response.data.forEach(match => {
+          allTeamNames.add(match.homeTeamName);
+          allTeamNames.add(match.awayTeamName);
+        });
+        console.log('All team names in upcoming matches:', Array.from(allTeamNames).sort());
+      }
 
       const data = response.data;
       this.cache.set(cacheKey, { data, timestamp: Date.now() });

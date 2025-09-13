@@ -77,6 +77,7 @@ const MatchesPage: React.FC = () => {
       console.log('Past matches:', pastData);
       console.log('Upcoming matches:', upcomingData);
       
+      // No need to filter - the API now returns club-specific matches
       setPastMatches(pastData);
       setUpcomingMatches(upcomingData);
     } catch (err) {
@@ -89,22 +90,42 @@ const MatchesPage: React.FC = () => {
 
   // Helper function to determine if the selected club won the match
   const getMatchResult = (match: MFLMatch, clubName: string): 'W' | 'L' | 'D' | null => {
-    if (match.status !== 'FINISHED' && match.status !== 'ENDED') return null;
+    console.log('getMatchResult called:', {
+      matchStatus: match.status,
+      clubName,
+      homeTeam: match.homeTeamName,
+      awayTeam: match.awayTeamName,
+      homeScore: match.homeScore,
+      awayScore: match.awayScore
+    });
+    
+    if (match.status !== 'FINISHED' && match.status !== 'ENDED') {
+      console.log('Match not finished, status:', match.status);
+      return null;
+    }
     
     const isHomeTeam = match.homeTeamName === clubName;
     const isAwayTeam = match.awayTeamName === clubName;
     
-    if (!isHomeTeam && !isAwayTeam) return null;
+    if (!isHomeTeam && !isAwayTeam) {
+      console.log('Club not found in match teams');
+      return null;
+    }
     
     // Check if it's a draw
     if (match.homeScore === match.awayScore) {
+      console.log('Draw detected');
       return 'D';
     }
     
     if (isHomeTeam) {
-      return match.homeScore > match.awayScore ? 'W' : 'L';
+      const result = match.homeScore > match.awayScore ? 'W' : 'L';
+      console.log('Home team result:', result);
+      return result;
     } else {
-      return match.awayScore > match.homeScore ? 'W' : 'L';
+      const result = match.awayScore > match.homeScore ? 'W' : 'L';
+      console.log('Away team result:', result);
+      return result;
     }
   };
 
@@ -193,7 +214,7 @@ const MatchesPage: React.FC = () => {
           <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4 mb-6">
             <p className="text-red-800 dark:text-red-200">{error}</p>
             <button
-              onClick={() => selectedClub ? fetchMatches(selectedClub.squad.id.toString()) : fetchClubs()}
+              onClick={() => selectedClub ? fetchMatches(selectedClub.club.id.toString()) : fetchClubs()}
               className="mt-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
             >
               Try Again
