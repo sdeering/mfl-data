@@ -58,6 +58,12 @@ export const Header: React.FC = () => {
               >
                 Clubs
               </button>
+              <button 
+                onClick={() => router.push('/matches')}
+                className="text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors cursor-pointer"
+              >
+                Matches
+              </button>
             </nav>
             
 
