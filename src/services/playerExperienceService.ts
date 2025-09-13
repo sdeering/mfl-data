@@ -1,29 +1,77 @@
 import type { PlayerExperienceHistory, PlayerExperienceEntry } from '../types/playerExperience';
 
-/**
- * Fetch player experience history from the MFL API
- */
-export async function fetchPlayerExperienceHistory(playerId: string): Promise<PlayerExperienceHistory> {
-  try {
-    const response = await fetch(`https://z519wdyajg.execute-api.us-east-1.amazonaws.com/prod/players/${playerId}/experiences/history`);
+class PlayerExperienceService {
+  private cache = new Map<string, PlayerExperienceHistory>();
+  private readonly CACHE_DURATION = 10 * 60 * 1000; // 10 minutes (experience data changes less frequently)
+
+  async fetchPlayerExperienceHistory(playerId: string): Promise<PlayerExperienceHistory> {
+    const cacheKey = `player_experience_${playerId}`;
+    const cached = this.cache.get(cacheKey);
     
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
+    if (cached) {
+      return cached;
     }
 
-    const data: PlayerExperienceEntry[] = await response.json();
-    
-    return {
-      success: true,
-      data: data
-    };
-  } catch (error) {
-    return {
-      success: false,
-      data: [],
-      error: error instanceof Error ? error.message : 'Failed to fetch experience history'
-    };
+    try {
+      const response = await fetch(`https://z519wdyajg.execute-api.us-east-1.amazonaws.com/prod/players/${playerId}/experiences/history`);
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data: PlayerExperienceEntry[] = await response.json();
+      
+      const result: PlayerExperienceHistory = {
+        success: true,
+        data: data
+      };
+
+      // Cache the result
+      this.cache.set(cacheKey, result);
+      
+      // Clear cache after duration
+      setTimeout(() => {
+        this.cache.delete(cacheKey);
+      }, this.CACHE_DURATION);
+
+      return result;
+    } catch (error) {
+      const result: PlayerExperienceHistory = {
+        success: false,
+        data: [],
+        error: error instanceof Error ? error.message : 'Failed to fetch experience history'
+      };
+      return result;
+    }
   }
+
+  /**
+   * Clear cache for a specific player or all cache
+   */
+  clearCache(playerId?: string): void {
+    if (playerId) {
+      const cacheKey = `player_experience_${playerId}`;
+      this.cache.delete(cacheKey);
+    } else {
+      this.cache.clear();
+    }
+  }
+
+  /**
+   * Get cache size
+   */
+  getCacheSize(): number {
+    return this.cache.size;
+  }
+}
+
+export const playerExperienceService = new PlayerExperienceService();
+
+/**
+ * Fetch player experience history from the MFL API (legacy function for backward compatibility)
+ */
+export async function fetchPlayerExperienceHistory(playerId: string): Promise<PlayerExperienceHistory> {
+  return playerExperienceService.fetchPlayerExperienceHistory(playerId);
 }
 
 /**

@@ -4,10 +4,10 @@ import React, { useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import SearchBar from './SearchBar';
 import ThemeToggle from './ThemeToggle';
+import WalletConnect from './WalletConnect';
 import { useLoading } from '../contexts/LoadingContext';
 
 export const Header: React.FC = () => {
-  const [showLoginPopup, setShowLoginPopup] = useState(false);
   const router = useRouter();
   const pathname = usePathname();
   const { isLoading } = useLoading();
@@ -27,13 +27,6 @@ export const Header: React.FC = () => {
     }
   };
 
-  const handleLoginClick = () => {
-    setShowLoginPopup(true);
-  };
-
-  const closeLoginPopup = () => {
-    setShowLoginPopup(false);
-  };
 
   return (
     <>
@@ -50,6 +43,22 @@ export const Header: React.FC = () => {
               </svg>
               <h1 className="text-xl font-bold text-gray-900 dark:text-white">MFL Data</h1>
             </button>
+            
+            {/* Navigation Links */}
+            <nav className="hidden lg:flex items-center space-x-6">
+              <button 
+                onClick={() => router.push('/agency')}
+                className="text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors cursor-pointer"
+              >
+                Agency
+              </button>
+              <button 
+                onClick={() => router.push('/clubs')}
+                className="text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors cursor-pointer"
+              >
+                Clubs
+              </button>
+            </nav>
             
 
             
@@ -75,16 +84,11 @@ export const Header: React.FC = () => {
               className="text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400"
               aria-label="Toggle dark mode"
             />
-            <button 
-              onClick={handleLoginClick}
-              className="px-4 py-2 text-white rounded-lg transition-all duration-200 cursor-pointer flex items-center space-x-2 hover:bg-gray-800 dark:hover:bg-gray-700 hover:scale-105 hover:shadow-lg"
-              style={{ background: '#2a2a2a' }}
-            >
-              <svg className="w-4 h-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" data-slot="icon">
-                <path d="M2.273 5.625A4.483 4.483 0 0 1 5.25 4.5h13.5c1.141 0 2.183.425 2.977 1.125A3 3 0 0 0 18.75 3H5.25a3 3 0 0 0-2.977 2.625ZM2.273 8.625A4.483 4.483 0 0 1 5.25 7.5h13.5c1.141 0 2.183.425 2.977 1.125A3 3 0 0 0 18.75 6H5.25a3 3 0 0 0-2.977 2.625ZM5.25 9a3 3 0 0 0-3 3v6a3 3 0 0 0 3 3h13.5a3 3 0 0 0 3-3v-6a3 3 0 0 0-3-3H15a.75.75 0 0 0-.75.75 2.25 2.25 0 0 1-4.5 0A.75.75 0 0 0 9 9H5.25Z"></path>
-              </svg>
-              <span>Login with wallet</span>
-            </button>
+            <WalletConnect 
+              variant="default"
+              size="md"
+              className="bg-[#2a2a2a] hover:bg-gray-800 dark:hover:bg-gray-700"
+            />
           </div>
           
           {/* Login Button - Mobile */}
@@ -95,16 +99,11 @@ export const Header: React.FC = () => {
               className="text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400"
               aria-label="Toggle dark mode"
             />
-            <button 
-              onClick={handleLoginClick}
-              className="px-3 py-2 text-white rounded-lg transition-all duration-200 cursor-pointer flex items-center space-x-2 hover:bg-gray-800 dark:hover:bg-gray-700 hover:scale-105 hover:shadow-lg"
-              style={{ background: '#2a2a2a' }}
-            >
-              <svg className="w-4 h-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" data-slot="icon">
-                <path d="M2.273 5.625A4.483 4.483 0 0 1 5.25 4.5h13.5c1.141 0 2.183.425 2.977 1.125A3 3 0 0 0 18.75 3H5.25a3 3 0 0 0-2.977 2.625ZM2.273 8.625A4.483 4.483 0 0 1 5.25 7.5h13.5c1.141 0 2.183.425 2.977 1.125A3 3 0 0 0 18.75 6H5.25a3 3 0 0 0-2.977 2.625ZM5.25 9a3 3 0 0 0-3 3v6a3 3 0 0 0 3 3h13.5a3 3 0 0 0 3-3v-6a3 3 0 0 0-3-3H15a.75.75 0 0 0-.75.75 2.25 2.25 0 0 1-4.5 0A.75.75 0 0 0 9 9H5.25Z"></path>
-              </svg>
-              <span className="hidden sm:inline">Login</span>
-            </button>
+            <WalletConnect 
+              variant="default"
+              size="sm"
+              className="bg-[#2a2a2a] hover:bg-gray-800 dark:hover:bg-gray-700"
+            />
           </div>
         </div>
         
@@ -126,27 +125,6 @@ export const Header: React.FC = () => {
         )}
       </header>
 
-      {/* Login Popup */}
-      {showLoginPopup && (
-        <div className="fixed top-20 right-2 lg:right-6 z-50">
-          <div className="bg-white dark:bg-gray-800 rounded-lg p-4 lg:p-6 max-w-sm w-full mx-2 lg:mx-4 shadow-lg border border-gray-200 dark:border-gray-700">
-            <div className="text-center">
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
-                Coming Soon!
-              </h3>
-              <p className="text-gray-600 dark:text-gray-400 mb-4 text-sm lg:text-base">
-                Wallet login functionality will be available in a future update.
-              </p>
-              <button
-                onClick={closeLoginPopup}
-                className="px-4 py-2 bg-blue-600 dark:bg-blue-500 text-white rounded-lg hover:bg-blue-700 dark:hover:bg-blue-600 transition-colors cursor-pointer"
-              >
-                Got it
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </>
   );
 };

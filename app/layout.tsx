@@ -5,6 +5,7 @@ import ThemeProviderWrapper from '../src/components/ThemeProviderWrapper';
 import Header from '../src/components/Header';
 import Footer from '../src/components/Footer';
 import { LoadingProvider } from '../src/contexts/LoadingContext';
+import { WalletProvider } from '../src/contexts/WalletContext';
 
 const titilliumWeb = Titillium_Web({ 
   subsets: ['latin'],
@@ -86,15 +87,17 @@ export default function RootLayout({
       </head>
       <body className={`${titilliumWeb.className} min-h-screen transition-colors duration-300 bg-[#f6f6f6] dark:bg-[#111827]`}>
         <ThemeProviderWrapper>
-          <LoadingProvider>
-            <div className="max-w-[1200px] mx-auto">
-              <Header />
-              <div className="p-[30px] max-[412px]:px-[15px] bg-white dark:bg-[#111827] min-h-[calc(100vh-200px)]">
-                {children}
+          <WalletProvider>
+            <LoadingProvider>
+              <div className="max-w-[1200px] mx-auto">
+                <Header />
+                <div className="p-[30px] max-[412px]:px-[15px] bg-white dark:bg-[#111827] min-h-[calc(100vh-200px)]">
+                  {children}
+                </div>
+                <Footer />
               </div>
-              <Footer />
-            </div>
-          </LoadingProvider>
+            </LoadingProvider>
+          </WalletProvider>
         </ThemeProviderWrapper>
       </body>
     </html>
