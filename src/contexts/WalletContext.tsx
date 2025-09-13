@@ -1,6 +1,7 @@
 "use client";
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { useRouter } from 'next/navigation';
 import * as fcl from '@onflow/fcl';
 
 interface WalletContextType {
@@ -20,6 +21,7 @@ interface WalletProviderProps {
 }
 
 export const WalletProvider: React.FC<WalletProviderProps> = ({ children }) => {
+  const router = useRouter();
   const [isConnected, setIsConnected] = useState(false);
   const [account, setAccount] = useState<string | null>(null);
   const [user, setUser] = useState<any>(null);
@@ -28,6 +30,17 @@ export const WalletProvider: React.FC<WalletProviderProps> = ({ children }) => {
 
   // Initialize FCL and check connection on mount
   useEffect(() => {
+    // Suppress WalletConnect warnings globally
+    const originalWarn = console.warn;
+    console.warn = (...args) => {
+      if (args[0] && typeof args[0] === 'string' && 
+          (args[0].includes('WalletConnect Service Plugin') || 
+           args[0].includes('All dApps are expected to register for a WalletConnect projectId'))) {
+        return; // Suppress WalletConnect warning
+      }
+      originalWarn.apply(console, args);
+    };
+
     const initializeFCL = async () => {
       try {
         // Configure FCL for Flow blockchain - bypass CORS issues
@@ -40,6 +53,9 @@ export const WalletProvider: React.FC<WalletProviderProps> = ({ children }) => {
           // Configure Dapper wallet directly to avoid CORS issues
           'discovery.wallet': 'https://accounts.meetdapper.com/fcl/authn-restricted',
           'discovery.wallet.method': 'TAB/RPC',
+          // Add WalletConnect project ID to suppress warnings
+          'discovery.wallet.method.https://accounts.meetdapper.com/fcl/authn-restricted': 'TAB/RPC',
+          'fcl.walletConnect.projectId': 'mfl-data-app',
         });
 
         // Check if user is already authenticated
@@ -55,6 +71,11 @@ export const WalletProvider: React.FC<WalletProviderProps> = ({ children }) => {
     };
 
     initializeFCL();
+
+    // Cleanup function to restore original console.warn
+    return () => {
+      console.warn = originalWarn;
+    };
   }, []);
 
   // Listen for FCL user changes
@@ -67,7 +88,7 @@ export const WalletProvider: React.FC<WalletProviderProps> = ({ children }) => {
         
         // Redirect to agency page after successful connection
         if (typeof window !== 'undefined' && window.location.pathname === '/') {
-          window.location.href = '/agency';
+          router.push('/agency');
         }
       } else {
         setUser(null);
@@ -79,7 +100,7 @@ export const WalletProvider: React.FC<WalletProviderProps> = ({ children }) => {
     return () => {
       unsubscribe();
     };
-  }, []);
+  }, [router]);
 
   const connectWallet = async () => {
     setIsLoading(true);
@@ -88,25 +109,31 @@ export const WalletProvider: React.FC<WalletProviderProps> = ({ children }) => {
     try {
       // Suppress WalletConnect warning during authentication
       const originalWarn = console.warn;
+      const originalError = console.error;
+      
       console.warn = (...args) => {
-        if (args[0] && typeof args[0] === 'string' && args[0].includes('WalletConnect Service Plugin')) {
+        if (args[0] && typeof args[0] === 'string' && 
+            (args[0].includes('WalletConnect Service Plugin') || 
+             args[0].includes('All dApps are expected to register for a WalletConnect projectId'))) {
           return; // Suppress WalletConnect warning
         }
         originalWarn.apply(console, args);
       };
 
-      // Use FCL authentication which will show available wallets including Dapper
-      console.log('Starting FCL authentication...');
-      
-      // Skip discovery debug to avoid CORS issues
-      console.log('Attempting to connect to Dapper wallet directly...');
-      
+      console.error = (...args) => {
+        if (args[0] && typeof args[0] === 'string' && 
+            args[0].includes('WalletConnect Service Plugin')) {
+          return; // Suppress WalletConnect error
+        }
+        originalError.apply(console, args);
+      };
+
       // Authenticate with Dapper wallet
       await fcl.authenticate();
-      console.log('FCL authentication completed');
 
-      // Restore original console.warn after authentication
+      // Restore original console methods after authentication
       console.warn = originalWarn;
+      console.error = originalError;
     } catch (error: any) {
       console.error('Error connecting wallet:', error);
       setError(error.message || 'Failed to connect wallet. Please make sure you have a Flow-compatible wallet installed (like Dapper wallet) and try again.');
