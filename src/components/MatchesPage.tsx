@@ -27,13 +27,16 @@ const MatchesPage: React.FC = () => {
   const fetchClubs = async () => {
     if (!account) return;
     
+    console.log('fetchClubs called with account:', account);
     setIsLoading(true);
     setError(null);
     
     try {
       const clubsData = await clubsService.fetchClubsForWallet(account);
+      console.log('Clubs data received:', clubsData);
       setClubs(clubsData);
       if (clubsData.length > 0) {
+        console.log('Setting selected club to:', clubsData[0]);
         setSelectedClub(clubsData[0]);
       }
     } catch (err) {
@@ -71,16 +74,28 @@ const MatchesPage: React.FC = () => {
   };
 
   useEffect(() => {
+    console.log('MatchesPage useEffect - isConnected:', isConnected, 'account:', account);
     if (isConnected && account) {
+      console.log('Wallet connected, fetching clubs for:', account);
       fetchClubs();
+    } else {
+      console.log('Wallet not connected or no account address');
     }
   }, [isConnected, account]);
 
   useEffect(() => {
-    if (selectedClub?.club?.squads && selectedClub.club.squads.length > 0) {
-      const squadId = selectedClub.club.squads[0].id;
-      console.log('Fetching matches for squad ID:', squadId, 'Club:', selectedClub.club.name);
-      fetchMatches(squadId.toString());
+    console.log('selectedClub changed:', selectedClub);
+    if (selectedClub) {
+      console.log('selectedClub.club:', selectedClub.club);
+      console.log('selectedClub.club.squads:', selectedClub.club?.squads);
+      
+      if (selectedClub?.club?.squads && selectedClub.club.squads.length > 0) {
+        const squadId = selectedClub.club.squads[0].id;
+        console.log('Fetching matches for squad ID:', squadId, 'Club:', selectedClub.club.name);
+        fetchMatches(squadId.toString());
+      } else {
+        console.log('No squads found for club:', selectedClub.club?.name);
+      }
     }
   }, [selectedClub]);
 
