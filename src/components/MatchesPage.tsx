@@ -61,17 +61,17 @@ const MatchesPage: React.FC = () => {
     }
   };
 
-  const fetchMatches = async (squadId: string) => {
-    if (!squadId) return;
+  const fetchMatches = async (clubId: string) => {
+    if (!clubId) return;
     
-    console.log('fetchMatches called with squadId:', squadId);
+    console.log('fetchMatches called with clubId:', clubId);
     setIsLoadingMatches(true);
     setError(null);
     
     try {
       const [pastData, upcomingData] = await Promise.all([
-        matchesService.fetchPastMatches(squadId),
-        matchesService.fetchUpcomingMatches(squadId)
+        matchesService.fetchPastMatches(clubId),
+        matchesService.fetchUpcomingMatches(clubId)
       ]);
       
       console.log('Past matches:', pastData);
@@ -122,21 +122,12 @@ const MatchesPage: React.FC = () => {
     console.log('selectedClub changed:', selectedClub);
     if (selectedClub) {
       console.log('selectedClub.club:', selectedClub.club);
-      console.log('selectedClub.club.squads:', selectedClub.club?.squads);
+      console.log('selectedClub.club.id:', selectedClub.club.id);
       
-      // Try to get squad ID from club name mapping
-      const squadId = matchesService.getSquadIdForClub(selectedClub.club.name);
-      console.log('Squad ID for club', selectedClub.club.name, ':', squadId);
-      
-      if (squadId) {
-        console.log('Fetching matches for squad ID:', squadId, 'Club:', selectedClub.club.name);
-        fetchMatches(squadId);
-      } else {
-        console.log('No squad ID found for club:', selectedClub.club?.name);
-        // Clear matches if no squad ID found
-        setPastMatches([]);
-        setUpcomingMatches([]);
-      }
+      // Use the club ID directly
+      const clubId = selectedClub.club.id.toString();
+      console.log('Using club ID:', clubId, 'for club:', selectedClub.club.name);
+      fetchMatches(clubId);
     }
   }, [selectedClub]);
 

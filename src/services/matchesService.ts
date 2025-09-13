@@ -61,26 +61,16 @@ class MatchesService {
   private cache = new Map<string, { data: MFLMatch[]; timestamp: number }>();
   private readonly CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 
-  // Temporary mapping of club names to squad IDs based on the API data
-  private clubToSquadMapping: { [key: string]: string } = {
-    'DogeSports England': '2880',
-    // Add more mappings as needed
-  };
-
-  private getCacheKey(squadId: string, type: 'past' | 'upcoming'): string {
-    return `matches_${squadId}_${type}`;
+  private getCacheKey(clubId: string, type: 'past' | 'upcoming'): string {
+    return `matches_${clubId}_${type}`;
   }
 
   private isCacheValid(timestamp: number): boolean {
     return Date.now() - timestamp < this.CACHE_DURATION;
   }
 
-  getSquadIdForClub(clubName: string): string | null {
-    return this.clubToSquadMapping[clubName] || null;
-  }
-
-  async fetchPastMatches(squadId: string): Promise<MFLMatch[]> {
-    const cacheKey = this.getCacheKey(squadId, 'past');
+  async fetchPastMatches(clubId: string): Promise<MFLMatch[]> {
+    const cacheKey = this.getCacheKey(clubId, 'past');
     const cached = this.cache.get(cacheKey);
 
     if (cached && this.isCacheValid(cached.timestamp)) {
@@ -90,7 +80,7 @@ class MatchesService {
     try {
       const url = `https://z519wdyajg.execute-api.us-east-1.amazonaws.com/prod/matches`;
       const params = {
-        squadId,
+        clubId,
         past: true,
         onlyCompetitions: true,
         limit: 15
@@ -111,8 +101,8 @@ class MatchesService {
     }
   }
 
-  async fetchUpcomingMatches(squadId: string): Promise<MFLMatch[]> {
-    const cacheKey = this.getCacheKey(squadId, 'upcoming');
+  async fetchUpcomingMatches(clubId: string): Promise<MFLMatch[]> {
+    const cacheKey = this.getCacheKey(clubId, 'upcoming');
     const cached = this.cache.get(cacheKey);
 
     if (cached && this.isCacheValid(cached.timestamp)) {
@@ -122,7 +112,7 @@ class MatchesService {
     try {
       const url = `https://z519wdyajg.execute-api.us-east-1.amazonaws.com/prod/matches`;
       const params = {
-        squadId,
+        clubId,
         upcoming: true,
         live: true,
         limit: 30
