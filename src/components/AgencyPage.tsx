@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { useWallet } from '../contexts/WalletContext';
 import { useRouter } from 'next/navigation';
 import { nftService, MFLPlayer } from '../services/nftService';
+import { calculateMarketValue } from '../utils/marketValueCalculator';
 
 const AgencyPage: React.FC = () => {
   const { isConnected, account } = useWallet();
@@ -101,6 +102,17 @@ const AgencyPage: React.FC = () => {
         return player.metadata.defense;
       case 'physical':
         return player.metadata.physical;
+      case 'marketValue':
+        try {
+          const marketValue = calculateMarketValue({
+            ...player.metadata,
+            positions: player.metadata.positions as any[],
+            preferredFoot: player.metadata.preferredFoot as 'LEFT' | 'RIGHT'
+          }, [], []);
+          return marketValue ? marketValue.estimatedValue : 0;
+        } catch (error) {
+          return 0;
+        }
       case 'club':
         return nftService.getClubName(player).toLowerCase();
       default:
@@ -235,7 +247,7 @@ const AgencyPage: React.FC = () => {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <div className="text-center">
             <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">
-              MFL Agency
+              My MFL Agency
             </h1>
             <p className="text-lg text-gray-600 dark:text-gray-400">
               Please connect your wallet to view your players
@@ -250,7 +262,7 @@ const AgencyPage: React.FC = () => {
     <div className="min-h-screen">
           <div className="mb-8">
             <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
-              MFL Agency ({filteredPlayers.length}{filteredPlayers.length !== players.length ? ` of ${players.length}` : ''} players)
+              My MFL Agency ({filteredPlayers.length}{filteredPlayers.length !== players.length ? ` of ${players.length}` : ''} players)
             </h1>
             {totalPages > 1 && (
               <p className="text-sm text-gray-600 dark:text-gray-400">
@@ -466,6 +478,19 @@ const AgencyPage: React.FC = () => {
                   </th>
                   <th 
                     className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600 select-none"
+                    onClick={() => handleSort('marketValue')}
+                  >
+                    <div className="flex items-center space-x-1">
+                      <span>Market Value</span>
+                      {sortField === 'marketValue' && (
+                        <span className="text-blue-600 dark:text-blue-400">
+                          {sortDirection === 'asc' ? '↑' : '↓'}
+                        </span>
+                      )}
+                    </div>
+                  </th>
+                  <th 
+                    className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600 select-none"
                     onClick={() => handleSort('club')}
                   >
                     <div className="flex items-center space-x-1">
@@ -538,6 +563,20 @@ const AgencyPage: React.FC = () => {
                     </td>
                     <td className="px-3 py-2 whitespace-nowrap w-20 text-center">
                       {renderAttributeValue(player, player.metadata.physical)}
+                    </td>
+                    <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-900 dark:text-white">
+                      {(() => {
+                        try {
+                          const marketValue = calculateMarketValue({
+                            ...player.metadata,
+                            positions: player.metadata.positions as any[],
+                            preferredFoot: player.metadata.preferredFoot as 'LEFT' | 'RIGHT'
+                          }, [], []);
+                          return marketValue ? `$${marketValue.estimatedValue.toLocaleString()}` : 'N/A';
+                        } catch (error) {
+                          return 'N/A';
+                        }
+                      })()}
                     </td>
                     <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-900 dark:text-white">
                       {nftService.getClubName(player)}
