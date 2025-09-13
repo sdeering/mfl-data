@@ -17,12 +17,24 @@ const MatchesPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
 
-  // Redirect if not connected
+  // Add a state to track if we've given enough time for wallet initialization
+  const [hasCheckedWallet, setHasCheckedWallet] = useState(false);
+
+  // Check wallet connection with delay to allow initialization
   useEffect(() => {
-    if (!isConnected) {
+    const timer = setTimeout(() => {
+      setHasCheckedWallet(true);
+    }, 1500); // Give 1.5 seconds for wallet to initialize
+    
+    return () => clearTimeout(timer);
+  }, []);
+
+  // Only redirect if we've checked and wallet is still not connected
+  useEffect(() => {
+    if (hasCheckedWallet && !isConnected) {
       router.push('/');
     }
-  }, [isConnected, router]);
+  }, [hasCheckedWallet, isConnected, router]);
 
   const fetchClubs = async () => {
     if (!account) return;
@@ -89,16 +101,42 @@ const MatchesPage: React.FC = () => {
       console.log('selectedClub.club:', selectedClub.club);
       console.log('selectedClub.club.squads:', selectedClub.club?.squads);
       
-      if (selectedClub?.club?.squads && selectedClub.club.squads.length > 0) {
-        const squadId = selectedClub.club.squads[0].id;
+      // Try to get squad ID from club name mapping
+      const squadId = matchesService.getSquadIdForClub(selectedClub.club.name);
+      console.log('Squad ID for club', selectedClub.club.name, ':', squadId);
+      
+      if (squadId) {
         console.log('Fetching matches for squad ID:', squadId, 'Club:', selectedClub.club.name);
-        fetchMatches(squadId.toString());
+        fetchMatches(squadId);
       } else {
-        console.log('No squads found for club:', selectedClub.club?.name);
+        console.log('No squad ID found for club:', selectedClub.club?.name);
+        // Clear matches if no squad ID found
+        setPastMatches([]);
+        setUpcomingMatches([]);
       }
     }
   }, [selectedClub]);
 
+  // Show loading state while checking wallet connection
+  if (!hasCheckedWallet) {
+    return (
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+            <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">
+              MFL Matches
+            </h1>
+            <p className="text-lg text-gray-600 dark:text-gray-400">
+              Loading...
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Show not connected message only after we've checked
   if (!isConnected) {
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900">

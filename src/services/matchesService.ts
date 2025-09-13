@@ -61,12 +61,22 @@ class MatchesService {
   private cache = new Map<string, { data: MFLMatch[]; timestamp: number }>();
   private readonly CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 
+  // Temporary mapping of club names to squad IDs based on the API data
+  private clubToSquadMapping: { [key: string]: string } = {
+    'DogeSports England': '2880',
+    // Add more mappings as needed
+  };
+
   private getCacheKey(squadId: string, type: 'past' | 'upcoming'): string {
     return `matches_${squadId}_${type}`;
   }
 
   private isCacheValid(timestamp: number): boolean {
     return Date.now() - timestamp < this.CACHE_DURATION;
+  }
+
+  getSquadIdForClub(clubName: string): string | null {
+    return this.clubToSquadMapping[clubName] || null;
   }
 
   async fetchPastMatches(squadId: string): Promise<MFLMatch[]> {
