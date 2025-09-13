@@ -281,7 +281,7 @@ const MatchesPage: React.FC = () => {
                           <div className="flex items-center justify-between">
                             <div className="flex-1">
                               <div className="flex items-center space-x-4">
-                                <div className="text-center">
+                                <div className="text-center min-w-[150px]">
                                   <div className="font-semibold text-gray-900 dark:text-white">
                                     {match.homeTeamName}
                                   </div>
@@ -289,15 +289,15 @@ const MatchesPage: React.FC = () => {
                                     Home
                                   </div>
                                 </div>
-                                <div className="text-center">
-                                  <div className="text-2xl font-bold text-gray-900 dark:text-white">
+                                <div className="text-center min-w-[120px]">
+                                  <div className="text-2xl font-bold text-gray-900 dark:text-white font-mono">
                                     {match.homeScore} - {match.awayScore}
                                   </div>
                                   <div className="text-sm text-gray-500 dark:text-gray-400">
                                     {matchesService.formatMatchDate(match.startDate)}
                                   </div>
                                 </div>
-                                <div className="text-center">
+                                <div className="text-center min-w-[150px]">
                                   <div className="font-semibold text-gray-900 dark:text-white">
                                     {match.awayTeamName}
                                   </div>
@@ -363,7 +363,7 @@ const MatchesPage: React.FC = () => {
                                     </div>
                                   )}
                                   
-                                  <div className="text-center">
+                                  <div className="text-center min-w-[150px]">
                                     <div className="font-semibold text-gray-900 dark:text-white">
                                       {match.homeTeamName}
                                     </div>
@@ -371,15 +371,15 @@ const MatchesPage: React.FC = () => {
                                       Home
                                     </div>
                                   </div>
-                                  <div className="text-center">
-                                    <div className="text-2xl font-bold text-gray-900 dark:text-white">
+                                  <div className="text-center min-w-[120px]">
+                                    <div className="text-2xl font-bold text-gray-900 dark:text-white font-mono">
                                       {match.homeScore} - {match.awayScore}
                                     </div>
                                     <div className="text-sm text-gray-500 dark:text-gray-400">
                                       {matchesService.formatMatchDate(match.startDate)}
                                     </div>
                                   </div>
-                                  <div className="text-center">
+                                  <div className="text-center min-w-[150px]">
                                     <div className="font-semibold text-gray-900 dark:text-white">
                                       {match.awayTeamName}
                                     </div>
