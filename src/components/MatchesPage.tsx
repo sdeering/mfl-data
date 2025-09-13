@@ -12,6 +12,8 @@ const MatchesPage: React.FC = () => {
   const [selectedClub, setSelectedClub] = useState<any>(null);
   const [pastMatches, setPastMatches] = useState<MFLMatch[]>([]);
   const [upcomingMatches, setUpcomingMatches] = useState<MFLMatch[]>([]);
+  const [showAllPast, setShowAllPast] = useState(false);
+  const [showAllUpcoming, setShowAllUpcoming] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingMatches, setIsLoadingMatches] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -82,6 +84,22 @@ const MatchesPage: React.FC = () => {
       setError('Failed to load matches data');
     } finally {
       setIsLoadingMatches(false);
+    }
+  };
+
+  // Helper function to determine if the selected club won the match
+  const getMatchResult = (match: MFLMatch, clubName: string): 'W' | 'L' | null => {
+    if (match.status !== 'FINISHED') return null;
+    
+    const isHomeTeam = match.homeTeamName === clubName;
+    const isAwayTeam = match.awayTeamName === clubName;
+    
+    if (!isHomeTeam && !isAwayTeam) return null;
+    
+    if (isHomeTeam) {
+      return match.homeScore > match.awayScore ? 'W' : 'L';
+    } else {
+      return match.awayScore > match.homeScore ? 'W' : 'L';
     }
   };
 
@@ -253,7 +271,7 @@ const MatchesPage: React.FC = () => {
                       </h2>
                     </div>
                     <div className="divide-y divide-gray-200 dark:divide-gray-700">
-                      {upcomingMatches.map((match) => (
+                      {(showAllUpcoming ? upcomingMatches : upcomingMatches.slice(0, 3)).map((match) => (
                         <div key={match.id} className="p-6 hover:bg-gray-50 dark:hover:bg-gray-700">
                           <div className="flex items-center justify-between">
                             <div className="flex-1">
@@ -296,6 +314,16 @@ const MatchesPage: React.FC = () => {
                         </div>
                       ))}
                     </div>
+                    {upcomingMatches.length > 3 && (
+                      <div className="px-6 py-4 border-t border-gray-200 dark:border-gray-700">
+                        <button
+                          onClick={() => setShowAllUpcoming(!showAllUpcoming)}
+                          className="w-full text-center text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 font-medium"
+                        >
+                          {showAllUpcoming ? 'Show Less' : `Show More (${upcomingMatches.length - 3} more)`}
+                        </button>
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -308,49 +336,75 @@ const MatchesPage: React.FC = () => {
                       </h2>
                     </div>
                     <div className="divide-y divide-gray-200 dark:divide-gray-700">
-                      {pastMatches.map((match) => (
-                        <div key={match.id} className="p-6 hover:bg-gray-50 dark:hover:bg-gray-700">
-                          <div className="flex items-center justify-between">
-                            <div className="flex-1">
-                              <div className="flex items-center space-x-4">
-                                <div className="text-center">
-                                  <div className="font-semibold text-gray-900 dark:text-white">
-                                    {match.homeTeamName}
+                      {(showAllPast ? pastMatches : pastMatches.slice(0, 3)).map((match) => {
+                        const result = getMatchResult(match, selectedClub.club.name);
+                        return (
+                          <div key={match.id} className="p-6 hover:bg-gray-50 dark:hover:bg-gray-700">
+                            <div className="flex items-center justify-between">
+                              <div className="flex-1">
+                                <div className="flex items-center space-x-4">
+                                  {/* Win/Loss Indicator */}
+                                  {result && (
+                                    <div className="flex-shrink-0">
+                                      <span className={`inline-flex items-center justify-center w-8 h-8 rounded-full text-sm font-bold ${
+                                        result === 'W' 
+                                          ? 'bg-green-500 text-white' 
+                                          : 'bg-red-500 text-white'
+                                      }`}>
+                                        {result}
+                                      </span>
+                                    </div>
+                                  )}
+                                  
+                                  <div className="text-center">
+                                    <div className="font-semibold text-gray-900 dark:text-white">
+                                      {match.homeTeamName}
+                                    </div>
+                                    <div className="text-sm text-gray-500 dark:text-gray-400">
+                                      Home
+                                    </div>
                                   </div>
-                                  <div className="text-sm text-gray-500 dark:text-gray-400">
-                                    Home
+                                  <div className="text-center">
+                                    <div className="text-2xl font-bold text-gray-900 dark:text-white">
+                                      {match.homeScore} - {match.awayScore}
+                                    </div>
+                                    <div className="text-sm text-gray-500 dark:text-gray-400">
+                                      {matchesService.formatMatchDate(match.startDate)}
+                                    </div>
                                   </div>
-                                </div>
-                                <div className="text-center">
-                                  <div className="text-2xl font-bold text-gray-900 dark:text-white">
-                                    {match.homeScore} - {match.awayScore}
-                                  </div>
-                                  <div className="text-sm text-gray-500 dark:text-gray-400">
-                                    {matchesService.formatMatchDate(match.startDate)}
-                                  </div>
-                                </div>
-                                <div className="text-center">
-                                  <div className="font-semibold text-gray-900 dark:text-white">
-                                    {match.awayTeamName}
-                                  </div>
-                                  <div className="text-sm text-gray-500 dark:text-gray-400">
-                                    Away
+                                  <div className="text-center">
+                                    <div className="font-semibold text-gray-900 dark:text-white">
+                                      {match.awayTeamName}
+                                    </div>
+                                    <div className="text-sm text-gray-500 dark:text-gray-400">
+                                      Away
+                                    </div>
                                   </div>
                                 </div>
                               </div>
-                            </div>
-                            <div className="flex flex-col items-end space-y-2">
-                              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${matchesService.getMatchStatusColor(match.status)}`}>
-                                {match.status}
-                              </span>
-                              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${matchesService.getCompetitionTypeColor(match.competition.type)}`}>
-                                {match.competition.name}
-                              </span>
+                              <div className="flex flex-col items-end space-y-2">
+                                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${matchesService.getMatchStatusColor(match.status)}`}>
+                                  {match.status}
+                                </span>
+                                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${matchesService.getCompetitionTypeColor(match.competition.type)}`}>
+                                  {match.competition.name}
+                                </span>
+                              </div>
                             </div>
                           </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
+                    {pastMatches.length > 3 && (
+                      <div className="px-6 py-4 border-t border-gray-200 dark:border-gray-700">
+                        <button
+                          onClick={() => setShowAllPast(!showAllPast)}
+                          className="w-full text-center text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 font-medium"
+                        >
+                          {showAllPast ? 'Show Less' : `Show More (${pastMatches.length - 3} more)`}
+                        </button>
+                      </div>
+                    )}
                   </div>
                 )}
 
