@@ -89,7 +89,7 @@ const MatchesPage: React.FC = () => {
 
   // Helper function to determine if the selected club won the match
   const getMatchResult = (match: MFLMatch, clubName: string): 'W' | 'L' | null => {
-    if (match.status !== 'FINISHED') return null;
+    if (match.status !== 'FINISHED' && match.status !== 'ENDED') return null;
     
     const isHomeTeam = match.homeTeamName === clubName;
     const isAwayTeam = match.awayTeamName === clubName;
@@ -304,7 +304,7 @@ const MatchesPage: React.FC = () => {
                             </div>
                             <div className="flex flex-col items-end space-y-2">
                               <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${matchesService.getMatchStatusColor(match.status)}`}>
-                                {match.status}
+                                {matchesService.formatMatchStatus(match.status)}
                               </span>
                               <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${matchesService.getCompetitionTypeColor(match.competition.type)}`}>
                                 {match.competition.name}
@@ -346,7 +346,7 @@ const MatchesPage: React.FC = () => {
                                   {/* Win/Loss Indicator */}
                                   {result && (
                                     <div className="flex-shrink-0">
-                                      <span className={`inline-flex items-center justify-center w-8 h-8 rounded-full text-sm font-bold ${
+                                      <span className={`inline-flex items-center justify-center w-16 h-16 rounded-full text-2xl font-bold ${
                                         result === 'W' 
                                           ? 'bg-green-500 text-white' 
                                           : 'bg-red-500 text-white'
@@ -384,7 +384,7 @@ const MatchesPage: React.FC = () => {
                               </div>
                               <div className="flex flex-col items-end space-y-2">
                                 <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${matchesService.getMatchStatusColor(match.status)}`}>
-                                  {match.status}
+                                  {matchesService.formatMatchStatus(match.status)}
                                 </span>
                                 <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${matchesService.getCompetitionTypeColor(match.competition.type)}`}>
                                   {match.competition.name}
