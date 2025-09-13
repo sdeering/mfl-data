@@ -88,13 +88,18 @@ const MatchesPage: React.FC = () => {
   };
 
   // Helper function to determine if the selected club won the match
-  const getMatchResult = (match: MFLMatch, clubName: string): 'W' | 'L' | null => {
+  const getMatchResult = (match: MFLMatch, clubName: string): 'W' | 'L' | 'D' | null => {
     if (match.status !== 'FINISHED' && match.status !== 'ENDED') return null;
     
     const isHomeTeam = match.homeTeamName === clubName;
     const isAwayTeam = match.awayTeamName === clubName;
     
     if (!isHomeTeam && !isAwayTeam) return null;
+    
+    // Check if it's a draw
+    if (match.homeScore === match.awayScore) {
+      return 'D';
+    }
     
     if (isHomeTeam) {
       return match.homeScore > match.awayScore ? 'W' : 'L';
@@ -343,13 +348,15 @@ const MatchesPage: React.FC = () => {
                             <div className="flex items-center justify-between">
                               <div className="flex-1">
                                 <div className="flex items-center space-x-4">
-                                  {/* Win/Loss Indicator */}
+                                  {/* Win/Loss/Draw Indicator */}
                                   {result && (
                                     <div className="flex-shrink-0">
                                       <span className={`inline-flex items-center justify-center w-16 h-16 rounded-full text-2xl font-bold ${
                                         result === 'W' 
                                           ? 'bg-green-500 text-white' 
-                                          : 'bg-red-500 text-white'
+                                          : result === 'L'
+                                          ? 'bg-red-500 text-white'
+                                          : 'bg-gray-500 text-white'
                                       }`}>
                                         {result}
                                       </span>
