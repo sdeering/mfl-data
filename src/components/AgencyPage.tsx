@@ -17,6 +17,7 @@ const AgencyPage: React.FC = () => {
   const [sortField, setSortField] = useState<string>('overall');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
   const [currentPage, setCurrentPage] = useState(1);
+  const [hasCheckedWallet, setHasCheckedWallet] = useState(false);
   const playersPerPage = 100;
   const router = useRouter();
 
@@ -169,11 +170,16 @@ const AgencyPage: React.FC = () => {
     }
   };
 
-  // Redirect if not connected
+  // Redirect if not connected (with delay to allow wallet to initialize)
   useEffect(() => {
-    if (!isConnected) {
-      router.push('/');
-    }
+    const timer = setTimeout(() => {
+      setHasCheckedWallet(true);
+      if (!isConnected) {
+        router.push('/');
+      }
+    }, 1000); // 1 second delay
+
+    return () => clearTimeout(timer);
   }, [isConnected, router]);
 
   const fetchMFLPlayers = async () => {
@@ -249,9 +255,18 @@ const AgencyPage: React.FC = () => {
             <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">
               My MFL Agency
             </h1>
-            <p className="text-lg text-gray-600 dark:text-gray-400">
-              Please connect your wallet to view your players
-            </p>
+            {!hasCheckedWallet ? (
+              <div className="flex items-center justify-center">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                <span className="ml-2 text-lg text-gray-600 dark:text-gray-400">
+                  Checking wallet connection...
+                </span>
+              </div>
+            ) : (
+              <p className="text-lg text-gray-600 dark:text-gray-400">
+                Please connect your wallet to view your players
+              </p>
+            )}
           </div>
         </div>
       </div>
