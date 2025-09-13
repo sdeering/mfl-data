@@ -78,17 +78,19 @@ class MatchesService {
     }
 
     try {
-      const response = await axios.get(
-        `https://z519wdyajg.execute-api.us-east-1.amazonaws.com/prod/matches`,
-        {
-          params: {
-            squadId,
-            past: true,
-            onlyCompetitions: true,
-            limit: 15
-          }
-        }
-      );
+      const url = `https://z519wdyajg.execute-api.us-east-1.amazonaws.com/prod/matches`;
+      const params = {
+        squadId,
+        past: true,
+        onlyCompetitions: true,
+        limit: 15
+      };
+      
+      console.log('Fetching past matches from:', url, 'with params:', params);
+      
+      const response = await axios.get(url, { params });
+      
+      console.log('Past matches response:', response.data);
 
       const data = response.data;
       this.cache.set(cacheKey, { data, timestamp: Date.now() });
@@ -108,17 +110,19 @@ class MatchesService {
     }
 
     try {
-      const response = await axios.get(
-        `https://z519wdyajg.execute-api.us-east-1.amazonaws.com/prod/matches`,
-        {
-          params: {
-            squadId,
-            upcoming: true,
-            live: true,
-            limit: 30
-          }
-        }
-      );
+      const url = `https://z519wdyajg.execute-api.us-east-1.amazonaws.com/prod/matches`;
+      const params = {
+        squadId,
+        upcoming: true,
+        live: true,
+        limit: 30
+      };
+      
+      console.log('Fetching upcoming matches from:', url, 'with params:', params);
+      
+      const response = await axios.get(url, { params });
+      
+      console.log('Upcoming matches response:', response.data);
 
       const data = response.data;
       this.cache.set(cacheKey, { data, timestamp: Date.now() });

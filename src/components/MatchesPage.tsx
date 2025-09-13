@@ -47,6 +47,7 @@ const MatchesPage: React.FC = () => {
   const fetchMatches = async (squadId: string) => {
     if (!squadId) return;
     
+    console.log('fetchMatches called with squadId:', squadId);
     setIsLoadingMatches(true);
     setError(null);
     
@@ -55,6 +56,9 @@ const MatchesPage: React.FC = () => {
         matchesService.fetchPastMatches(squadId),
         matchesService.fetchUpcomingMatches(squadId)
       ]);
+      
+      console.log('Past matches:', pastData);
+      console.log('Upcoming matches:', upcomingData);
       
       setPastMatches(pastData);
       setUpcomingMatches(upcomingData);
@@ -73,8 +77,10 @@ const MatchesPage: React.FC = () => {
   }, [isConnected, account]);
 
   useEffect(() => {
-    if (selectedClub?.squad?.id) {
-      fetchMatches(selectedClub.squad.id.toString());
+    if (selectedClub?.club?.squads && selectedClub.club.squads.length > 0) {
+      const squadId = selectedClub.club.squads[0].id;
+      console.log('Fetching matches for squad ID:', squadId, 'Club:', selectedClub.club.name);
+      fetchMatches(squadId.toString());
     }
   }, [selectedClub]);
 
