@@ -9,11 +9,14 @@ const AgencyPage: React.FC = () => {
   const { isConnected, account } = useWallet();
   const [players, setPlayers] = useState<MFLPlayer[]>([]);
   const [filteredPlayers, setFilteredPlayers] = useState<MFLPlayer[]>([]);
+  const [displayedPlayers, setDisplayedPlayers] = useState<MFLPlayer[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sortField, setSortField] = useState<string>('overall');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
+  const [currentPage, setCurrentPage] = useState(1);
+  const playersPerPage = 100;
   const router = useRouter();
 
   // Helper function to get tier color based on rating value (same as PlayerStatsGrid)
@@ -133,6 +136,27 @@ const AgencyPage: React.FC = () => {
     });
   };
 
+  // Pagination helper functions
+  const totalPages = Math.ceil(filteredPlayers.length / playersPerPage);
+  
+  const goToPage = (page: number) => {
+    if (page >= 1 && page <= totalPages) {
+      setCurrentPage(page);
+    }
+  };
+
+  const goToPreviousPage = () => {
+    if (currentPage > 1) {
+      setCurrentPage(currentPage - 1);
+    }
+  };
+
+  const goToNextPage = () => {
+    if (currentPage < totalPages) {
+      setCurrentPage(currentPage + 1);
+    }
+  };
+
   // Redirect if not connected
   useEffect(() => {
     if (!isConnected) {
@@ -192,7 +216,18 @@ const AgencyPage: React.FC = () => {
     // Apply sorting to filtered results
     const sortedFiltered = sortPlayers(filtered);
     setFilteredPlayers(sortedFiltered);
+    
+    // Reset to first page when search term changes
+    setCurrentPage(1);
   }, [searchTerm, players, sortField, sortDirection]);
+
+  // Update displayed players based on current page
+  useEffect(() => {
+    const startIndex = (currentPage - 1) * playersPerPage;
+    const endIndex = startIndex + playersPerPage;
+    const paginatedPlayers = filteredPlayers.slice(startIndex, endIndex);
+    setDisplayedPlayers(paginatedPlayers);
+  }, [filteredPlayers, currentPage, playersPerPage]);
 
   if (!isConnected) {
     return (
@@ -215,6 +250,11 @@ const AgencyPage: React.FC = () => {
             <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
               MFL Agency ({filteredPlayers.length}{filteredPlayers.length !== players.length ? ` of ${players.length}` : ''} players)
             </h1>
+            {totalPages > 1 && (
+              <p className="text-sm text-gray-600 dark:text-gray-400">
+                Showing {((currentPage - 1) * playersPerPage) + 1}-{Math.min(currentPage * playersPerPage, filteredPlayers.length)} of {filteredPlayers.length} players
+              </p>
+            )}
           </div>
 
       {isLoading && (
@@ -272,7 +312,7 @@ const AgencyPage: React.FC = () => {
                   </div>
                 </div>
               </div>
-          {filteredPlayers.length === 0 && searchTerm ? (
+          {displayedPlayers.length === 0 && searchTerm ? (
             <div className="text-center py-8">
               <div className="text-gray-400 dark:text-gray-600 mb-4">
                 <svg className="w-12 h-12 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -437,7 +477,7 @@ const AgencyPage: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                {filteredPlayers.map((player) => (
+                {displayedPlayers.map((player) => (
                   <tr key={player.id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
                     <td className="px-3 py-2 whitespace-nowrap">
                       <div>
@@ -504,6 +544,94 @@ const AgencyPage: React.FC = () => {
               </tbody>
             </table>
             </div>
+            
+            {/* Pagination Controls */}
+            {totalPages > 1 && (
+              <div className="bg-white dark:bg-gray-800 px-4 py-3 flex items-center justify-between border-t border-gray-200 dark:border-gray-700 sm:px-6">
+                <div className="flex-1 flex justify-between sm:hidden">
+                  <button
+                    onClick={goToPreviousPage}
+                    disabled={currentPage === 1}
+                    className="relative inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Previous
+                  </button>
+                  <button
+                    onClick={goToNextPage}
+                    disabled={currentPage === totalPages}
+                    className="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Next
+                  </button>
+                </div>
+                <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
+                  <div>
+                    <p className="text-sm text-gray-700 dark:text-gray-300">
+                      Showing{' '}
+                      <span className="font-medium">{((currentPage - 1) * playersPerPage) + 1}</span>
+                      {' '}to{' '}
+                      <span className="font-medium">{Math.min(currentPage * playersPerPage, filteredPlayers.length)}</span>
+                      {' '}of{' '}
+                      <span className="font-medium">{filteredPlayers.length}</span>
+                      {' '}results
+                    </p>
+                  </div>
+                  <div>
+                    <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
+                      <button
+                        onClick={goToPreviousPage}
+                        disabled={currentPage === 1}
+                        className="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm font-medium text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <span className="sr-only">Previous</span>
+                        <svg className="h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                          <path fillRule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clipRule="evenodd" />
+                        </svg>
+                      </button>
+                      
+                      {/* Page numbers */}
+                      {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                        let pageNum;
+                        if (totalPages <= 5) {
+                          pageNum = i + 1;
+                        } else if (currentPage <= 3) {
+                          pageNum = i + 1;
+                        } else if (currentPage >= totalPages - 2) {
+                          pageNum = totalPages - 4 + i;
+                        } else {
+                          pageNum = currentPage - 2 + i;
+                        }
+                        
+                        return (
+                          <button
+                            key={pageNum}
+                            onClick={() => goToPage(pageNum)}
+                            className={`relative inline-flex items-center px-4 py-2 border text-sm font-medium ${
+                              currentPage === pageNum
+                                ? 'z-10 bg-blue-50 dark:bg-blue-900 border-blue-500 dark:border-blue-400 text-blue-600 dark:text-blue-300'
+                                : 'bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-600'
+                            }`}
+                          >
+                            {pageNum}
+                          </button>
+                        );
+                      })}
+                      
+                      <button
+                        onClick={goToNextPage}
+                        disabled={currentPage === totalPages}
+                        className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm font-medium text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <span className="sr-only">Next</span>
+                        <svg className="h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                          <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
+                        </svg>
+                      </button>
+                    </nav>
+                  </div>
+                </div>
+              </div>
+            )}
           )}
         </div>
       )}
