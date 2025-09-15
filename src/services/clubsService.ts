@@ -27,15 +27,20 @@ export interface MFLClubData {
 }
 
 class ClubsService {
-  private cache = new Map<string, MFLClubData[]>();
-  private readonly CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+  private cache = new Map<string, { data: MFLClubData[]; timestamp: number }>();
+  private readonly CACHE_DURATION = 60 * 60 * 1000; // 1 hour
+
+  private isCacheValid(timestamp: number): boolean {
+    return Date.now() - timestamp < this.CACHE_DURATION;
+  }
 
   async fetchClubsForWallet(walletAddress: string): Promise<MFLClubData[]> {
     const cacheKey = `clubs_${walletAddress}`;
     const cached = this.cache.get(cacheKey);
     
-    if (cached) {
-      return cached;
+    if (cached && this.isCacheValid(cached.timestamp)) {
+      console.log(`🎯 CACHE HIT: Using cached clubs data for ${cacheKey}`);
+      return cached.data;
     }
 
     try {
@@ -45,13 +50,9 @@ class ClubsService {
 
       const clubs = response.data;
       
-      // Cache the result
-      this.cache.set(cacheKey, clubs);
-      
-      // Clear cache after duration
-      setTimeout(() => {
-        this.cache.delete(cacheKey);
-      }, this.CACHE_DURATION);
+      // Cache the result with timestamp
+      this.cache.set(cacheKey, { data: clubs, timestamp: Date.now() });
+      console.log(`🚀 CACHE MISS: Fetched clubs data from API for ${cacheKey}`);
 
       return clubs;
     } catch (error) {

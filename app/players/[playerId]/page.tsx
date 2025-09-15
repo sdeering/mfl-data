@@ -19,11 +19,11 @@ async function getPlayerData(playerId: string) {
 
 export default async function PlayerPage({ params }: PlayerPageProps) {
   const { playerId } = await params;
-  await getPlayerData(playerId);
+  const { player, error } = await getPlayerData(playerId);
 
   return (
     <Suspense fallback={<div>Loading...</div>}>
-      <PlayerResultsPage propPlayerId={playerId} />
+      <PlayerResultsPage propPlayerId={playerId} initialPlayer={player} initialError={error} />
     </Suspense>
   );
 }

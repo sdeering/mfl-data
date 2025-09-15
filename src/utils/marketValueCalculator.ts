@@ -107,8 +107,43 @@ export function calculateMarketValue(
     }
   }
   
+  // If no market data available, use enhanced fallback calculation
+  if (baseValue === 0) {
+    // Enhanced fallback calculation based on multiple factors
+    let fallbackBaseValue = 0;
+    
+    // Base value by overall rating tiers (more realistic curve)
+    if (player.overall >= 90) {
+      fallbackBaseValue = 800 + (player.overall - 90) * 100; // $800-$1300 for 90+
+    } else if (player.overall >= 85) {
+      fallbackBaseValue = 400 + (player.overall - 85) * 80; // $400-$800 for 85-89
+    } else if (player.overall >= 80) {
+      fallbackBaseValue = 200 + (player.overall - 80) * 40; // $200-$400 for 80-84
+    } else if (player.overall >= 75) {
+      fallbackBaseValue = 100 + (player.overall - 75) * 20; // $100-$200 for 75-79
+    } else if (player.overall >= 70) {
+      fallbackBaseValue = 50 + (player.overall - 70) * 10; // $50-$100 for 70-74
+    } else {
+      fallbackBaseValue = Math.max(25, player.overall * 3); // $25-$210 for <70
+    }
+    
+    // Age adjustment (younger players more valuable)
+    const ageAdjustment = player.age <= 25 ? fallbackBaseValue * 0.2 : 
+                         player.age <= 30 ? 0 : 
+                         player.age <= 35 ? fallbackBaseValue * -0.1 : fallbackBaseValue * -0.3;
+    
+    // Position premium (attacking positions more valuable)
+    const positionPremium = player.positions.some(pos => ['ST', 'CF', 'CAM', 'LW', 'RW'].includes(pos)) ? 
+                           fallbackBaseValue * 0.15 : 0;
+    
+    // Multiple positions bonus
+    const multiPositionBonus = player.positions.length > 1 ? fallbackBaseValue * 0.1 : 0;
+    
+    baseValue = fallbackBaseValue + ageAdjustment + positionPremium + multiPositionBonus;
+  }
+  
   // Round base value to whole number for display consistency
-  const roundedBaseValue = Math.round(baseValue);
+  const roundedBaseValue = Math.max(1, Math.round(baseValue)); // Ensure minimum value of 1 to avoid division issues
   
   // Apply adjustments
   let totalAdjustments = 0;
@@ -116,8 +151,8 @@ export function calculateMarketValue(
   // Age adjustment (weight based on age difference from comparable listings)
   let ageAdjustment = 0;
   if (comparableListings.length > 0) {
-    const avgComparableAge = comparableListings.reduce((sum, listing) => sum + listing.player.metadata.age, 0) / comparableListings.length;
-    const ageDifference = player.age - avgComparableAge;
+    const avgComparableAge = comparableListings.reduce((sum, listing) => sum + (listing.player?.metadata?.age || 0), 0) / comparableListings.length;
+    const ageDifference = (player.age || 0) - avgComparableAge;
     // 2% adjustment per year of age difference
     ageAdjustment = roundedBaseValue * (ageDifference * 0.02);
     totalAdjustments += ageAdjustment;
@@ -126,8 +161,8 @@ export function calculateMarketValue(
   // Overall rating adjustment
   let overallAdjustment = 0;
   if (comparableListings.length > 0) {
-    const avgComparableOverall = comparableListings.reduce((sum, listing) => sum + listing.player.metadata.overall, 0) / comparableListings.length;
-    const overallDifference = player.overall - avgComparableOverall;
+    const avgComparableOverall = comparableListings.reduce((sum, listing) => sum + (listing.player?.metadata?.overall || 0), 0) / comparableListings.length;
+    const overallDifference = (player.overall || 0) - avgComparableOverall;
     // 3% adjustment per overall point difference
     overallAdjustment = roundedBaseValue * (overallDifference * 0.03);
     totalAdjustments += overallAdjustment;
@@ -139,7 +174,7 @@ export function calculateMarketValue(
   if (positionRatings) {
     // Count positions where the calculated rating is within 6 points of overall
     const playablePositions = Object.entries(positionRatings).filter(([position, rating]) => {
-      return rating > 0 && Math.abs(rating - player.overall) <= 6;
+      return rating > 0 && Math.abs((rating || 0) - (player.overall || 0)) <= 6;
     });
     
     const playablePositionCount = playablePositions.length;
@@ -193,7 +228,7 @@ export function calculateMarketValue(
                   // Calculate overall progression over the period
                   const oldestPoint = recentProgression[0];
                   const newestPoint = recentProgression[recentProgression.length - 1];
-                  const overallProgression = newestPoint.overall - oldestPoint.overall;
+                  const overallProgression = (newestPoint.overall || 0) - (oldestPoint.overall || 0);
                   
 
 
@@ -247,22 +282,22 @@ export function calculateMarketValue(
   
   // Pace penalty (-10% if player has Overall > 60 and Pace < 50, excluding goalkeepers)
   let pacePenalty = 0;
-  if (player.overall > 60 && player.pace < 50 && !player.positions.includes('GK')) {
+  if ((player.overall || 0) > 60 && (player.pace || 0) < 50 && !player.positions.includes('GK')) {
     pacePenalty = roundedBaseValue * -0.10; // -10% for slow players with high overall (excluding goalkeepers)
     totalAdjustments += pacePenalty;
   }
   
   // Pace premium (+10% for Pace >= 90, +5% for Pace 85-90, if primary position is not a wide/fullback position)
   let pacePremium = 0;
-  if (player.pace >= 85) {
+  if ((player.pace || 0) >= 85) {
     // Check if primary position is NOT a wide/fullback position
     const widePositions = ['LW', 'RW', 'LB', 'RB', 'LWB', 'RWB'];
     const primaryPosition = player.positions[0]; // First position is typically the primary
     
     if (!widePositions.includes(primaryPosition)) {
-      if (player.pace >= 90) {
+      if ((player.pace || 0) >= 90) {
         pacePremium = roundedBaseValue * 0.10; // +10% for very fast players (90+) in non-wide positions
-      } else if (player.pace >= 85) {
+      } else if ((player.pace || 0) >= 85) {
         pacePremium = roundedBaseValue * 0.05; // +5% for fast players (85-89) in non-wide positions
       }
       totalAdjustments += pacePremium;
@@ -273,7 +308,7 @@ export function calculateMarketValue(
   let heightAdjustment = 0;
   if (player.positions.includes('GK')) {
     // Convert height from cm to feet and inches
-    const heightInCm = player.height;
+    const heightInCm = player.height || 0;
     const heightInFeet = heightInCm / 30.48;
     const feet = Math.floor(heightInFeet);
     const inches = Math.round((heightInFeet - feet) * 12);
@@ -301,6 +336,11 @@ export function calculateMarketValue(
   
   // Helper function to round small adjustments up to $1
   const roundSmallAdjustment = (adjustment: number) => {
+    // Check for NaN or undefined values
+    if (isNaN(adjustment) || adjustment === undefined || adjustment === null) {
+      return 0;
+    }
+    
     if (adjustment > 0.01 && adjustment < 1) {
       return 1;
     } else if (adjustment < -0.01 && adjustment > -1) {

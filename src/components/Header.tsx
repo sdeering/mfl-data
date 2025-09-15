@@ -6,11 +6,13 @@ import SearchBar from './SearchBar';
 import ThemeToggle from './ThemeToggle';
 import WalletConnect from './WalletConnect';
 import { useLoading } from '../contexts/LoadingContext';
+import { useWallet } from '../contexts/WalletContext';
 
 export const Header: React.FC = () => {
   const router = useRouter();
   const pathname = usePathname();
   const { isLoading } = useLoading();
+  const { isConnected } = useWallet();
 
   // Extract player ID from current path
   const getCurrentPlayerId = () => {
@@ -44,27 +46,35 @@ export const Header: React.FC = () => {
               <h1 className="text-xl font-bold text-gray-900 dark:text-white">MFL Data</h1>
             </button>
             
-            {/* Navigation Links */}
-            <nav className="hidden lg:flex items-center space-x-6">
-              <button 
-                onClick={() => router.push('/agency')}
-                className="text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors cursor-pointer"
-              >
-                Agency
-              </button>
-              <button 
-                onClick={() => router.push('/clubs')}
-                className="text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors cursor-pointer"
-              >
-                Clubs
-              </button>
-              <button 
-                onClick={() => router.push('/matches')}
-                className="text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors cursor-pointer"
-              >
-                Matches
-              </button>
-            </nav>
+            {/* Navigation Links - Only show when logged in */}
+            {isConnected && (
+              <nav className="hidden lg:flex items-center space-x-6">
+                <button 
+                  onClick={() => router.push('/agency')}
+                  className="text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors cursor-pointer"
+                >
+                  Agency
+                </button>
+                <button 
+                  onClick={() => router.push('/clubs')}
+                  className="text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors cursor-pointer"
+                >
+                  Clubs
+                </button>
+                <button 
+                  onClick={() => router.push('/matches')}
+                  className="text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors cursor-pointer"
+                >
+                  Matches
+                </button>
+                <button 
+                  onClick={() => router.push('/matches/tactics')}
+                  className="text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors cursor-pointer"
+                >
+                  Tactics
+                </button>
+              </nav>
+            )}
             
 
             

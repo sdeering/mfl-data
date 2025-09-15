@@ -73,9 +73,10 @@ interface PlayerStatsProps {
   } | null;
   progressionData?: any[] | null;
   matchCount?: number;
+  isCalculatingMarketValue?: boolean;
 }
 
-export default function PlayerStats({ player, marketValueEstimate, progressionData, matchCount }: PlayerStatsProps) {
+export default function PlayerStats({ player, marketValueEstimate, progressionData, matchCount, isCalculatingMarketValue }: PlayerStatsProps) {
   const {
     metadata: {
       overall,
@@ -92,6 +93,26 @@ export default function PlayerStats({ player, marketValueEstimate, progressionDa
   // Generate tags based on player data
   const generateTags = () => {
     const tags = [];
+    
+    // Pace-based tags
+    if (player.metadata.pace) {
+      if (player.metadata.pace < 55) {
+        tags.push({
+          text: '🐢 Slow',
+          type: 'slow'
+        });
+      } else if (player.metadata.pace >= 95) {
+        tags.push({
+          text: '⚡ Lightning Fast',
+          type: 'lightningFast'
+        });
+      } else if (player.metadata.pace > 90) {
+        tags.push({
+          text: 'Fast',
+          type: 'fast'
+        });
+      }
+    }
     
     // Retirement tag
     if (player.metadata.retirementYears && player.metadata.retirementYears > 0) {
@@ -176,11 +197,12 @@ export default function PlayerStats({ player, marketValueEstimate, progressionDa
     },
     {
       label: 'Market Value Est',
-      value: marketValueEstimate ? `$${marketValueEstimate.estimatedValue.toLocaleString()}` : undefined,
+      value: isCalculatingMarketValue ? 'Calculating...' : (marketValueEstimate ? `$${marketValueEstimate.estimatedValue.toLocaleString()}` : undefined),
       isMarketValue: true,
       confidence: marketValueEstimate?.confidence,
       breakdown: marketValueEstimate?.breakdown,
-      details: marketValueEstimate?.details
+      details: marketValueEstimate?.details,
+      isCalculating: isCalculatingMarketValue
     },
     {
       label: 'Tags',
@@ -239,21 +261,30 @@ export default function PlayerStats({ player, marketValueEstimate, progressionDa
                   ) : stat.isMarketValue ? (
                     <div className="flex items-center space-x-2">
                       <div className="flex items-center space-x-1 px-3 py-2 rounded-lg shadow-sm text-gray-900 dark:text-gray-900 bg-gradient-to-r from-white to-gray-100 dark:from-white dark:to-gray-100">
-                        <span className="text-lg font-bold">
-                          {stat.value}
-                        </span>
-                        {stat.confidence && (
-                          <span className={`text-xs px-2 py-1 rounded-full ml-2 ${
-                            stat.confidence === 'high' 
-                              ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
-                              : stat.confidence === 'medium'
-                              ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200'
-                              : 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
-                          }`}>
-                            {stat.confidence}
-                          </span>
+                        {stat.isCalculating ? (
+                          <div className="flex items-center space-x-2">
+                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-600"></div>
+                            <span className="text-lg font-bold">Calculating...</span>
+                          </div>
+                        ) : (
+                          <>
+                            <span className="text-lg font-bold">
+                              {stat.value}
+                            </span>
+                            {stat.confidence && (
+                              <span className={`text-xs px-2 py-1 rounded-full ml-2 ${
+                                stat.confidence === 'high' 
+                                  ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
+                                  : stat.confidence === 'medium'
+                                  ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200'
+                                  : 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
+                              }`}>
+                                {stat.confidence}
+                              </span>
+                            )}
+                          </>
                         )}
-                        {stat.breakdown && (
+                        {stat.breakdown && !stat.isCalculating && (
                           <div className="relative group">
                             <svg className="w-4 h-4 text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 cursor-help" fill="currentColor" viewBox="0 0 20 20">
                               <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-3a1 1 0 00-.867.5 1 1 0 11-1.731-1A3 3 0 0113 8a3.001 3.001 0 01-2 2.83V11a1 1 0 11-2 0v-1a1 1 0 011-1 1 1 0 100-2zm0 8a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
@@ -313,7 +344,13 @@ export default function PlayerStats({ player, marketValueEstimate, progressionDa
                           <span 
                             key={index}
                             className={`text-xs font-medium px-2 py-1 rounded-md ${
-                              tag.type === 'retirement' 
+                              tag.type === 'slow'
+                                ? 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200'
+                                : tag.type === 'fast'
+                                ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
+                                : tag.type === 'lightningFast'
+                                ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
+                                : tag.type === 'retirement' 
                                 ? 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200'
                                 : tag.type === 'positions'
                                 ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'

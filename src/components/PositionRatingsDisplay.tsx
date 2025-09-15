@@ -6,6 +6,7 @@ import type { MFLPosition, PlayerForOVRCalculation } from '../types/positionOvr'
 import { getRatingStyle } from '../utils/ratingUtils';
 import { fetchPlayerMatches } from '../services/playerMatchesService';
 import type { PlayerMatchStats, PositionSummary } from '../types/playerMatches';
+import { OverallRatingTooltip } from './OverallRatingTooltip';
 
 // Function to get tier color based on rating value (same as PlayerStatsGrid)
 const getTierColor = (rating: number) => {
@@ -320,12 +321,23 @@ function PositionRatingItem({ rating, player, matchRating }: {
               {difference > 0 ? '+' : ''}{difference}
             </span>
           )}
-          <div 
-            className={`font-bold px-3 py-2 rounded-lg shadow-sm ${tierColors.text} ${tierColors.bg} ${tierColors.border}`}
-            style={{ fontSize: '22px' }}
-          >
-            {ratingValue}
-          </div>
+          {familiarity === 'PRIMARY' ? (
+            <OverallRatingTooltip player={player}>
+              <div 
+                className={`font-bold px-3 py-2 rounded-lg shadow-sm ${tierColors.text} ${tierColors.bg} ${tierColors.border}`}
+                style={{ fontSize: '22px' }}
+              >
+                {ratingValue}
+              </div>
+            </OverallRatingTooltip>
+          ) : (
+            <div 
+              className={`font-bold px-3 py-2 rounded-lg shadow-sm ${tierColors.text} ${tierColors.bg} ${tierColors.border}`}
+              style={{ fontSize: '22px' }}
+            >
+              {ratingValue}
+            </div>
+          )}
         </div>
       </div>
     </div>

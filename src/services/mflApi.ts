@@ -35,7 +35,7 @@ const MFL_API_CONFIG = {
     },
   },
   cache: {
-    ttl: 5 * 60 * 1000, // 5 minutes
+    ttl: 60 * 60 * 1000, // 1 hour
     maxSize: 100, // Maximum number of cached items
   },
 } as const;

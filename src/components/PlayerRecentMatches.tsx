@@ -270,6 +270,31 @@ export default function PlayerRecentMatches({ playerId, playerName }: PlayerRece
                   <p className="text-xs text-gray-500 dark:text-gray-400">
                     {formatDate(match.match.startDate)} • {match.match.competition.name}
                   </p>
+                  
+                  {/* Goals and Assists Icons */}
+                  <div className="flex items-center space-x-2 mt-2">
+                    {/* Goals */}
+                    {match.stats.goals > 0 && (
+                      <div className="flex items-center space-x-1">
+                        {Array.from({ length: match.stats.goals }, (_, i) => (
+                          <div key={i} className="w-4 h-4 bg-green-600 dark:bg-green-400 rounded-full flex items-center justify-center">
+                            <span className="text-xs font-bold text-white">⚽</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    
+                    {/* Assists */}
+                    {match.stats.assists > 0 && (
+                      <div className="flex items-center space-x-1">
+                        {Array.from({ length: match.stats.assists }, (_, i) => (
+                          <div key={i} className="w-4 h-4 bg-white dark:bg-gray-200 rounded-full flex items-center justify-center border border-gray-300 dark:border-gray-600">
+                            <span className="text-xs font-bold text-gray-800 dark:text-gray-800">🥅</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </div>
                 <div className="text-right">
                   <span className={`text-[20px] font-bold ${getRatingColor(match.stats.rating)}`}>

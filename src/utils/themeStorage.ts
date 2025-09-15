@@ -113,6 +113,6 @@ export const getInitialThemePreference = (): Theme => {
     console.warn('Failed to detect system theme preference:', error);
   }
 
-  // Final fallback to light theme
-  return 'light';
+  // Final fallback to dark theme
+  return 'dark';
 };

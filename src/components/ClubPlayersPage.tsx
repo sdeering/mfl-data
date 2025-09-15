@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useWallet } from '@/src/contexts/WalletContext';
 import { clubPlayersService, ClubPlayer } from '@/src/services/clubPlayersService';
 import { clubsService } from '@/src/services/clubsService';
+import { OverallRatingTooltip } from './OverallRatingTooltip';
 
 interface ClubPlayersPageProps {
   clubId: string;
@@ -412,9 +413,11 @@ export default function ClubPlayersPage({ clubId }: ClubPlayersPageProps) {
                         </div>
                       </td>
                       <td className="px-3 py-2 whitespace-nowrap text-center">
-                        <div className={`flex items-center justify-center rounded-lg shadow-sm px-2 py-1 text-center font-bold w-12 ${tierColors.bg} ${tierColors.text} ${tierColors.border}`}>
-                          {player.metadata.overall}
-                        </div>
+                        <OverallRatingTooltip player={player}>
+                          <div className={`flex items-center justify-center rounded-lg shadow-sm px-2 py-1 text-center font-bold w-12 ${tierColors.bg} ${tierColors.text} ${tierColors.border}`}>
+                            {player.metadata.overall}
+                          </div>
+                        </OverallRatingTooltip>
                       </td>
                       <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-900 dark:text-white">
                         {player.metadata.age}

@@ -1,5 +1,6 @@
 import React from 'react';
 import type { MFLPlayer } from '../types/mflApi';
+import { OverallRatingTooltip } from './OverallRatingTooltip';
 
 interface PlayerStatsGridProps {
   player: MFLPlayer;
@@ -73,12 +74,22 @@ export const PlayerStatsGrid: React.FC<PlayerStatsGridProps> = ({ player }) => {
       {/* Values row */}
       {stats.map((stat) => {
         const tierColors = getTierColor(stat.value);
+        const isOverallRating = stat.label === 'GK'; // GK represents overall rating for goalkeepers
+        
         return (
           <div key={`value-${stat.label}`} className="flex flex-col items-center justify-start gap-0.5 px-1 pt-1">
             <div className="relative">
-              <div className={`flex items-center justify-center rounded-lg shadow-sm px-3 py-2 text-center font-bold ${tierColors.text} ${tierColors.bg} ${tierColors.border}`} style={{ fontSize: '22px' }}>
-                {stat.value}
-              </div>
+              {isOverallRating ? (
+                <OverallRatingTooltip player={player}>
+                  <div className={`flex items-center justify-center rounded-lg shadow-sm px-3 py-2 text-center font-bold ${tierColors.text} ${tierColors.bg} ${tierColors.border}`} style={{ fontSize: '22px' }}>
+                    {stat.value}
+                  </div>
+                </OverallRatingTooltip>
+              ) : (
+                <div className={`flex items-center justify-center rounded-lg shadow-sm px-3 py-2 text-center font-bold ${tierColors.text} ${tierColors.bg} ${tierColors.border}`} style={{ fontSize: '22px' }}>
+                  {stat.value}
+                </div>
+              )}
             </div>
           </div>
         );

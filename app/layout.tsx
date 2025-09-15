@@ -6,6 +6,7 @@ import Header from '../src/components/Header';
 import Footer from '../src/components/Footer';
 import { LoadingProvider } from '../src/contexts/LoadingContext';
 import { WalletProvider } from '../src/contexts/WalletContext';
+import { SupabaseSyncProvider } from '../src/components/SupabaseSyncProvider';
 
 const titilliumWeb = Titillium_Web({ 
   subsets: ['latin'],
@@ -89,13 +90,15 @@ export default function RootLayout({
         <ThemeProviderWrapper>
           <WalletProvider>
             <LoadingProvider>
-              <div className="max-w-[1200px] mx-auto">
-                <Header />
-                <div className="p-[30px] max-[412px]:px-[15px] bg-white dark:bg-[#111827] min-h-[calc(100vh-200px)]">
-                  {children}
+              <SupabaseSyncProvider>
+                <div className="max-w-[1200px] mx-auto">
+                  <Header />
+                  <div className="p-[30px] max-[412px]:px-[15px] bg-white dark:bg-[#111827] min-h-[calc(100vh-200px)]">
+                    {children}
+                  </div>
+                  <Footer />
                 </div>
-                <Footer />
-              </div>
+              </SupabaseSyncProvider>
             </LoadingProvider>
           </WalletProvider>
         </ThemeProviderWrapper>

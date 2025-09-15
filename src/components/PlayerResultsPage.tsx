@@ -20,9 +20,13 @@ import PlayerSaleHistory from './PlayerSaleHistory';
 import PlayerPositionSummary from './PlayerPositionSummary';
 import PlayerRecentMatches from './PlayerRecentMatches';
 import { useLoading } from '../contexts/LoadingContext';
+import { supabase, TABLES } from '../lib/supabase';
+import { useWallet } from '../contexts/WalletContext';
 
 interface PlayerResultsPageProps {
   propPlayerId?: string;
+  initialPlayer?: MFLPlayer | null;
+  initialError?: string | null;
 }
 
 // Function to add player to recent searches
@@ -54,15 +58,129 @@ const addToRecentSearches = (player: MFLPlayer) => {
   }
 };
 
-const PlayerResultsPage: React.FC<PlayerResultsPageProps> = ({ propPlayerId }) => {
+const PlayerResultsPage: React.FC<PlayerResultsPageProps> = ({ propPlayerId, initialPlayer, initialError }) => {
   const searchParams = useSearchParams();
-  const [player, setPlayer] = useState<MFLPlayer | null>(null);
+  const { account } = useWallet();
+  const [player, setPlayer] = useState<MFLPlayer | null>(initialPlayer || null);
   const [marketValueEstimate, setMarketValueEstimate] = useState<MarketValueEstimate | null>(null);
+  const [isCalculatingMarketValue, setIsCalculatingMarketValue] = useState(false);
   const [progressionData, setProgressionData] = useState<any[] | null>(null);
   const [matchCount, setMatchCount] = useState<number | undefined>(undefined);
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(initialError || null);
   const { setIsLoading: setGlobalLoading } = useLoading();
+
+  // Check if market value data has expired (7 days)
+  const isMarketValueExpired = useCallback((lastCalculated: string): boolean => {
+    const now = new Date();
+    const calculatedDate = new Date(lastCalculated);
+    const daysDiff = (now.getTime() - calculatedDate.getTime()) / (1000 * 60 * 60 * 24);
+    return daysDiff > 7;
+  }, []);
+
+  // Store position ratings and market value in database
+  const storePlayerMarketData = useCallback(async (
+    player: MFLPlayer, 
+    positionRatings: any, 
+    marketValueEstimate: MarketValueEstimate
+  ) => {
+    try {
+      const walletAddress = account || 'anonymous';
+      console.log('💾 Storing player market data in database for player:', player.id, 'wallet:', walletAddress);
+      
+      const marketValueData = {
+        player_id: player.id,
+        wallet_address: walletAddress,
+        market_value: Math.round(marketValueEstimate.estimatedValue),
+        overall_rating: player.metadata.overall,
+        positions: player.metadata.positions,
+        position_ratings: Object.entries(positionRatings).reduce((acc, [position, result]) => {
+          if (result.success) {
+            acc[position] = {
+              rating: result.ovr,
+              familiarity: result.familiarity,
+              penalty: result.penalty,
+              difference: result.difference
+            };
+          }
+          return acc;
+        }, {} as any),
+        last_calculated: new Date().toISOString()
+      };
+
+      const { error } = await supabase
+        .from(TABLES.MARKET_VALUES)
+        .upsert(marketValueData, {
+          onConflict: 'player_id'
+        });
+
+      if (error) {
+        console.error('❌ Error storing player market data:', error);
+      } else {
+        console.log('✅ Successfully stored player market data for player:', player.id);
+      }
+    } catch (error) {
+      console.error('❌ Error in storePlayerMarketData:', error);
+    }
+  }, [account]);
+
+  // Update wallet addresses from 'anonymous' to actual wallet when user logs in
+  const updateAnonymousWalletAddresses = useCallback(async (playerId: number) => {
+    if (!account) return; // Only run when user is logged in
+    
+    try {
+      console.log('🔄 Updating anonymous wallet addresses for player:', playerId);
+      
+      const { error } = await supabase
+        .from(TABLES.MARKET_VALUES)
+        .update({ wallet_address: account })
+        .eq('player_id', playerId)
+        .eq('wallet_address', 'anonymous');
+
+      if (error) {
+        console.warn('⚠️ Failed to update anonymous wallet address:', error);
+      } else {
+        console.log('✅ Updated anonymous wallet address to:', account);
+      }
+    } catch (error) {
+      console.warn('⚠️ Error updating anonymous wallet address:', error);
+    }
+  }, [account]);
+
+  // Check if we need to recalculate market value (expired or doesn't exist)
+  const shouldRecalculateMarketValue = useCallback(async (player: MFLPlayer): Promise<boolean> => {
+    try {
+      const walletAddress = account || 'anonymous';
+      const { data, error } = await supabase
+        .from(TABLES.MARKET_VALUES)
+        .select('last_calculated')
+        .eq('player_id', player.id)
+        .eq('wallet_address', walletAddress)
+        .maybeSingle();
+
+      if (error) {
+        console.log('Could not check existing market value, will recalculate:', error.message);
+        return true;
+      }
+
+      if (!data || !data.last_calculated) {
+        console.log('No existing market value found, will recalculate');
+        return true;
+      }
+
+      const isExpired = isMarketValueExpired(data.last_calculated);
+      if (isExpired) {
+        console.log('Market value has expired (7+ days old), will recalculate');
+        return true;
+      }
+
+      console.log('Market value is still valid (less than 7 days old), skipping recalculation');
+      return false;
+    } catch (error) {
+      console.log('Error checking market value expiration, will recalculate:', error);
+      return true;
+    }
+  }, [account, isMarketValueExpired]);
 
   const calculateMarketValueForPlayer = useCallback(async (player: MFLPlayer) => {
     try {
@@ -71,6 +189,10 @@ const PlayerResultsPage: React.FC<PlayerResultsPageProps> = ({ propPlayerId }) =
         console.warn('Player or player metadata not available for market value calculation');
         return;
       }
+
+      // Always do fresh calculation to ensure consistency between popup and widget
+      console.log('🔄 Calculating fresh market value for player:', player.id);
+      setIsCalculatingMarketValue(true);
 
       const [marketResponse, historyResponse, progressionResponse, matchesResponse] = await Promise.all([
         fetchMarketData({
@@ -137,13 +259,18 @@ const PlayerResultsPage: React.FC<PlayerResultsPageProps> = ({ propPlayerId }) =
         );
 
         setMarketValueEstimate(estimate);
+        
+        // Store the position ratings and market value in database
+        await storePlayerMarketData(player, positionRatings, estimate);
       } else {
 
       }
     } catch (error) {
       console.error('Failed to calculate market value:', error);
+    } finally {
+      setIsCalculatingMarketValue(false);
     }
-  }, []);
+  }, [storePlayerMarketData, shouldRecalculateMarketValue]);
 
   const fetchPlayerData = useCallback(async (playerId: string) => {
     setIsLoading(true);
@@ -151,7 +278,15 @@ const PlayerResultsPage: React.FC<PlayerResultsPageProps> = ({ propPlayerId }) =
     setError(null);
     
     try {
-      const player = await mflApi.getPlayer(playerId);
+      // Fetch player data from our API route (server-side)
+      const response = await fetch(`/api/player/${playerId}`);
+      const data = await response.json();
+      
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || 'Failed to fetch player data');
+      }
+      
+      const player = data.player;
       setPlayer(player);
       
       // Add player to recent searches when successfully loaded
@@ -192,6 +327,13 @@ const PlayerResultsPage: React.FC<PlayerResultsPageProps> = ({ propPlayerId }) =
       fetchPlayerData(currentPlayerId);
     }
   }, [propPlayerId, searchParams, fetchPlayerData]);
+
+  // Update anonymous wallet addresses when user logs in
+  useEffect(() => {
+    if (account && player) {
+      updateAnonymousWalletAddresses(player.id);
+    }
+  }, [account, player, updateAnonymousWalletAddresses]);
 
   // Loading state
   if (isLoading) {
@@ -294,6 +436,7 @@ const PlayerResultsPage: React.FC<PlayerResultsPageProps> = ({ propPlayerId }) =
                     marketValueEstimate={marketValueEstimate}
                     progressionData={progressionData}
                     matchCount={matchCount}
+                    isCalculatingMarketValue={isCalculatingMarketValue}
                   />
                 </div>
               </div>

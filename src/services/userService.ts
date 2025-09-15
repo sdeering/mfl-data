@@ -12,7 +12,7 @@ export interface MFLUser {
 
 class UserService {
   private cache = new Map<string, { data: MFLUser; timestamp: number }>();
-  private readonly CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+  private readonly CACHE_DURATION = 60 * 60 * 1000; // 1 hour
 
   private isCacheValid(timestamp: number): boolean {
     return Date.now() - timestamp < this.CACHE_DURATION;

@@ -12,11 +12,13 @@
     "cache:stats": "node scripts/manage-cache.js stats",
     "cache:clear-expired": "node scripts/manage-cache.js clear-expired",
     "cache:clear-all": "node scripts/manage-cache.js clear-all",
-    "cache:show": "node scripts/manage-cache.js show"
+    "cache:show": "node scripts/manage-cache.js show",
+    "prepare": "husky"
   },
   "dependencies": {
     "@onflow/fcl": "^1.20.1",
     "@onflow/types": "^1.4.2",
+    "@supabase/supabase-js": "^2.57.4",
     "axios": "^1.11.0",
     "cheerio": "^1.1.2",
     "next": "15.5.0",
@@ -38,6 +40,7 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "15.5.0",
+    "husky": "^9.1.7",
     "identity-obj-proxy": "^3.0.0",
     "jest": "^29.7.0",
     "jest-environment-jsdom": "^29.7.0",

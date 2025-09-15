@@ -57,6 +57,7 @@ const WalletConnect: React.FC<WalletConnectProps> = ({
     setShowDropdown(false);
   };
 
+
   if (isConnected && account) {
     return (
       <div className="relative">

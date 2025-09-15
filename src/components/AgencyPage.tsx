@@ -1,16 +1,23 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useWallet } from '../contexts/WalletContext';
 import { useRouter } from 'next/navigation';
-import { nftService, MFLPlayer } from '../services/nftService';
-import { calculateMarketValue } from '../utils/marketValueCalculator';
+import { supabaseDataService } from '../services/supabaseDataService';
+import { MFLPlayer } from '../types/mflApi';
+import { useSupabaseSync } from '../hooks/useSupabaseSync';
+import { GlobalSyncProgress } from './GlobalSyncProgress';
+import { OverallRatingTooltip } from './OverallRatingTooltip';
+import * as XLSX from 'xlsx';
 
 const AgencyPage: React.FC = () => {
   const { isConnected, account } = useWallet();
+  const { startSync, isSyncing, isVisible: isSyncVisible, closeProgress } = useSupabaseSync();
   const [players, setPlayers] = useState<MFLPlayer[]>([]);
   const [filteredPlayers, setFilteredPlayers] = useState<MFLPlayer[]>([]);
   const [displayedPlayers, setDisplayedPlayers] = useState<MFLPlayer[]>([]);
+  const [marketValues, setMarketValues] = useState<Map<number, number>>(new Map());
+  const [marketValueDetails, setMarketValueDetails] = useState<Map<number, any>>(new Map());
   const [searchTerm, setSearchTerm] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -18,8 +25,24 @@ const AgencyPage: React.FC = () => {
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
   const [currentPage, setCurrentPage] = useState(1);
   const [hasCheckedWallet, setHasCheckedWallet] = useState(false);
-  const playersPerPage = 100;
+  const [hasAttemptedLoad, setHasAttemptedLoad] = useState(false);
+  const playersPerPage = 50;
   const router = useRouter();
+  const prevIsSyncingRef = useRef(false);
+  const hasAutoSyncedRef = useRef(false);
+
+  // Helper functions for formatting player data
+  const formatPlayerName = (player: MFLPlayer): string => {
+    return `${player.metadata.firstName} ${player.metadata.lastName}`;
+  };
+
+  const formatPositions = (player: MFLPlayer): string => {
+    return player.metadata.positions.join(', ');
+  };
+
+  const getClubName = (player: MFLPlayer): string => {
+    return player.activeContract?.club.name || 'No Club';
+  };
 
   // Helper function to get tier color based on rating value (same as PlayerStatsGrid)
   const getTierColor = (rating: number) => {
@@ -84,9 +107,9 @@ const AgencyPage: React.FC = () => {
   const getSortValue = (player: MFLPlayer, field: string): string | number => {
     switch (field) {
       case 'name':
-        return nftService.formatPlayerName(player).toLowerCase();
+        return formatPlayerName(player).toLowerCase();
       case 'positions':
-        return nftService.formatPositions(player).toLowerCase();
+        return formatPositions(player).toLowerCase();
       case 'overall':
         return player.metadata.overall;
       case 'age':
@@ -104,18 +127,9 @@ const AgencyPage: React.FC = () => {
       case 'physical':
         return player.metadata.physical;
       case 'marketValue':
-        try {
-          const marketValue = calculateMarketValue({
-            ...player.metadata,
-            positions: player.metadata.positions as any[],
-            preferredFoot: player.metadata.preferredFoot as 'LEFT' | 'RIGHT'
-          }, [], []);
-          return marketValue ? marketValue.estimatedValue : 0;
-        } catch (error) {
-          return 0;
-        }
+        return marketValues.get(player.id) || 0;
       case 'club':
-        return nftService.getClubName(player).toLowerCase();
+        return getClubName(player).toLowerCase();
       default:
         return 0;
     }
@@ -129,6 +143,124 @@ const AgencyPage: React.FC = () => {
       setSortField(field);
       setSortDirection('desc');
     }
+  };
+
+  // Function to export players to Excel
+  const exportToExcel = () => {
+    if (players.length === 0) {
+      alert('No players to export');
+      return;
+    }
+
+    // Prepare data for export
+    const exportData = players.map(player => {
+      const marketValue = marketValues.get(player.id);
+      const playerMarketValueDetails = marketValueDetails.get(player.id);
+      
+      // Get position ratings and primary position
+      const positionRatings = playerMarketValueDetails?.position_ratings || {};
+      const primaryPosition = player.metadata.positions?.[0] || 'N/A';
+      
+      // Define position order
+      const positionOrder = ['GK', 'RWB', 'RB', 'CB', 'LWB', 'LB', 'CM', 'RM', 'LM', 'CDM', 'CAM', 'RW', 'LW', 'CF', 'ST'];
+      
+      // Create base export object
+      const exportObj = {
+        'Player ID': player.id,
+        'First Name': player.metadata.firstName,
+        'Last Name': player.metadata.lastName,
+        'Full Name': formatPlayerName(player),
+        'Primary Position': primaryPosition,
+        'All Positions': formatPositions(player),
+        'Overall Rating': player.metadata.overall,
+        'Age': player.metadata.age,
+        'Pace': player.metadata.pace,
+        'Shooting': player.metadata.shooting,
+        'Passing': player.metadata.passing,
+        'Dribbling': player.metadata.dribbling,
+        'Defense': player.metadata.defense,
+        'Physical': player.metadata.physical,
+        'Goalkeeping': player.metadata.goalkeeping || 0,
+        'Market Value': marketValue ? `$${marketValue.toLocaleString()}` : 'Not Calculated',
+        'Market Value Confidence': playerMarketValueDetails?.confidence === 'medium' ? 'N/A (Cached)' : (playerMarketValueDetails?.confidence || 'N/A'),
+        'Club': getClubName(player),
+        'Contract Status': player.activeContract ? 'Active' : 'No Contract',
+        'Nationality': player.metadata.nationalities?.[0] || 'N/A',
+        'Height': player.metadata.height || 'N/A',
+        'Preferred Foot': player.metadata.preferredFoot || 'N/A',
+        'Retirement Years': player.metadata.retirementYears || 'N/A'
+      };
+      
+      // Add position rating columns at the end
+      positionOrder.forEach(position => {
+        const rating = positionRatings[position];
+        if (rating && typeof rating === 'object' && rating.rating !== undefined) {
+          exportObj[`${position} Rating`] = rating.rating;
+        } else {
+          exportObj[`${position} Rating`] = 'N/A';
+        }
+      });
+      
+      return exportObj;
+    });
+
+    // Create workbook and worksheet
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.json_to_sheet(exportData);
+
+    // Set column widths
+    const colWidths = [
+      { wch: 10 }, // Player ID
+      { wch: 15 }, // First Name
+      { wch: 15 }, // Last Name
+      { wch: 20 }, // Full Name
+      { wch: 15 }, // Primary Position
+      { wch: 20 }, // All Positions
+      { wch: 15 }, // Overall Rating
+      { wch: 8 },  // Age
+      { wch: 8 },  // Pace
+      { wch: 10 }, // Shooting
+      { wch: 10 }, // Passing
+      { wch: 12 }, // Dribbling
+      { wch: 10 }, // Defense
+      { wch: 10 }, // Physical
+      { wch: 12 }, // Goalkeeping
+      { wch: 15 }, // Market Value
+      { wch: 20 }, // Market Value Confidence
+      { wch: 20 }, // Club
+      { wch: 15 }, // Contract Status
+      { wch: 15 }, // Nationality
+      { wch: 8 },  // Height
+      { wch: 15 }, // Preferred Foot
+      { wch: 15 }, // Retirement Years
+      // Position rating columns (15 positions)
+      { wch: 12 }, // GK Rating
+      { wch: 12 }, // RWB Rating
+      { wch: 12 }, // RB Rating
+      { wch: 12 }, // CB Rating
+      { wch: 12 }, // LWB Rating
+      { wch: 12 }, // LB Rating
+      { wch: 12 }, // CM Rating
+      { wch: 12 }, // RM Rating
+      { wch: 12 }, // LM Rating
+      { wch: 12 }, // CDM Rating
+      { wch: 12 }, // CAM Rating
+      { wch: 12 }, // RW Rating
+      { wch: 12 }, // LW Rating
+      { wch: 12 }, // CF Rating
+      { wch: 12 }  // ST Rating
+    ];
+    ws['!cols'] = colWidths;
+
+    // Add worksheet to workbook
+    XLSX.utils.book_append_sheet(wb, ws, 'Agency Players');
+
+    // Generate filename with timestamp
+    const timestamp = new Date().toISOString().split('T')[0];
+    const filename = `agency-players-${timestamp}.xlsx`;
+
+    // Save file
+    XLSX.writeFile(wb, filename);
   };
 
   // Function to sort players
@@ -182,29 +314,163 @@ const AgencyPage: React.FC = () => {
     return () => clearTimeout(timer);
   }, [isConnected, router]);
 
+  // Fetch market values for agency players
+  const fetchMarketValues = async () => {
+    if (!account) return;
+    
+    try {
+      console.log('💰 Fetching market values from database for wallet:', account);
+      const marketValuesData = await supabaseDataService.getAgencyPlayerMarketValues(account);
+      console.log('💰 Fetched market values from database:', marketValuesData?.length || 0, 'players');
+      
+      if (marketValuesData && marketValuesData.length > 0) {
+        const marketValuesMap = new Map<number, number>();
+        const marketValueDetailsMap = new Map<number, any>();
+        
+        marketValuesData.forEach((item: any) => {
+          marketValuesMap.set(item.player_id, item.market_value);
+          
+          // Store detailed breakdown information for popup
+          if (item.position_ratings) {
+            marketValueDetailsMap.set(item.player_id, {
+              market_value: item.market_value,
+              position_ratings: item.position_ratings,
+              confidence: 'medium', // Default confidence for cached values
+              breakdown: {
+                positionPremium: 0, // We don't store this in DB yet
+                progressionPremium: 0,
+                retirementPenalty: 0,
+                newlyMintPremium: 0,
+                pacePenalty: 0,
+                pacePremium: 0,
+                heightAdjustment: 0,
+                comparableListings: 0,
+                recentSales: 0
+              },
+              details: {
+                baseValue: item.market_value,
+                comparableListings: [],
+                recentSales: [],
+                comparableAverage: 0,
+                recentSalesAverage: 0
+              }
+            });
+          }
+        });
+        
+        setMarketValues(marketValuesMap);
+        setMarketValueDetails(marketValueDetailsMap);
+      } else {
+        setMarketValues(new Map());
+        setMarketValueDetails(new Map());
+      }
+    } catch (err) {
+      console.error('❌ Error fetching market values:', err);
+      // Don't set error state for market values as it's not critical
+    }
+  };
+
   const fetchMFLPlayers = async () => {
     if (!account) return;
     
+    console.log('🔍 fetchMFLPlayers called for account:', account);
     setIsLoading(true);
     setError(null);
+    setHasAttemptedLoad(true);
     
-        try {
-          const playerData = await nftService.fetchNFTsForWallet(account);
-          setPlayers(playerData);
-          setFilteredPlayers(playerData);
-        } catch (error: any) {
-      console.error('Error fetching players:', error);
-      setError('Failed to load your player collection. Please try again.');
+    try {
+      // Use Supabase data service instead of MFL API
+      console.log('🔍 Fetching agency players from database...');
+      const playerData = await supabaseDataService.getAgencyPlayers(account);
+      console.log('📊 Fetched players from database:', playerData.length, 'players');
+      
+      if (playerData.length === 0) {
+        console.log('⚠️ No players found in database, this might be a cache issue');
+      }
+      
+      setPlayers(playerData);
+      setFilteredPlayers(playerData);
+      
+      // Fetch market values after players are loaded
+      await fetchMarketValues();
+      
+    } catch (error: any) {
+      console.error('❌ Error fetching players from database:', error);
+      setError('Failed to load your player collection from database. Please try again.');
     } finally {
       setIsLoading(false);
     }
   };
 
+  const handleSyncPlayers = async () => {
+    if (!account) return;
+    
+    try {
+      await startSync(true, true); // Force refresh and show display
+    } catch (error) {
+      console.error('Error starting sync:', error);
+      setError('Failed to start sync. Please try again.');
+    }
+  };
+
+
   useEffect(() => {
     if (isConnected && account) {
+      hasAutoSyncedRef.current = false; // Reset auto-sync flag for new account
       fetchMFLPlayers();
     }
   }, [isConnected, account]);
+
+  // Auto-sync when no players are found (only if global sync is not already running)
+  useEffect(() => {
+    if (hasAttemptedLoad && !isLoading && !error && players.length === 0 && account && !isSyncing && !hasAutoSyncedRef.current) {
+      console.log('No players found, auto-syncing...');
+      hasAutoSyncedRef.current = true; // Prevent multiple auto-syncs
+      handleSyncPlayers();
+    }
+  }, [hasAttemptedLoad, isLoading, error, players.length, account, isSyncing]);
+
+  // Refetch players when sync completes
+  useEffect(() => {
+    // Check if sync just completed (was syncing, now not syncing)
+    if (hasAttemptedLoad && !isSyncing && prevIsSyncingRef.current && account) {
+      console.log('✅ Sync completed, clearing cache and refetching players...');
+      // Clear the agency players cache to ensure we get fresh data
+      supabaseDataService.clearCache(`agency_players_${account}`);
+      // Also clear market values cache
+      supabaseDataService.clearCache(`agency_market_values_${account}`);
+      fetchMFLPlayers();
+    }
+    
+    // Update previous sync state
+    prevIsSyncingRef.current = isSyncing;
+  }, [isSyncing, account, hasAttemptedLoad]);
+
+  // Refresh market values periodically during sync
+  useEffect(() => {
+    if (!isSyncing || !account) return;
+
+    const interval = setInterval(async () => {
+      try {
+        console.log('🔄 Refreshing market values during sync...');
+        const marketValuesData = await supabaseDataService.getAgencyPlayerMarketValues(account);
+        
+        if (marketValuesData && marketValuesData.length > 0) {
+          const marketValuesMap = new Map<number, number>();
+          marketValuesData.forEach((item: any) => {
+            marketValuesMap.set(item.player_id, item.market_value);
+          });
+          setMarketValues(marketValuesMap);
+          console.log(`💰 Updated market values for ${marketValuesData.length} players`);
+        }
+      } catch (error) {
+        console.warn('⚠️ Error refreshing market values during sync:', error);
+      }
+    }, 5000); // Refresh every 5 seconds during sync
+
+    return () => clearInterval(interval);
+  }, [isSyncing, account]);
+
 
   // Filter and sort players based on search term and sort settings
   useEffect(() => {
@@ -212,9 +478,9 @@ const AgencyPage: React.FC = () => {
     
     if (searchTerm.trim()) {
       filtered = players.filter(player => {
-        const fullName = nftService.formatPlayerName(player).toLowerCase();
-        const positions = nftService.formatPositions(player).toLowerCase();
-        const club = nftService.getClubName(player).toLowerCase();
+        const fullName = formatPlayerName(player).toLowerCase();
+        const positions = formatPositions(player).toLowerCase();
+        const club = getClubName(player).toLowerCase();
         const search = searchTerm.toLowerCase();
         
         return fullName.includes(search) || 
@@ -275,21 +541,34 @@ const AgencyPage: React.FC = () => {
 
   return (
     <div className="min-h-screen">
-          <div className="mb-8">
-            <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
+      {/* Global Sync Progress - Show when syncing */}
+      <GlobalSyncProgress isVisible={isSyncVisible} onClose={closeProgress} />
+      
+      <div className="mb-8">
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center gap-3">
+            <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
               My MFL Agency ({filteredPlayers.length}{filteredPlayers.length !== players.length ? ` of ${players.length}` : ''} players)
             </h1>
-            {totalPages > 1 && (
-              <p className="text-sm text-gray-600 dark:text-gray-400">
-                Showing {((currentPage - 1) * playersPerPage) + 1}-{Math.min(currentPage * playersPerPage, filteredPlayers.length)} of {filteredPlayers.length} players
-              </p>
+            {isSyncing && (
+              <div className="flex items-center gap-2 px-3 py-1 bg-blue-100 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 rounded-full">
+                <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-600"></div>
+                <span className="text-xs text-blue-700 dark:text-blue-300 font-medium">Syncing</span>
+              </div>
             )}
           </div>
+        </div>
+        {totalPages > 1 && (
+          <p className="text-sm text-gray-600 dark:text-gray-400">
+            Showing {((currentPage - 1) * playersPerPage) + 1}-{Math.min(currentPage * playersPerPage, filteredPlayers.length)} of {filteredPlayers.length} players
+          </p>
+        )}
+      </div>
 
       {isLoading && (
         <div className="flex items-center justify-center py-12">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-          <span className="ml-3 text-gray-600 dark:text-gray-400">Loading your NFTs...</span>
+          <span className="ml-3 text-gray-600 dark:text-gray-400">Loading your players from database...</span>
         </div>
       )}
 
@@ -305,19 +584,44 @@ const AgencyPage: React.FC = () => {
         </div>
       )}
 
-      {!isLoading && !error && players.length === 0 && (
+      {!isLoading && !error && hasAttemptedLoad && players.length === 0 && !isSyncing && (
         <div className="text-center py-12">
           <div className="text-gray-400 dark:text-gray-600 mb-4">
             <svg className="w-16 h-16 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z" />
             </svg>
           </div>
           <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
             No Players Found
           </h3>
-          <p className="text-gray-600 dark:text-gray-400">
-            You don't have any MFL players in this wallet.
+          <p className="text-gray-600 dark:text-gray-400 mb-4">
+            No players found in your agency. Try syncing your data.
           </p>
+          <button
+            onClick={handleSyncPlayers}
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            Sync Players
+          </button>
+        </div>
+      )}
+
+      {!isLoading && !error && hasAttemptedLoad && players.length === 0 && isSyncing && (
+        <div className="text-center py-12">
+          <div className="text-gray-400 dark:text-gray-600 mb-4">
+            <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-600 mx-auto"></div>
+          </div>
+          <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
+            Syncing Your Players
+          </h3>
+          <p className="text-gray-600 dark:text-gray-400">
+            Syncing your MFL data...
+          </p>
+          <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+            <p className="text-sm text-blue-800 dark:text-blue-200">
+              💡 You can navigate to other pages while data syncs in the background
+            </p>
+          </div>
         </div>
       )}
 
@@ -496,7 +800,10 @@ const AgencyPage: React.FC = () => {
                     onClick={() => handleSort('marketValue')}
                   >
                     <div className="flex items-center space-x-1">
-                      <span>Market Value</span>
+                      <span>Value</span>
+                      {isSyncing && (
+                        <div className="animate-spin rounded-full h-3 w-3 border-b border-blue-600"></div>
+                      )}
                       {sortField === 'marketValue' && (
                         <span className="text-blue-600 dark:text-blue-400">
                           {sortDirection === 'asc' ? '↑' : '↓'}
@@ -536,7 +843,7 @@ const AgencyPage: React.FC = () => {
                           }}
                           className="text-lg font-semibold text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 transition-colors cursor-pointer"
                         >
-                          {nftService.formatPlayerName(player)}
+                          {formatPlayerName(player)}
                         </button>
                         <div className="text-sm text-gray-500 dark:text-gray-400">
                           ID: {player.id}
@@ -547,15 +854,17 @@ const AgencyPage: React.FC = () => {
                       {(() => {
                         const tierColors = getTierColor(player.metadata.overall);
                         return (
-                          <div className={`flex items-center justify-center rounded-lg shadow-sm px-2 py-1 text-center font-bold w-12 ${tierColors.text} ${tierColors.bg} ${tierColors.border}`} style={{ fontSize: '16px' }}>
-                            {player.metadata.overall}
-                          </div>
+                          <OverallRatingTooltip player={player}>
+                            <div className={`flex items-center justify-center rounded-lg shadow-sm px-2 py-1 text-center font-bold w-12 ${tierColors.text} ${tierColors.bg} ${tierColors.border}`} style={{ fontSize: '16px' }}>
+                              {player.metadata.overall}
+                            </div>
+                          </OverallRatingTooltip>
                         );
                       })()}
                     </td>
                     <td className="px-3 py-2 whitespace-nowrap">
                       <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
-                        {nftService.formatPositions(player)}
+                        {formatPositions(player)}
                       </span>
                     </td>
                     <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-900 dark:text-white">
@@ -581,20 +890,30 @@ const AgencyPage: React.FC = () => {
                     </td>
                     <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-900 dark:text-white">
                       {(() => {
-                        try {
-                          const marketValue = calculateMarketValue({
-                            ...player.metadata,
-                            positions: player.metadata.positions as any[],
-                            preferredFoot: player.metadata.preferredFoot as 'LEFT' | 'RIGHT'
-                          }, [], []);
-                          return marketValue ? `$${marketValue.estimatedValue.toLocaleString()}` : 'N/A';
-                        } catch (error) {
-                          return 'N/A';
+                        const marketValue = marketValues.get(player.id);
+                        if (marketValue) {
+                          return (
+                            <span className={`font-semibold text-green-600 dark:text-green-400 ${isSyncing ? 'animate-pulse' : ''}`}>
+                              ${marketValue.toLocaleString()}
+                            </span>
+                          );
                         }
+                        return (
+                          <span className="text-gray-400 dark:text-gray-500 text-xs">
+                            {isSyncing ? (
+                              <div className="flex items-center space-x-1">
+                                <div className="animate-spin rounded-full h-3 w-3 border-b border-blue-600"></div>
+                                <span>Calculating...</span>
+                              </div>
+                            ) : (
+                              '?'
+                            )}
+                          </span>
+                        );
                       })()}
                     </td>
                     <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-900 dark:text-white">
-                      {nftService.getClubName(player)}
+                      {getClubName(player)}
                     </td>
                   </tr>
                 ))}
@@ -687,6 +1006,21 @@ const AgencyPage: React.FC = () => {
                     </nav>
                   </div>
                 </div>
+              </div>
+            )}
+            
+            {/* Export to Excel Button */}
+            {players.length > 0 && (
+              <div className="mt-6 mb-6 ml-6 flex justify-start">
+                <button
+                  onClick={exportToExcel}
+                  className="inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors duration-200"
+                >
+                  <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                  Export to Excel
+                </button>
               </div>
             )}
             </>

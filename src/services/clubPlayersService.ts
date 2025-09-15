@@ -96,15 +96,20 @@ export interface ClubPlayer {
 }
 
 class ClubPlayersService {
-  private cache = new Map<string, ClubPlayer[]>();
-  private readonly CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+  private cache = new Map<string, { data: ClubPlayer[]; timestamp: number }>();
+  private readonly CACHE_DURATION = 60 * 60 * 1000; // 1 hour
+
+  private isCacheValid(timestamp: number): boolean {
+    return Date.now() - timestamp < this.CACHE_DURATION;
+  }
 
   async fetchPlayersForClub(clubId: string): Promise<ClubPlayer[]> {
     const cacheKey = `club_players_${clubId}`;
     const cached = this.cache.get(cacheKey);
     
-    if (cached) {
-      return cached;
+    if (cached && this.isCacheValid(cached.timestamp)) {
+      console.log(`🎯 CACHE HIT: Using cached club players data for ${cacheKey}`);
+      return cached.data;
     }
 
     try {
@@ -114,13 +119,9 @@ class ClubPlayersService {
 
       const players = response.data;
       
-      // Cache the result
-      this.cache.set(cacheKey, players);
-      
-      // Clear cache after duration
-      setTimeout(() => {
-        this.cache.delete(cacheKey);
-      }, this.CACHE_DURATION);
+      // Cache the result with timestamp
+      this.cache.set(cacheKey, { data: players, timestamp: Date.now() });
+      console.log(`🚀 CACHE MISS: Fetched club players data from API for ${cacheKey}`);
 
       return players;
     } catch (error) {

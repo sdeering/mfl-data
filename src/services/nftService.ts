@@ -69,7 +69,7 @@ class NFTService {
   private config: NFTServiceConfig;
   private cache: Map<string, MFLPlayer[]> = new Map();
   private cacheExpiry: Map<string, number> = new Map();
-  private readonly CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+  private readonly CACHE_DURATION = 60 * 60 * 1000; // 1 hour
 
   constructor(config: NFTServiceConfig = {}) {
     this.config = {

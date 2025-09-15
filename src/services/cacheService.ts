@@ -13,7 +13,20 @@ class CacheService {
 
   // Generate a cache key from URL and parameters
   private generateKey(url: string, params?: Record<string, any>): string {
-    const urlObj = new URL(url);
+    // Handle relative URLs by converting them to absolute URLs
+    let absoluteUrl: string;
+    if (url.startsWith('/')) {
+      // Relative URL - use current origin
+      absoluteUrl = `${window.location.origin}${url}`;
+    } else if (url.startsWith('http://') || url.startsWith('https://')) {
+      // Already absolute URL
+      absoluteUrl = url;
+    } else {
+      // Assume it's a relative URL and add origin
+      absoluteUrl = `${window.location.origin}/${url}`;
+    }
+    
+    const urlObj = new URL(absoluteUrl);
     
     // Add query parameters to the key
     if (params) {

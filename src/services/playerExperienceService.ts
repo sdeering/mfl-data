@@ -2,7 +2,7 @@ import type { PlayerExperienceHistory, PlayerExperienceEntry } from '../types/pl
 
 class PlayerExperienceService {
   private cache = new Map<string, PlayerExperienceHistory>();
-  private readonly CACHE_DURATION = 10 * 60 * 1000; // 10 minutes (experience data changes less frequently)
+  private readonly CACHE_DURATION = 60 * 60 * 1000; // 1 hour (experience data changes less frequently)
 
   async fetchPlayerExperienceHistory(playerId: string): Promise<PlayerExperienceHistory> {
     const cacheKey = `player_experience_${playerId}`;
