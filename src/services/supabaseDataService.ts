@@ -51,8 +51,8 @@ class SupabaseDataService {
         const { data, error } = await supabase
           .from(TABLES.MARKET_VALUES)
           .select('*')
-          .eq('data->wallet_address', walletAddress)
-          .order('data->estimatedValue', { ascending: false })
+          .eq('data->>wallet_address', walletAddress)
+          .order('data->>estimatedValue', { ascending: false })
 
         if (error) {
           // Check if it's a table not found error
