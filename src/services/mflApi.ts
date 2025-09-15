@@ -165,6 +165,7 @@ interface RequestOptions {
   body?: Record<string, unknown>;
   timeout?: number;
   retries?: number;
+  signal?: AbortSignal;
 }
 
 class HTTPClient {
@@ -251,11 +252,16 @@ class HTTPClient {
     endpoint: string,
     options: RequestOptions
   ): Promise<T> {
-    const { method, headers, body, timeout } = options;
+    const { method, headers, body, timeout, signal } = options;
     const url = `${MFL_API_CONFIG.baseUrl}${endpoint}`;
 
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), timeout);
+
+    // Combine abort signals if both are provided
+    const combinedSignal = signal ? 
+      AbortSignal.any([controller.signal, signal]) : 
+      controller.signal;
 
     try {
       const response = await fetch(url, {
@@ -266,7 +272,7 @@ class HTTPClient {
           ...headers,
         },
         body: body ? JSON.stringify(body) : undefined,
-        signal: controller.signal,
+        signal: combinedSignal,
       });
 
       clearTimeout(timeoutId);
@@ -328,9 +334,17 @@ class HTTPClient {
 
 export class MFLAPIService {
   private httpClient: HTTPClient;
+  private abortSignal?: AbortSignal;
 
   constructor() {
     this.httpClient = new HTTPClient();
+  }
+
+  /**
+   * Set abort signal for all requests
+   */
+  setAbortSignal(signal?: AbortSignal): void {
+    this.abortSignal = signal;
   }
 
   // ============================================================================
@@ -342,7 +356,8 @@ export class MFLAPIService {
    */
   async getPlayer(playerId: MFLPlayerId): Promise<MFLPlayer> {
     const response = await this.httpClient.request<MFLPlayerResponse>(
-      `/players/${playerId}`
+      `/players/${playerId}`,
+      { signal: this.abortSignal }
     );
     return response.player;
   }

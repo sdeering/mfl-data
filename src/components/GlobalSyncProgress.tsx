@@ -5,19 +5,19 @@ import { supabaseSyncService, type SyncProgress } from '../services/supabaseSync
 
 interface GlobalSyncProgressProps {
   isVisible: boolean
+  isSyncing: boolean
   onClose: () => void
 }
 
-export const GlobalSyncProgress: React.FC<GlobalSyncProgressProps> = ({ isVisible, onClose }) => {
+export const GlobalSyncProgress: React.FC<GlobalSyncProgressProps> = ({ isVisible, isSyncing, onClose }) => {
   const [progress, setProgress] = useState<SyncProgress[]>([])
-  const [isSyncing, setIsSyncing] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [isMinimized, setIsMinimized] = useState(false)
 
   // Debug logging
   useEffect(() => {
-    console.log('GlobalSyncProgress visibility changed:', isVisible)
-  }, [isVisible])
+    console.log('GlobalSyncProgress visibility changed:', { isVisible, isSyncing, progress: progress.length })
+  }, [isVisible, isSyncing, progress])
   const [hasInitialized, setHasInitialized] = useState(false)
 
   useEffect(() => {
@@ -25,7 +25,6 @@ export const GlobalSyncProgress: React.FC<GlobalSyncProgressProps> = ({ isVisibl
       setIsLoading(true)
       setHasInitialized(false)
       setProgress([])
-      setIsSyncing(false)
       setIsMinimized(false)
       return
     }
@@ -89,7 +88,6 @@ export const GlobalSyncProgress: React.FC<GlobalSyncProgressProps> = ({ isVisibl
       }
       
       const syncing = supabaseSyncService.isSyncInProgress()
-      setIsSyncing(syncing)
       
       // If sync is not in progress and we have no progress data, hide the component
       if (!syncing && currentProgress.length === 0 && hasInitialized) {
@@ -100,16 +98,40 @@ export const GlobalSyncProgress: React.FC<GlobalSyncProgressProps> = ({ isVisibl
     return () => clearInterval(interval)
   }, [isVisible, hasInitialized, onClose])
 
-  // Don't show if not visible, still loading initial data, or no relevant progress to show
-  if (!isVisible || isLoading) return null
+  // Debug logging for conditional rendering
+  console.log('GlobalSyncProgress render check:', { 
+    isVisible, 
+    isLoading, 
+    progressLength: progress.length, 
+    isSyncing, 
+    hasInitialized 
+  })
+
+  // Don't show if not visible or still loading initial data
+  if (!isVisible || isLoading) {
+    console.log('GlobalSyncProgress: Not showing - not visible or loading')
+    return null
+  }
   
-  // Don't show if we have no progress data and no active sync
-  if (progress.length === 0 && !isSyncing) return null
+  // If manually triggered (isVisible is true), always show the component
+  // This ensures the sync dialog appears immediately when user clicks sync
+  if (isVisible) {
+    console.log('GlobalSyncProgress: Showing - manually triggered (isVisible=true)')
+  } else {
+    // Don't show if we have no progress data and no active sync (for auto-sync)
+    if (progress.length === 0 && !isSyncing && hasInitialized) {
+      console.log('GlobalSyncProgress: Not showing - no progress and not syncing')
+      return null
+    }
+  }
   
   // Don't show if all sync items are 100% complete (unless there are errors)
   const allCompleted = progress.length > 0 && progress.every(p => p.progress === 100 && p.status === 'completed')
   const hasErrors = progress.some(p => p.status === 'failed')
-  if (allCompleted && !hasErrors) return null
+  if (allCompleted && !hasErrors) {
+    console.log('GlobalSyncProgress: Not showing - all completed')
+    return null
+  }
 
   const totalProgress = progress.length > 0 
     ? Math.round(progress.reduce((sum, p) => sum + p.progress, 0) / progress.length)
@@ -162,6 +184,10 @@ export const GlobalSyncProgress: React.FC<GlobalSyncProgressProps> = ({ isVisibl
                 onClick={() => {
                   supabaseSyncService.stopSync()
                   setIsMinimized(true)
+                  // Close the progress display after a short delay
+                  setTimeout(() => {
+                    onClose()
+                  }, 1000)
                 }}
                 className="px-3 py-1 text-xs bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
                 title="Stop Sync"
@@ -216,75 +242,86 @@ export const GlobalSyncProgress: React.FC<GlobalSyncProgressProps> = ({ isVisibl
 
             {/* Individual Progress Items */}
             <div className="space-y-2 max-h-48 overflow-y-auto">
-          {progress
-            .sort((a, b) => {
-              // Sort by status priority: in_progress first, then pending, then completed, then failed
-              const statusOrder = { 'in_progress': 0, 'pending': 1, 'completed': 2, 'failed': 3 }
-              const aOrder = statusOrder[a.status as keyof typeof statusOrder] ?? 4
-              const bOrder = statusOrder[b.status as keyof typeof statusOrder] ?? 4
-              
-              if (aOrder !== bOrder) {
-                return aOrder - bOrder
-              }
-              
-              // If same status, sort by progress (higher progress first for completed items)
-              if (a.status === 'completed' && b.status === 'completed') {
-                return b.progress - a.progress
-              }
-              
-              // For other statuses, sort by progress (lower progress first)
-              return a.progress - b.progress
-            })
-            .map((item, index) => (
-            <div 
-              key={`${item.dataType}-${index}`} 
-              className="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-800 rounded-lg transition-all duration-300"
-            >
-              <div className="flex items-center space-x-3 flex-1">
-                <div className="flex items-center space-x-2">
-                  {item.status === 'in_progress' && (
-                    <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-600"></div>
-                  )}
-                  {item.status === 'completed' && (
-                    <div className="h-3 w-3 rounded-full bg-green-500"></div>
-                  )}
-                  {item.status === 'failed' && (
-                    <div className="h-3 w-3 rounded-full bg-red-500"></div>
-                  )}
-                  {item.status === 'pending' && (
-                    <div className="h-3 w-3 rounded-full bg-gray-400"></div>
-                  )}
+              {showLoadingState ? (
+                <div className="flex items-center justify-center p-4">
+                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mr-3"></div>
+                  <span className="text-sm text-gray-600 dark:text-gray-400">Starting sync...</span>
                 </div>
-                
-                <div className="flex-1">
-                  <div className="flex items-center space-x-2">
-                    <span className="text-sm font-medium text-gray-900 dark:text-white capitalize">
-                      {item.dataType.replace(/_/g, ' ')}
-                    </span>
-                  </div>
-                  <div className="text-xs text-gray-600 dark:text-gray-400">
-                    {item.message}
-                  </div>
-                </div>
-              </div>
-              
-              <div className="flex items-center space-x-2">
-                <span className="text-xs text-gray-500 dark:text-gray-400">
-                  {item.progress}%
-                </span>
-                <div className="w-16 bg-gray-200 dark:bg-gray-700 rounded-full h-1">
-                  <div 
-                    className={`h-1 rounded-full transition-all duration-300 ${
-                      item.status === 'failed' ? 'bg-red-500' : 
-                      item.status === 'completed' ? 'bg-green-500' : 
-                      'bg-blue-500'
-                    }`}
-                    style={{ width: `${item.progress}%` }}
-                  />
-                </div>
-              </div>
-            </div>
-          ))}
+              ) : (
+                progress
+                  .sort((a, b) => {
+                    // Sort by status priority: in_progress first, then pending, then completed, then failed
+                    const statusOrder = { 'in_progress': 0, 'pending': 1, 'completed': 2, 'failed': 3 }
+                    const aOrder = statusOrder[a.status as keyof typeof statusOrder] ?? 4
+                    const bOrder = statusOrder[b.status as keyof typeof statusOrder] ?? 4
+                    
+                    if (aOrder !== bOrder) {
+                      return aOrder - bOrder
+                    }
+                    
+                    // If same status, sort by progress (higher progress first for completed items)
+                    if (a.status === 'completed' && b.status === 'completed') {
+                      return b.progress - a.progress
+                    }
+                    
+                    // For other statuses, sort by progress (lower progress first)
+                    return a.progress - b.progress
+                  })
+                  .map((item, index) => (
+                    <div 
+                      key={`${item.dataType}-${index}`} 
+                      className="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-800 rounded-lg transition-all duration-300"
+                    >
+                      <div className="flex items-center space-x-3 flex-1">
+                        <div className="flex items-center space-x-2">
+                          {item.status === 'in_progress' && (
+                            <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-600"></div>
+                          )}
+                          {item.status === 'completed' && (
+                            <div className="h-3 w-3 rounded-full bg-green-500"></div>
+                          )}
+                          {item.status === 'failed' && (
+                            <div className="h-3 w-3 rounded-full bg-red-500"></div>
+                          )}
+                          {item.status === 'pending' && (
+                            <div className="h-3 w-3 rounded-full bg-gray-400"></div>
+                          )}
+                          {item.status === 'cancelled' && (
+                            <div className="h-3 w-3 rounded-full bg-orange-500"></div>
+                          )}
+                        </div>
+                        
+                        <div className="flex-1">
+                          <div className="flex items-center space-x-2">
+                            <span className="text-sm font-medium text-gray-900 dark:text-white capitalize">
+                              {item.dataType.replace(/_/g, ' ')}
+                            </span>
+                          </div>
+                          <div className="text-xs text-gray-600 dark:text-gray-400">
+                            {item.message}
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <div className="flex items-center space-x-2">
+                        <span className="text-xs text-gray-500 dark:text-gray-400">
+                          {item.progress}%
+                        </span>
+                        <div className="w-16 bg-gray-200 dark:bg-gray-700 rounded-full h-1">
+                          <div 
+                            className={`h-1 rounded-full transition-all duration-300 ${
+                              item.status === 'failed' ? 'bg-red-500' : 
+                              item.status === 'completed' ? 'bg-green-500' : 
+                              item.status === 'cancelled' ? 'bg-orange-500' :
+                              'bg-blue-500'
+                            }`}
+                            style={{ width: `${item.progress}%` }}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  ))
+              )}
             </div>
 
             {/* Error Details */}

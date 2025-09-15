@@ -8,6 +8,10 @@ import { LoadingProvider } from '../contexts/LoadingContext';
 jest.mock('../services/mflApi');
 const mockMflApi = mflApi as jest.Mocked<typeof mflApi>;
 
+// Mock fetch for API calls
+global.fetch = jest.fn();
+const mockFetch = global.fetch as jest.MockedFunction<typeof fetch>;
+
 // Mock the wallet context
 jest.mock('../contexts/WalletContext', () => ({
   useWallet: () => ({
@@ -33,11 +37,33 @@ describe('Players Page Tests', () => {
   it('should render player page without breaking after Supabase migration', async () => {
     const mockPlayer = {
       id: 12345,
-      name: 'Test Player',
-      position: 'ST',
-      age: 25,
-      overall: 85,
-      // Add other player properties as needed
+      metadata: {
+        firstName: 'Test',
+        lastName: 'Player',
+        age: 25,
+        overall: 85,
+        pace: 80,
+        shooting: 85,
+        passing: 75,
+        dribbling: 80,
+        defense: 70,
+        physical: 75,
+        goalkeeping: 0,
+        positions: ['ST'],
+        retirementYears: 5,
+        nationalities: ['USA'],
+        height: 180,
+        preferredFoot: 'Right'
+      },
+      ownedBy: {
+        name: 'Test Agency',
+        walletAddress: '0x1234567890abcdef'
+      },
+      activeContract: {
+        club: {
+          name: 'Test Club'
+        }
+      }
     };
 
     mockMflApi.getPlayer.mockResolvedValue(mockPlayer);
@@ -75,11 +101,33 @@ describe('Players Page Tests', () => {
   it('should maintain all existing functionality', async () => {
     const mockPlayer = {
       id: 12345,
-      name: 'Test Player',
-      position: 'ST',
-      age: 25,
-      overall: 85,
-      // Add comprehensive player data
+      metadata: {
+        firstName: 'Test',
+        lastName: 'Player',
+        age: 25,
+        overall: 85,
+        pace: 80,
+        shooting: 85,
+        passing: 75,
+        dribbling: 80,
+        defense: 70,
+        physical: 75,
+        goalkeeping: 0,
+        positions: ['ST'],
+        retirementYears: 5,
+        nationalities: ['USA'],
+        height: 180,
+        preferredFoot: 'Right'
+      },
+      ownedBy: {
+        name: 'Test Agency',
+        walletAddress: '0x1234567890abcdef'
+      },
+      activeContract: {
+        club: {
+          name: 'Test Club'
+        }
+      }
     };
 
     mockMflApi.getPlayer.mockResolvedValue(mockPlayer);

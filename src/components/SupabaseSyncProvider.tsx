@@ -16,6 +16,7 @@ export const SupabaseSyncProvider: React.FC<SupabaseSyncProviderProps> = ({ chil
       {children}
       <GlobalSyncProgress 
         isVisible={isVisible}
+        isSyncing={isSyncing}
         onClose={closeProgress}
       />
     </>

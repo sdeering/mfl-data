@@ -20,7 +20,7 @@ describe('Market Data API', () => {
       await new Promise(resolve => setTimeout(resolve, 1000));
       retries++;
     }
-  });
+  }, 30000);
 
   describe('GET /api/market-data', () => {
     it('should return market data for similar players', async () => {

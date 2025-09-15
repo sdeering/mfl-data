@@ -50,7 +50,7 @@ export function calculateMarketValue(
   let recentSalesAverage = 0;
   
   // Calculate average from comparable listings
-  if (comparableListings.length > 0) {
+  if (comparableListings && comparableListings.length > 0) {
     // Filter out extreme outliers (prices more than 3x the median)
     const prices = comparableListings.map(listing => listing.price).sort((a, b) => a - b);
     const medianPrice = prices[Math.floor(prices.length / 2)];
@@ -70,7 +70,7 @@ export function calculateMarketValue(
   }
   
   // Calculate weighted average from recent sales (last 3 sales)
-  const recentSalesData = recentSales.slice(0, 3);
+  const recentSalesData = recentSales ? recentSales.slice(0, 3) : [];
   if (recentSalesData.length > 0) {
     const now = Date.now();
     const oneYearInMs = 365 * 24 * 60 * 60 * 1000;

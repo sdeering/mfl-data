@@ -91,7 +91,9 @@ export const useSupabaseSync = () => {
     
     // Show sync display if requested (for manual sync from agency page)
     if (showDisplay) {
+      console.log('🚀 Setting sync display visible and clearing progress')
       setIsVisible(true)
+      setProgress([]) // Clear any existing progress to show fresh state
     }
 
     try {

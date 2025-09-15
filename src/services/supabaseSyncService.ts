@@ -33,6 +33,7 @@ class SupabaseSyncService {
   private connectionAvailable = true
   private syncCancelled = false
   private onProgressCallback?: (progress: SyncProgress) => void
+  private abortController?: AbortController
 
   /**
    * Retry wrapper for async operations
@@ -47,11 +48,21 @@ class SupabaseSyncService {
     const delay = retryDelay ?? this.defaultRetryDelay
     
     for (let attempt = 1; attempt <= retries; attempt++) {
+      // Check for cancellation before each attempt
+      if (this.syncCancelled || this.abortController?.signal.aborted) {
+        throw new Error(`${operationName} cancelled by user`)
+      }
+      
       try {
         return await operation()
       } catch (error) {
         const isLastAttempt = attempt === retries
         const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+        
+        // Don't retry if cancelled
+        if (this.syncCancelled || this.abortController?.signal.aborted) {
+          throw new Error(`${operationName} cancelled by user`)
+        }
         
         console.warn(`${operationName} failed (attempt ${attempt}/${retries}):`, errorMessage)
         
@@ -59,8 +70,16 @@ class SupabaseSyncService {
           throw error
         }
         
-        // Wait before retrying
-        await new Promise(resolve => setTimeout(resolve, delay * attempt))
+        // Wait before retrying (but check for cancellation during wait)
+        await new Promise(resolve => {
+          const timeoutId = setTimeout(resolve, delay * attempt)
+          if (this.abortController?.signal) {
+            this.abortController.signal.addEventListener('abort', () => {
+              clearTimeout(timeoutId)
+              resolve(undefined)
+            })
+          }
+        })
       }
     }
     
@@ -1515,9 +1534,7 @@ class SupabaseSyncService {
    */
   cancelSync() {
     console.log('Cancelling sync...')
-    this.syncCancelled = true
-    this.isSyncing = false
-    this.currentProgress = []
+    this.stopSync() // Use stopSync to properly abort HTTP requests
   }
 
   /**
@@ -1533,6 +1550,12 @@ class SupabaseSyncService {
     this.syncCancelled = false
     this.currentProgress = []
     this.onProgressCallback = options.onProgress
+    
+    // Create AbortController for this sync session
+    this.abortController = new AbortController()
+    
+    // Set abort signal on mflApi for all HTTP requests
+    mflApi.setAbortSignal(this.abortController.signal)
 
     try {
       // Test connection first
@@ -1541,7 +1564,7 @@ class SupabaseSyncService {
         throw new Error('Cannot connect to data service. Please check your connection and try again.')
       }
       // Sync data types in order with retry logic
-      if (!this.syncCancelled) {
+      if (!this.syncCancelled && !this.abortController?.signal.aborted) {
         console.log('🔄 Starting user info sync')
         await this.withRetry(
           () => this.syncUserInfo(walletAddress, options),
@@ -1552,7 +1575,7 @@ class SupabaseSyncService {
         console.log('✅ User info sync completed')
       }
       
-      if (!this.syncCancelled) {
+      if (!this.syncCancelled && !this.abortController?.signal.aborted) {
         console.log('🔄 Starting club data sync')
         await this.withRetry(
           () => this.syncClubData(walletAddress, options),
@@ -1563,7 +1586,7 @@ class SupabaseSyncService {
         console.log('✅ Club data sync completed')
       }
       
-      if (!this.syncCancelled) {
+      if (!this.syncCancelled && !this.abortController?.signal.aborted) {
         console.log('🔄 Starting agency players sync')
         await this.withRetry(
           () => this.syncAgencyPlayers(walletAddress, options),
@@ -1574,7 +1597,7 @@ class SupabaseSyncService {
         console.log('✅ Agency players sync completed')
       }
       
-      if (!this.syncCancelled) {
+      if (!this.syncCancelled && !this.abortController?.signal.aborted) {
         console.log('🔄 Starting agency player market values sync')
         await this.withRetry(
           () => this.syncAgencyPlayerMarketValues(walletAddress, options),
@@ -1589,7 +1612,7 @@ class SupabaseSyncService {
       // This is more efficient than syncing all players at once
       console.log('ℹ️ Player data sync is handled on-demand, skipping in main sync sequence')
       
-      if (!this.syncCancelled) {
+      if (!this.syncCancelled && !this.abortController?.signal.aborted) {
         console.log('🔄 Starting matches data sync')
         await this.withRetry(
           () => this.syncMatchesData(walletAddress, options),
@@ -1600,7 +1623,7 @@ class SupabaseSyncService {
         console.log('✅ Matches data sync completed')
       }
       
-      if (!this.syncCancelled) {
+      if (!this.syncCancelled && !this.abortController?.signal.aborted) {
         console.log('🔄 Starting upcoming opposition sync')
         await this.withRetry(
           () => this.syncUpcomingOppositionData(walletAddress, options),
@@ -1611,7 +1634,7 @@ class SupabaseSyncService {
         console.log('✅ Upcoming opposition sync completed')
       }
       
-      if (!this.syncCancelled) {
+      if (!this.syncCancelled && !this.abortController?.signal.aborted) {
         console.log('🔄 Starting opponent matches sync in main sync sequence')
         await this.withRetry(
           () => this.syncOpponentMatchesData(walletAddress, options),
@@ -1623,7 +1646,7 @@ class SupabaseSyncService {
       }
 
       // Call completion callback only if not cancelled
-      if (!this.syncCancelled && options.onComplete) {
+      if (!this.syncCancelled && !this.abortController?.signal.aborted && options.onComplete) {
         options.onComplete()
       }
     } catch (error) {
@@ -1647,6 +1670,14 @@ class SupabaseSyncService {
     } finally {
       this.isSyncing = false
       this.onProgressCallback = undefined
+      
+      // Clean up abort controller
+      if (this.abortController) {
+        this.abortController = undefined
+      }
+      
+      // Clear abort signal from mflApi
+      mflApi.setAbortSignal(undefined)
     }
   }
 
@@ -1655,6 +1686,13 @@ class SupabaseSyncService {
    */
   getCurrentProgress(): SyncProgress[] {
     return [...this.currentProgress]
+  }
+
+  /**
+   * Get abort signal for HTTP requests
+   */
+  getAbortSignal(): AbortSignal | undefined {
+    return this.abortController?.signal
   }
 
   /**
@@ -1675,9 +1713,28 @@ class SupabaseSyncService {
    * Stop the current sync operation
    */
   stopSync(): void {
+    console.log('🛑 Stopping sync and aborting all requests...')
     this.syncCancelled = true
     this.isSyncing = false
+    this.currentProgress = []
+    
+    // Abort all ongoing HTTP requests
+    if (this.abortController) {
+      this.abortController.abort()
+      this.abortController = undefined
+    }
+    
     console.log('🛑 Sync stopped by user')
+    
+    // Notify any progress callbacks that sync was cancelled
+    if (this.onProgressCallback) {
+      this.onProgressCallback({
+        dataType: 'sync_cancelled',
+        status: 'cancelled',
+        progress: 0,
+        message: 'Sync cancelled by user'
+      })
+    }
   }
 
   /**

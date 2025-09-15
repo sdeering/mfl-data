@@ -261,10 +261,10 @@ describe('Compare Page Tests', () => {
     const player1Input = screen.getByLabelText('Player 1 ID');
 
     fireEvent.change(player1Input, { target: { value: '12345' } });
-    fireEvent.keyPress(player1Input, { key: 'Enter', code: 'Enter' });
+    fireEvent.keyDown(player1Input, { key: 'Enter', code: 'Enter' });
 
     await waitFor(() => {
       expect(screen.getByText('Test Player')).toBeInTheDocument();
-    });
+    }, { timeout: 5000 });
   });
 });

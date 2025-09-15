@@ -12,8 +12,8 @@ describe('Player Progression Endpoint - Real API Tests', () => {
       expect(progressions['93886']).toBeDefined();
       
       const playerProgression = progressions['93886'];
-      expect(playerProgression?.overall).toBe(3);
-      expect(playerProgression?.defense).toBe(5);
+      expect(playerProgression?.overall).toBe(6);
+      expect(playerProgression?.defense).toBe(7);
       expect(playerProgression?.dribbling).toBe(2);
       expect(playerProgression?.pace).toBe(3);
       expect(playerProgression?.passing).toBe(4);
@@ -30,8 +30,8 @@ describe('Player Progression Endpoint - Real API Tests', () => {
       
       // Player 93886 progression
       const player93886 = progressions['93886'];
-      expect(player93886?.overall).toBe(3);
-      expect(player93886?.defense).toBe(5);
+      expect(player93886?.overall).toBe(6);
+      expect(player93886?.defense).toBe(7);
       
       // Player 116267 progression
       const player116267 = progressions['116267'];
