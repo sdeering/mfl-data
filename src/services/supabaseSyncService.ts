@@ -1109,7 +1109,39 @@ class SupabaseSyncService {
       let processedPlayers = 0
       console.log(`🔍 Starting market value calculation loop for ${playersToProcess.length} players (highest rated first)`)
 
+      // Check for existing market values to determine starting point
+      const sevenDaysAgo = new Date();
+      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+      
+      // Get all existing market values for this wallet to see which players are already processed
+      const { data: existingMarketValues, error: existingError } = await supabase
+        .from(TABLES.MARKET_VALUES)
+        .select('mfl_player_id, created_at')
+        .gte('created_at', sevenDaysAgo.toISOString());
+
+      const existingPlayerIds = new Set<number>();
+      if (existingMarketValues && !existingError) {
+        existingMarketValues.forEach(mv => {
+          existingPlayerIds.add(mv.mfl_player_id);
+        });
+        console.log(`📊 Found ${existingPlayerIds.size} players with recent market values, will skip them`);
+      }
+
+      // Find the starting index (first player without a recent market value)
+      let startIndex = 0;
       for (let i = 0; i < playersToProcess.length; i++) {
+        if (!existingPlayerIds.has(playersToProcess[i].mfl_player_id)) {
+          startIndex = i;
+          break;
+        }
+      }
+
+      if (startIndex > 0) {
+        console.log(`🔄 Resuming market value calculation from player ${startIndex + 1}/${playersToProcess.length} (${existingPlayerIds.size} already processed)`);
+        this.updateProgress(dataType, SYNC_STATUS.IN_PROGRESS, 50 + (startIndex / playersToProcess.length) * 45, `Resuming from player ${startIndex + 1}/${playersToProcess.length}...`);
+      }
+
+      for (let i = startIndex; i < playersToProcess.length; i++) {
         const player = playersToProcess[i]
         const progress = 50 + (i / playersToProcess.length) * 45
         
@@ -1127,26 +1159,8 @@ class SupabaseSyncService {
         this.updateProgress(dataType, SYNC_STATUS.IN_PROGRESS, Math.round(progress), `Calculating market value for ${playerMetadata.firstName} ${playerMetadata.lastName} (${i + 1}/${playersToProcess.length})...`)
         
         try {
-          console.log(`💰 Checking market value for ${playerMetadata.firstName} ${playerMetadata.lastName} (${i + 1}/${playersToProcess.length})`)
+          console.log(`💰 Calculating market value for ${playerMetadata.firstName} ${playerMetadata.lastName} (${i + 1}/${playersToProcess.length})`)
           const positionRatings = positionRatingsMap.get(player.mfl_player_id)
-
-          // Check database for existing market value first (7-day expiration)
-          const sevenDaysAgo = new Date();
-          sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-          
-          const { data: existingMarketValue, error: marketValueError } = await supabase
-            .from(TABLES.MARKET_VALUES)
-            .select('*')
-            .eq('mfl_player_id', player.mfl_player_id)
-            .gte('created_at', sevenDaysAgo.toISOString())
-            .single();
-
-          if (existingMarketValue && !marketValueError) {
-            const marketValue = existingMarketValue.data?.estimatedValue || existingMarketValue.data?.market_value;
-            console.log(`✅ Using existing market value for ${playerMetadata.firstName} ${playerMetadata.lastName}: $${marketValue?.toLocaleString() || 'N/A'} (created: ${existingMarketValue.created_at})`)
-            processedPlayers++
-            continue;
-          }
 
           // Check cache as fallback
           let marketValue = marketValueCache.get(player.mfl_player_id)
