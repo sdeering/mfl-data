@@ -501,6 +501,16 @@ const MatchesTacticsPage: React.FC = () => {
           <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
             All upcoming matches for your clubs in next 24 hours.
           </p>
+          <div className="mb-4">
+            <a 
+              href="https://mfldata.com/formation-meta" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 underline text-sm"
+            >
+              View formation meta →
+            </a>
+          </div>
           
           {/* Club Filter Pills */}
           {clubs.length > 0 && (
