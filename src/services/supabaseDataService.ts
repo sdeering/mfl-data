@@ -112,7 +112,7 @@ class SupabaseDataService {
         .order('last_synced', { ascending: false })
 
       // If wallet_address column doesn't exist, fall back to getting all clubs (old schema)
-      if (error && error.message?.includes('column "wallet_address" does not exist')) {
+      if (error && (error.message?.includes('column clubs.wallet_address does not exist') || error.message?.includes('column "wallet_address" does not exist'))) {
         console.log('⚠️ wallet_address column not found, falling back to old schema');
         const fallbackResult = await supabase
           .from(TABLES.CLUBS)
