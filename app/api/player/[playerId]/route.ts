@@ -3,10 +3,10 @@ import { mflApi } from '@/src/services/mflApi';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { playerId: string } }
+  { params }: { params: Promise<{ playerId: string }> }
 ) {
   try {
-    const { playerId } = params;
+    const { playerId } = await params;
     
     if (!playerId) {
       return NextResponse.json(
@@ -20,7 +20,7 @@ export async function GET(
     
     return NextResponse.json({
       success: true,
-      player
+      data: player
     });
   } catch (error) {
     console.error('Error fetching player data:', error);

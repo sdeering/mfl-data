@@ -286,7 +286,7 @@ const PlayerResultsPage: React.FC<PlayerResultsPageProps> = ({ propPlayerId, ini
         throw new Error(data.error || 'Failed to fetch player data');
       }
       
-      const player = data.player;
+      const player = data.data;
       setPlayer(player);
       
       // Add player to recent searches when successfully loaded

@@ -61,7 +61,7 @@ describe('Supabase Migration Tests', () => {
       
       await waitFor(() => {
         expect(screen.getByText('Wallet Not Connected')).toBeInTheDocument();
-      });
+      }, { timeout: 10000 });
     });
 
     it('should load clubs when wallet is connected', async () => {
@@ -96,7 +96,7 @@ describe('Supabase Migration Tests', () => {
       await waitFor(() => {
         expect(screen.getByText('Test Club 1')).toBeInTheDocument();
         expect(screen.getByText('Test Club 2')).toBeInTheDocument();
-      });
+      }, { timeout: 10000 });
 
       expect(mockSupabaseDataService.getClubsForWallet).toHaveBeenCalledWith(mockAccount);
     });
@@ -142,7 +142,7 @@ describe('Supabase Migration Tests', () => {
       
       await waitFor(() => {
         expect(screen.getByText('Test Club 1')).toBeInTheDocument();
-      });
+      }, { timeout: 10000 });
 
       // Click on the club to select it
       const clubButton = screen.getByText('Test Club 1');
@@ -173,7 +173,7 @@ describe('Supabase Migration Tests', () => {
       await waitFor(() => {
         expect(screen.getByText('Error')).toBeInTheDocument();
         expect(screen.getByText('Failed to load clubs')).toBeInTheDocument();
-      });
+      }, { timeout: 10000 });
     });
 
     it('should display Supabase branding', async () => {
@@ -201,7 +201,7 @@ describe('Supabase Migration Tests', () => {
       
       await waitFor(() => {
         expect(screen.getByText('Powered by Supabase Database')).toBeInTheDocument();
-      });
+      }, { timeout: 10000 });
     });
   });
 

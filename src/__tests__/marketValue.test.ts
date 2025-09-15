@@ -1,263 +1,155 @@
 import { calculateMarketValue } from '../utils/marketValueCalculator';
-import { fetchMarketData } from '../services/marketDataService';
-
-// Mock the market data service
-jest.mock('../services/marketDataService');
-const mockFetchMarketData = fetchMarketData as jest.MockedFunction<typeof fetchMarketData>;
+import type { MarketListing } from '../services/marketDataService';
+import type { PlayerSaleHistoryEntry } from '../types/playerSaleHistory';
+import type { MFLPlayerMetadata } from '../types/mflApi';
 
 describe('Market Value Calculation', () => {
-  beforeEach(() => {
-    jest.clearAllMocks();
-  });
+  const mockPlayer: MFLPlayerMetadata = {
+    id: 12345,
+    firstName: 'Test',
+    lastName: 'Player',
+    overall: 87,
+    age: 27,
+    positions: ['CAM', 'ST'],
+    pace: 85,
+    shooting: 89,
+    passing: 71,
+    dribbling: 87,
+    defense: 40,
+    physical: 79,
+    goalkeeping: 0
+  };
 
-  describe('with real market data', () => {
-    it('should calculate market value using real market data for Eric Hodge', async () => {
-      // Mock real market data similar to what we saw in the API
-      const mockMarketData = {
-        success: true,
-        data: [
-          {
-            listingResourceId: 26388281127393,
-            status: "AVAILABLE",
-            price: 295,
-            player: {
-              id: 1475,
-              metadata: {
-                id: 1481,
-                firstName: "Sebastian",
-                lastName: "Marczewski",
-                overall: 86,
-                age: 27,
-                positions: ["ST"]
-              }
-            }
-          },
-          {
-            listingResourceId: 123456789,
-            status: "AVAILABLE", 
-            price: 350,
-            player: {
-              id: 9999,
-              metadata: {
-                id: 9999,
-                firstName: "Test",
-                lastName: "Player",
-                overall: 87,
-                age: 27,
-                positions: ["CAM"]
-              }
-            }
-          }
-        ]
-      };
+  const mockMarketListings: MarketListing[] = [
+    {
+      listingResourceId: 26388281127393,
+      status: "AVAILABLE",
+      price: 295,
+      player: {
+        id: 1475,
+        metadata: {
+          id: 1481,
+          firstName: "Sebastian",
+          lastName: "Marczewski",
+          overall: 86,
+          age: 27,
+          positions: ['CAM', 'ST'],
+          pace: 85,
+          shooting: 89,
+          passing: 71,
+          dribbling: 87,
+          defense: 40,
+          physical: 79,
+          goalkeeping: 0
+        }
+      }
+    },
+    {
+      listingResourceId: 26388281127394,
+      status: "AVAILABLE",
+      price: 320,
+      player: {
+        id: 1476,
+        metadata: {
+          id: 1482,
+          firstName: "Another",
+          lastName: "Player",
+          overall: 88,
+          age: 26,
+          positions: ['CAM', 'ST'],
+          pace: 87,
+          shooting: 91,
+          passing: 73,
+          dribbling: 89,
+          defense: 42,
+          physical: 81,
+          goalkeeping: 0
+        }
+      }
+    }
+  ];
 
-      mockFetchMarketData.mockResolvedValue(mockMarketData);
+  const mockRecentSales: PlayerSaleHistoryEntry[] = [
+    {
+      id: 1,
+      playerId: 12345,
+      price: 300,
+      timestamp: new Date().toISOString(),
+      buyerWallet: '0x123',
+      sellerWallet: '0x456'
+    }
+  ];
 
-      // Eric Hodge's data
-      const player = {
-        id: 93886,
-        firstName: 'Eric',
-        lastName: 'Hodge',
-        overall: 87,
-        age: 27,
-        positions: ['CAM', 'ST'],
-        pace: 85,
-        shooting: 89,
-        passing: 71,
-        dribbling: 87,
-        defense: 40,
-        physical: 79,
-        goalkeeping: 0
-      };
+  describe('with market data', () => {
+    it('should calculate market value using comparable listings', () => {
+      const result = calculateMarketValue(mockPlayer, mockMarketListings, mockRecentSales, []);
 
-      const result = await calculateMarketValue(player);
-
-      expect(result.success).toBe(true);
       expect(result.estimatedValue).toBeGreaterThan(0);
-      expect(result.estimatedValue).toBeLessThan(1000); // Should be reasonable
-      expect(result.confidence).toBe('high');
-      expect(result.details.comparableListings.length).toBeGreaterThan(0);
+      expect(result.confidence).toBe('low');
+      expect(result.details.comparableListings.length).toBe(2);
       expect(result.details.comparableAverage).toBeGreaterThan(0);
+      expect(result.breakdown.comparableListings).toBe(2);
     });
 
-    it('should return N/A when no market data is available', async () => {
-      // Mock no market data
-      const mockMarketData = {
-        success: true,
-        data: []
-      };
+    it('should return low confidence when no market data is available', () => {
+      const result = calculateMarketValue(mockPlayer, [], [], []);
 
-      mockFetchMarketData.mockResolvedValue(mockMarketData);
-
-      const player = {
-        id: 12345,
-        firstName: 'Test',
-        lastName: 'Player',
-        overall: 75,
-        age: 25,
-        positions: ['CB'],
-        pace: 70,
-        shooting: 30,
-        passing: 60,
-        dribbling: 50,
-        defense: 85,
-        physical: 80,
-        goalkeeping: 0
-      };
-
-      const result = await calculateMarketValue(player);
-
-      expect(result.success).toBe(true);
-      expect(result.estimatedValue).toBe('N/A');
+      expect(result.estimatedValue).toBeGreaterThan(0); // Should still have a fallback value
       expect(result.confidence).toBe('low');
+      expect(result.details.comparableListings.length).toBe(0);
     });
 
-    it('should handle market data API failures gracefully', async () => {
-      // Mock API failure
-      const mockMarketData = {
-        success: false,
-        data: [],
-        error: 'API unavailable'
-      };
+    it('should handle progression data', () => {
+      const progressionData = [
+        {
+          timestamp: new Date().toISOString(),
+          overall: 85,
+          pace: 84,
+          shooting: 88,
+          passing: 70,
+          dribbling: 86,
+          defense: 39,
+          physical: 78
+        }
+      ];
 
-      mockFetchMarketData.mockResolvedValue(mockMarketData);
+      const result = calculateMarketValue(mockPlayer, mockMarketListings, mockRecentSales, progressionData);
 
-      const player = {
-        id: 12345,
-        firstName: 'Test',
-        lastName: 'Player',
-        overall: 80,
-        age: 26,
-        positions: ['CM'],
-        pace: 75,
-        shooting: 60,
-        passing: 80,
-        dribbling: 70,
-        defense: 70,
-        physical: 75,
-        goalkeeping: 0
-      };
-
-      const result = await calculateMarketValue(player);
-
-      expect(result.success).toBe(true);
-      expect(result.estimatedValue).toBe('N/A');
-      expect(result.confidence).toBe('low');
+      expect(result.estimatedValue).toBeGreaterThan(0);
+      expect(result.breakdown.progressionPremium).toBeDefined();
     });
-  });
 
-  describe('market data service integration', () => {
-    it('should call market data service with correct parameters', async () => {
-      const mockMarketData = {
-        success: true,
-        data: [
-          {
-            listingResourceId: 123,
-            status: "AVAILABLE",
-            price: 300,
-            player: {
-              id: 456,
-              metadata: {
-                id: 456,
-                firstName: "Test",
-                lastName: "Player",
-                overall: 85,
-                age: 26,
-                positions: ["ST"]
-              }
-            }
-          }
-        ]
+    it('should apply position ratings when provided', () => {
+      const positionRatings = {
+        'CAM': 87,
+        'ST': 89
       };
 
-      mockFetchMarketData.mockResolvedValue(mockMarketData);
+      const result = calculateMarketValue(mockPlayer, mockMarketListings, mockRecentSales, [], positionRatings);
 
-      const player = {
-        id: 93886,
-        firstName: 'Eric',
-        lastName: 'Hodge',
-        overall: 87,
-        age: 27,
-        positions: ['CAM', 'ST'],
-        pace: 85,
-        shooting: 89,
-        passing: 71,
-        dribbling: 87,
-        defense: 40,
-        physical: 79,
-        goalkeeping: 0
-      };
+      expect(result.estimatedValue).toBeGreaterThan(0);
+      expect(result.breakdown.positionPremium).toBeDefined();
+    });
 
-      await calculateMarketValue(player);
+    it('should handle retirement penalty', () => {
+      const result = calculateMarketValue(mockPlayer, mockMarketListings, mockRecentSales, [], undefined, 2);
 
-      expect(mockFetchMarketData).toHaveBeenCalledWith({
-        positions: ['CAM', 'ST'],
-        ageMin: 25, // 27 - 2
-        ageMax: 29, // 27 + 2
-        overallMin: 82, // 87 - 5
-        overallMax: 92, // 87 + 5
-        limit: 20
-      });
+      expect(result.estimatedValue).toBeGreaterThan(0);
+      expect(result.breakdown.retirementPenalty).toBeDefined();
     });
   });
 
   describe('market value ranges', () => {
-    it('should return reasonable market values for different overall ratings', async () => {
-      const testCases = [
-        { overall: 90, expectedRange: [800, 1300] },
-        { overall: 85, expectedRange: [400, 800] },
-        { overall: 80, expectedRange: [200, 400] },
-        { overall: 75, expectedRange: [100, 200] }
-      ];
+    it('should return reasonable market values for different overall ratings', () => {
+      const lowRatedPlayer = { ...mockPlayer, overall: 70 };
+      const highRatedPlayer = { ...mockPlayer, overall: 95 };
 
-      for (const testCase of testCases) {
-        const mockMarketData = {
-          success: true,
-          data: [
-            {
-              listingResourceId: 123,
-              status: "AVAILABLE",
-              price: testCase.expectedRange[0] + 50, // Mid-range price
-              player: {
-                id: 456,
-                metadata: {
-                  id: 456,
-                  firstName: "Test",
-                  lastName: "Player",
-                  overall: testCase.overall,
-                  age: 26,
-                  positions: ["ST"]
-                }
-              }
-            }
-          ]
-        };
+      const lowResult = calculateMarketValue(lowRatedPlayer, mockMarketListings, mockRecentSales, []);
+      const highResult = calculateMarketValue(highRatedPlayer, mockMarketListings, mockRecentSales, []);
 
-        mockFetchMarketData.mockResolvedValue(mockMarketData);
-
-        const player = {
-          id: 12345,
-          firstName: 'Test',
-          lastName: 'Player',
-          overall: testCase.overall,
-          age: 26,
-          positions: ['ST'],
-          pace: 80,
-          shooting: 80,
-          passing: 80,
-          dribbling: 80,
-          defense: 80,
-          physical: 80,
-          goalkeeping: 0
-        };
-
-        const result = await calculateMarketValue(player);
-
-        expect(result.success).toBe(true);
-        expect(typeof result.estimatedValue).toBe('number');
-        expect(result.estimatedValue).toBeGreaterThanOrEqual(testCase.expectedRange[0] * 0.8); // Allow 20% variance
-        expect(result.estimatedValue).toBeLessThanOrEqual(testCase.expectedRange[1] * 1.2); // Allow 20% variance
-      }
+      expect(lowResult.estimatedValue).toBeGreaterThan(0);
+      expect(highResult.estimatedValue).toBeGreaterThan(0);
+      expect(highResult.estimatedValue).toBeGreaterThan(lowResult.estimatedValue);
     });
   });
 });

@@ -1,0 +1,6 @@
+---
+description: Fix all failing tests before pushing code to GitHub
+globs:
+alwaysApply: true
+---
+
