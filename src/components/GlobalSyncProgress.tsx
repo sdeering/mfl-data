@@ -29,6 +29,14 @@ export const GlobalSyncProgress: React.FC<GlobalSyncProgressProps> = ({ isVisibl
       return
     }
 
+    // Auto-close after 5 seconds if manually triggered but no sync is active
+    const autoCloseTimeout = setTimeout(() => {
+      if (isVisible && !isSyncing && hasInitialized && progress.length === 0) {
+        console.log('🔄 Auto-closing sync progress - timeout (no active sync)')
+        onClose()
+      }
+    }, 5000)
+
     // Get initial sync status
     const fetchSyncStatus = async () => {
       try {
@@ -89,14 +97,27 @@ export const GlobalSyncProgress: React.FC<GlobalSyncProgressProps> = ({ isVisibl
       
       const syncing = supabaseSyncService.isSyncInProgress()
       
+      // Check if all items are completed and auto-close
+      const allCompleted = currentProgress.length > 0 && currentProgress.every(p => p.progress === 100 && p.status === 'completed')
+      const hasErrors = currentProgress.some(p => p.status === 'failed')
+      
       // If sync is not in progress and we have no progress data, hide the component
       if (!syncing && currentProgress.length === 0 && hasInitialized) {
         onClose()
       }
+      
+      // Auto-close when all items are completed (unless there are errors)
+      if (allCompleted && !hasErrors && hasInitialized) {
+        console.log('🔄 Auto-closing sync progress - all completed')
+        onClose()
+      }
     }, 1000)
 
-    return () => clearInterval(interval)
-  }, [isVisible, hasInitialized, onClose])
+    return () => {
+      clearInterval(interval)
+      clearTimeout(autoCloseTimeout)
+    }
+  }, [isVisible, hasInitialized, onClose, isSyncing, progress.length])
 
   // Debug logging for conditional rendering
   console.log('GlobalSyncProgress render check:', { 
@@ -286,9 +307,6 @@ export const GlobalSyncProgress: React.FC<GlobalSyncProgressProps> = ({ isVisibl
                           {item.status === 'pending' && (
                             <div className="h-3 w-3 rounded-full bg-gray-400"></div>
                           )}
-                          {item.status === 'cancelled' && (
-                            <div className="h-3 w-3 rounded-full bg-orange-500"></div>
-                          )}
                         </div>
                         
                         <div className="flex-1">
@@ -312,7 +330,6 @@ export const GlobalSyncProgress: React.FC<GlobalSyncProgressProps> = ({ isVisibl
                             className={`h-1 rounded-full transition-all duration-300 ${
                               item.status === 'failed' ? 'bg-red-500' : 
                               item.status === 'completed' ? 'bg-green-500' : 
-                              item.status === 'cancelled' ? 'bg-orange-500' :
                               'bg-blue-500'
                             }`}
                             style={{ width: `${item.progress}%` }}
