@@ -103,12 +103,25 @@ class SupabaseDataService {
     
     return this.getCachedData(cacheKey, async () => {
       console.log('🔍 Querying clubs table for wallet:', walletAddress);
-      // Get clubs from the database that were synced for this specific wallet
-      const { data, error } = await supabase
+      
+      // Try to query with wallet_address filter first (new schema)
+      let { data, error } = await supabase
         .from(TABLES.CLUBS)
         .select('*')
         .eq('wallet_address', walletAddress)
         .order('last_synced', { ascending: false })
+
+      // If wallet_address column doesn't exist, fall back to getting all clubs (old schema)
+      if (error && error.message?.includes('column "wallet_address" does not exist')) {
+        console.log('⚠️ wallet_address column not found, falling back to old schema');
+        const fallbackResult = await supabase
+          .from(TABLES.CLUBS)
+          .select('*')
+          .order('last_synced', { ascending: false })
+        
+        data = fallbackResult.data;
+        error = fallbackResult.error;
+      }
 
       if (error) {
         console.error('❌ Error querying clubs table:', error);

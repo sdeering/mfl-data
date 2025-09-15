@@ -1137,13 +1137,13 @@ class SupabaseSyncService {
           const { data: existingMarketValue, error: marketValueError } = await supabase
             .from(TABLES.MARKET_VALUES)
             .select('*')
-            .eq('player_id', player.mfl_player_id)
-            .eq('wallet_address', walletAddress)
+            .eq('mfl_player_id', player.mfl_player_id)
             .gte('created_at', sevenDaysAgo.toISOString())
             .single();
 
           if (existingMarketValue && !marketValueError) {
-            console.log(`✅ Using existing market value for ${playerMetadata.firstName} ${playerMetadata.lastName}: $${existingMarketValue.market_value.toLocaleString()} (created: ${existingMarketValue.created_at})`)
+            const marketValue = existingMarketValue.data?.estimatedValue || existingMarketValue.data?.market_value;
+            console.log(`✅ Using existing market value for ${playerMetadata.firstName} ${playerMetadata.lastName}: $${marketValue?.toLocaleString() || 'N/A'} (created: ${existingMarketValue.created_at})`)
             processedPlayers++
             continue;
           }
@@ -1262,14 +1262,17 @@ class SupabaseSyncService {
             console.log(`✅ Using cached market value for ${playerMetadata.firstName} ${playerMetadata.lastName}: $${marketValue.toLocaleString()}`)
           }
 
-          // Prepare market value data for database
+          // Prepare market value data for database (using correct table structure)
           const marketValueData = {
-            player_id: player.mfl_player_id,
-            wallet_address: walletAddress,
-            market_value: marketValue,
-            overall_rating: playerMetadata.overall,
-            positions: playerMetadata.positions,
-            last_calculated: new Date().toISOString()
+            mfl_player_id: player.mfl_player_id,
+            data: {
+              estimatedValue: marketValue,
+              overall_rating: playerMetadata.overall,
+              positions: playerMetadata.positions,
+              last_calculated: new Date().toISOString(),
+              wallet_address: walletAddress
+            },
+            last_synced: new Date().toISOString()
           }
 
           // Include position ratings if they were calculated successfully
@@ -1286,7 +1289,7 @@ class SupabaseSyncService {
               }
               return acc;
             }, {} as any)
-            marketValueData.position_ratings = processedRatings
+            marketValueData.data.position_ratings = processedRatings
             console.log(`🔍 Processed position ratings for ${playerMetadata.firstName} ${playerMetadata.lastName}:`, processedRatings)
           } else {
             console.log(`⚠️ No position ratings found for ${playerMetadata.firstName} ${playerMetadata.lastName}`)
@@ -1297,7 +1300,7 @@ class SupabaseSyncService {
           const { error: upsertError } = await supabase
             .from(TABLES.MARKET_VALUES)
             .upsert(marketValueData, {
-              onConflict: 'player_id'
+              onConflict: 'mfl_player_id'
             })
 
           if (upsertError) {
