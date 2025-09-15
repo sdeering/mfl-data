@@ -1490,6 +1490,7 @@ class SupabaseSyncService {
       // Prepare club data for database
       const clubData = clubs.map(club => ({
         mfl_club_id: club.club.id,
+        wallet_address: walletAddress,
         data: club,
         last_synced: new Date().toISOString()
       }))
@@ -1498,7 +1499,7 @@ class SupabaseSyncService {
       const { error } = await supabase
         .from(TABLES.CLUBS)
         .upsert(clubData, {
-          onConflict: 'mfl_club_id'
+          onConflict: 'mfl_club_id,wallet_address'
         })
 
       if (error) throw error

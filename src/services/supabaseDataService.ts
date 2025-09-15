@@ -103,10 +103,11 @@ class SupabaseDataService {
     
     return this.getCachedData(cacheKey, async () => {
       console.log('🔍 Querying clubs table for wallet:', walletAddress);
-      // Get all clubs from the database (they were synced for this wallet)
+      // Get clubs from the database that were synced for this specific wallet
       const { data, error } = await supabase
         .from(TABLES.CLUBS)
         .select('*')
+        .eq('wallet_address', walletAddress)
         .order('last_synced', { ascending: false })
 
       if (error) {
@@ -345,10 +346,11 @@ class SupabaseDataService {
           .limit(1)
           .maybeSingle(),
         
-        // Clubs table doesn't have wallet_address, get latest
+        // Get latest clubs sync for this wallet
         supabase
           .from(TABLES.CLUBS)
           .select('last_synced')
+          .eq('wallet_address', walletAddress)
           .order('last_synced', { ascending: false })
           .limit(1)
           .maybeSingle(),
