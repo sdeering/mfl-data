@@ -1,7 +1,9 @@
--- Create market_values table if it doesn't exist
+-- Drop and recreate market_values table with correct structure
 -- This ensures the table has the correct structure for storing market value data
 
-CREATE TABLE IF NOT EXISTS market_values (
+DROP TABLE IF EXISTS market_values;
+
+CREATE TABLE market_values (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   mfl_player_id INTEGER UNIQUE NOT NULL,
   data JSONB,
