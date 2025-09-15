@@ -51,8 +51,8 @@ class SupabaseDataService {
         const { data, error } = await supabase
           .from(TABLES.MARKET_VALUES)
           .select('*')
-          .eq('wallet_address', walletAddress)
-          .order('market_value', { ascending: false })
+          .eq('data->wallet_address', walletAddress)
+          .order('data->estimatedValue', { ascending: false })
 
         if (error) {
           // Check if it's a table not found error
@@ -65,7 +65,18 @@ class SupabaseDataService {
         }
 
         console.log(`📊 Fetched market values from database: ${data?.length || 0} players`)
-        return data || []
+        
+        // Transform the data to match what the agency page expects
+        const transformedData = (data || []).map(item => ({
+          player_id: item.mfl_player_id, // Use mfl_player_id as player_id for compatibility
+          market_value: item.data?.estimatedValue || item.data?.market_value || 0,
+          position_ratings: item.data?.position_ratings || {},
+          confidence: 'medium', // Default confidence for cached values
+          created_at: item.created_at,
+          last_calculated: item.data?.last_calculated
+        }));
+
+        return transformedData
       } catch (error) {
         // If there's any other error (like network issues), return empty array instead of throwing
         console.warn('Warning: Could not fetch market values, returning empty array:', error)
