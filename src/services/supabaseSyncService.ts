@@ -7,6 +7,9 @@ import { calculateAllPositionOVRs } from '../utils/ruleBasedPositionCalculator'
 import { marketValueCache } from './marketValueCache'
 import { calculateMarketValue } from '../utils/marketValueCalculator'
 import { fetchMarketData } from './marketDataService'
+import { fetchPlayerSaleHistory } from './playerSaleHistoryService'
+import { fetchPlayerExperienceHistory, processProgressionData } from './playerExperienceService'
+import { fetchPlayerMatches } from './playerMatchesService'
 
 export interface SyncProgress {
   dataType: string
@@ -1121,7 +1124,7 @@ class SupabaseSyncService {
 
         const playerData = player.player.data
         const playerMetadata = playerData.metadata
-        this.updateProgress(dataType, SYNC_STATUS.IN_PROGRESS, Math.round(progress), `Calculating market value for ${playerMetadata.firstName} ${playerMetadata.lastName}...`)
+        this.updateProgress(dataType, SYNC_STATUS.IN_PROGRESS, Math.round(progress), `Calculating market value for ${playerMetadata.firstName} ${playerMetadata.lastName} (${i + 1}/${playersToProcess.length})...`)
         
         try {
           console.log(`💰 Checking market value for ${playerMetadata.firstName} ${playerMetadata.lastName} (${i + 1}/${playersToProcess.length})`)
@@ -1151,14 +1154,14 @@ class SupabaseSyncService {
           if (marketValue === null) {
             console.log(`🔍 Market value not in cache for ${playerMetadata.firstName} ${playerMetadata.lastName}, calculating...`)
             
-            // Fetch market data for comparison
+            // Fetch market data for comparison (same parameters as player page)
             const searchParams = {
               positions: playerMetadata.positions,
-              ageMin: Math.max(1, playerMetadata.age - 2),
-              ageMax: Math.min(50, playerMetadata.age + 2),
-              overallMin: Math.max(1, playerMetadata.overall - 5),
-              overallMax: Math.min(99, playerMetadata.overall + 5),
-              limit: 20
+              ageMin: Math.max(1, playerMetadata.age - 1),
+              ageMax: Math.min(50, playerMetadata.age + 1),
+              overallMin: Math.max(1, playerMetadata.overall - 1),
+              overallMax: Math.min(99, playerMetadata.overall + 1),
+              limit: 50
             }
             
             let marketData;
@@ -1181,6 +1184,13 @@ class SupabaseSyncService {
             if (marketData.success && marketData.data.length > 0) {
               // Use the comprehensive market value calculator
               
+              // Fetch additional data for accurate calculation (same as player page)
+              const [historyResponse, progressionResponse, matchesResponse] = await Promise.all([
+                fetchPlayerSaleHistory(player.mfl_player_id.toString()),
+                fetchPlayerExperienceHistory(player.mfl_player_id.toString()),
+                fetchPlayerMatches(player.mfl_player_id.toString())
+              ]);
+              
               // Convert position ratings to the format expected by the calculator
               const positionRatingsForMarketValue = positionRatings
                 ? Object.entries(positionRatings).reduce((acc, [position, result]) => {
@@ -1194,12 +1204,12 @@ class SupabaseSyncService {
               const marketValueEstimate = calculateMarketValue(
                 playerMetadata,
                 marketData.data,
-                [], // No recent sales data for now
-                [], // No progression data for now
+                historyResponse.success ? historyResponse.data : [],
+                progressionResponse.success ? processProgressionData(progressionResponse.data) : [],
                 positionRatingsForMarketValue,
                 playerMetadata.retirementYears,
-                0, // No match count for now
-                player.id
+                matchesResponse.success ? matchesResponse.data.length : undefined,
+                player.mfl_player_id
               )
 
               marketValue = Math.round(marketValueEstimate.estimatedValue)
