@@ -89,29 +89,32 @@ const PlayerResultsPage: React.FC<PlayerResultsPageProps> = ({ propPlayerId, ini
       console.log('💾 Storing player market data in database for player:', player.id, 'wallet:', walletAddress);
       
       const marketValueData = {
-        player_id: player.id,
-        wallet_address: walletAddress,
-        market_value: Math.round(marketValueEstimate.estimatedValue),
-        overall_rating: player.metadata.overall,
-        positions: player.metadata.positions,
-        position_ratings: Object.entries(positionRatings).reduce((acc, [position, result]) => {
-          if (result.success) {
-            acc[position] = {
-              rating: result.ovr,
-              familiarity: result.familiarity,
-              penalty: result.penalty,
-              difference: result.difference
-            };
-          }
-          return acc;
-        }, {} as any),
-        last_calculated: new Date().toISOString()
+        mfl_player_id: player.id,
+        data: {
+          estimatedValue: Math.round(marketValueEstimate.estimatedValue),
+          overall_rating: player.metadata.overall,
+          positions: player.metadata.positions,
+          position_ratings: Object.entries(positionRatings).reduce((acc, [position, result]) => {
+            if (result.success) {
+              acc[position] = {
+                rating: result.ovr,
+                familiarity: result.familiarity,
+                penalty: result.penalty,
+                difference: result.difference
+              };
+            }
+            return acc;
+          }, {} as any),
+          last_calculated: new Date().toISOString(),
+          wallet_address: walletAddress
+        },
+        last_synced: new Date().toISOString()
       };
 
       const { error } = await supabase
         .from(TABLES.MARKET_VALUES)
         .upsert(marketValueData, {
-          onConflict: 'player_id'
+          onConflict: 'mfl_player_id'
         });
 
       if (error) {
@@ -131,11 +134,30 @@ const PlayerResultsPage: React.FC<PlayerResultsPageProps> = ({ propPlayerId, ini
     try {
       console.log('🔄 Updating anonymous wallet addresses for player:', playerId);
       
+      // First get the current data
+      const { data: currentData, error: fetchError } = await supabase
+        .from(TABLES.MARKET_VALUES)
+        .select('data')
+        .eq('mfl_player_id', playerId)
+        .eq('data->>wallet_address', 'anonymous')
+        .single();
+
+      if (fetchError || !currentData) {
+        console.warn('⚠️ No anonymous market value found to update:', fetchError);
+        return;
+      }
+
+      // Update the wallet address in the data
+      const updatedData = {
+        ...currentData.data,
+        wallet_address: account
+      };
+
       const { error } = await supabase
         .from(TABLES.MARKET_VALUES)
-        .update({ wallet_address: account })
-        .eq('player_id', playerId)
-        .eq('wallet_address', 'anonymous');
+        .update({ data: updatedData })
+        .eq('mfl_player_id', playerId)
+        .eq('data->>wallet_address', 'anonymous');
 
       if (error) {
         console.warn('⚠️ Failed to update anonymous wallet address:', error);
