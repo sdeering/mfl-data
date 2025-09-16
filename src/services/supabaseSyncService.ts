@@ -1024,38 +1024,56 @@ class SupabaseSyncService {
       console.log(`📊 Found ${agencyPlayers.length} agency players for market value calculation`)
       this.updateProgress(dataType, SYNC_STATUS.IN_PROGRESS, 20, `Found ${agencyPlayers.length} agency players`)
 
-      // Step 2: Start backend sync job
-      this.updateProgress(dataType, SYNC_STATUS.IN_PROGRESS, 40, 'Starting backend market value sync...')
+      // Step 2: Check for existing sync jobs first
+      this.updateProgress(dataType, SYNC_STATUS.IN_PROGRESS, 30, 'Checking for existing sync jobs...')
       
       const playerIds = agencyPlayers.map(p => p.mfl_player_id.toString())
       const syncLimit = limit // No default limit for production
       
-      console.log(`🚀 Starting backend sync for ${playerIds.length} players${syncLimit ? ` (limited to ${syncLimit})` : ' (no limit)'}`)
+      // Check if there's already a sync in progress for this wallet
+      const existingJobsResponse = await fetch(`/api/sync/player-market-values?walletAddress=${walletAddress}`)
+      const existingJobsData = await existingJobsResponse.json()
       
-      const response = await fetch('/api/sync/player-market-values', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          walletAddress,
-          playerIds,
-          forceRecalculate: true,
-          limit: syncLimit
+      let jobId: string
+      let isResumed = false
+      
+      if (existingJobsData.success && existingJobsData.activeJobs.length > 0) {
+        // Resume existing job
+        const existingJob = existingJobsData.activeJobs[0]
+        jobId = existingJob.jobId
+        isResumed = true
+        console.log(`🔄 Resuming existing sync job ${jobId} for wallet ${walletAddress}`)
+        this.updateProgress(dataType, SYNC_STATUS.IN_PROGRESS, 40, `Resuming existing sync (${existingJob.progress}/${existingJob.total})...`)
+      } else {
+        // Start new sync job
+        this.updateProgress(dataType, SYNC_STATUS.IN_PROGRESS, 40, 'Starting backend market value sync...')
+        console.log(`🚀 Starting new backend sync for ${playerIds.length} players${syncLimit ? ` (limited to ${syncLimit})` : ' (no limit)'}`)
+        
+        const response = await fetch('/api/sync/player-market-values', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            walletAddress,
+            playerIds,
+            forceRecalculate: false, // Respect 7-day cache by default
+            limit: syncLimit
+          })
         })
-      })
 
-      if (!response.ok) {
-        throw new Error(`Backend sync failed: ${response.statusText}`)
+        if (!response.ok) {
+          throw new Error(`Backend sync failed: ${response.statusText}`)
+        }
+
+        const responseData = await response.json()
+        jobId = responseData.jobId
+        console.log(`✅ Backend sync job started: ${jobId}`)
       }
-
-      const result = await response.json()
-      console.log('✅ Backend sync started:', result)
       
-      this.updateProgress(dataType, SYNC_STATUS.IN_PROGRESS, 60, `Backend sync started for ${result.limitedPlayers} players`)
+      this.updateProgress(dataType, SYNC_STATUS.IN_PROGRESS, 60, `Backend sync ${isResumed ? 'resumed' : 'started'} for ${playerIds.length} players`)
 
       // Step 3: Poll for completion
-      const jobId = result.jobId
       let completed = false
       let attempts = 0
       const maxAttempts = 300 // 5 minutes max (1 second intervals)

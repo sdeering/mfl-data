@@ -228,12 +228,12 @@ export async function getPlayerMarketValue(
   if (!forceRecalculate) {
     const cached = await getCachedMarketValue(playerId, walletAddress);
     if (cached) {
-      console.log(`📋 Using cached market value for player ${playerId}`);
+      console.log(`📋 Using cached market value for player ${playerId} (${cached.marketValue === 0 ? 'Unknown' : `$${cached.marketValue}`})`);
       return cached;
     }
   }
 
   // Calculate fresh value
-  console.log(`🔄 Calculating fresh market value for player ${playerId}`);
+  console.log(`🔄 Calculating fresh market value for player ${playerId} (forceRecalculate: ${forceRecalculate})`);
   return await calculatePlayerMarketValue(playerId, walletAddress);
 }

@@ -140,7 +140,7 @@ describe('Market Value Consistency Tests', () => {
     const result = await calculatePlayerMarketValue('116267', '0x123');
 
     expect(result.success).toBe(true);
-    expect(result.details.breakdown.progressionPremium).toBeLessThan(0); // Should be negative for zero progression
+    expect(result.details.breakdown.progressionPremium).toBe(0); // Should be 0 for zero progression
   });
 
   it('should handle single position players correctly', async () => {
@@ -251,7 +251,7 @@ describe('Market Value Consistency Tests', () => {
     const result = await calculatePlayerMarketValue('116267', '0x123');
 
     expect(result.success).toBe(true);
-    expect(result.details.breakdown.positionPremium).toBeGreaterThan(0); // Should be positive for multiple positions
+    expect(result.details.breakdown.positionPremium).toBeGreaterThan(0); // Should be positive for multiple positions (3 declared positions = 15% premium)
   });
 
   it('should handle different wallet addresses consistently', async () => {

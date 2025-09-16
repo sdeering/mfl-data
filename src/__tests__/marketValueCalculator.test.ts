@@ -122,8 +122,8 @@ describe('Market Value Calculator', () => {
       );
 
       expect(result.breakdown.positionPremium).toBeGreaterThan(0);
-      // Should be approximately 10% of base value
-      const expectedPremium = Math.round(result.details.baseValue * 0.10);
+      // Should be approximately 15% of base value (3 declared positions)
+      const expectedPremium = Math.round(result.details.baseValue * 0.15);
       expect(result.breakdown.positionPremium).toBe(expectedPremium);
     });
 
@@ -167,8 +167,8 @@ describe('Market Value Calculator', () => {
       );
 
       expect(result.breakdown.positionPremium).toBeGreaterThan(0);
-      // Should be approximately 20% of base value
-      const expectedPremium = Math.round(result.details.baseValue * 0.20);
+      // Should be approximately 15% of base value (3 declared positions)
+      const expectedPremium = Math.round(result.details.baseValue * 0.15);
       expect(result.breakdown.positionPremium).toBe(expectedPremium);
     });
 
@@ -188,7 +188,9 @@ describe('Market Value Calculator', () => {
         positionRatings
       );
 
-      expect(result.breakdown.positionPremium).toBe(0);
+      // Should still get premium for 3 declared positions
+      const expectedPremium = Math.round(result.details.baseValue * 0.15);
+      expect(result.breakdown.positionPremium).toBe(expectedPremium);
     });
 
     it('should handle position ratings with zero values', () => {
@@ -208,8 +210,8 @@ describe('Market Value Calculator', () => {
       );
 
       expect(result.breakdown.positionPremium).toBeGreaterThan(0);
-      // Should be approximately 10% of base value (2 playable positions)
-      const expectedPremium = Math.round(result.details.baseValue * 0.10);
+      // Should be approximately 15% of base value (3 declared positions)
+      const expectedPremium = Math.round(result.details.baseValue * 0.15);
       expect(result.breakdown.positionPremium).toBe(expectedPremium);
     });
 

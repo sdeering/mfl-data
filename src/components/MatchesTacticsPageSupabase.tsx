@@ -284,7 +284,15 @@ const MatchesTacticsPageSupabase: React.FC = () => {
       {/* Upcoming Matches */}
       {selectedClub && (
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-          <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">Upcoming Matches (Next 48 Hours)</h2>
+          <div className="flex items-center gap-2 mb-4">
+            <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Upcoming Matches (Next 48 Hours)</h2>
+            {loadingOpponents.total > 0 && (
+              <div className="flex items-center gap-2 px-3 py-1 bg-blue-100 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 rounded-full">
+                <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-600"></div>
+                <span className="text-xs text-blue-700 dark:text-blue-300 font-medium">Syncing</span>
+              </div>
+            )}
+          </div>
           
           {isLoading ? (
             <div className="flex items-center justify-center py-8">

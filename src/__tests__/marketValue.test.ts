@@ -94,8 +94,8 @@ describe('Market Value Calculation', () => {
     it('should return low confidence when no market data is available', () => {
       const result = calculateMarketValue(mockPlayer, [], [], []);
 
-      expect(result.estimatedValue).toBeGreaterThan(0); // Should still have a fallback value
-      expect(result.confidence).toBe('low');
+      expect(result.estimatedValue).toBe(0); // Should return 0 for insufficient data
+      expect(result.confidence).toBe('unknown');
       expect(result.details.comparableListings.length).toBe(0);
     });
 

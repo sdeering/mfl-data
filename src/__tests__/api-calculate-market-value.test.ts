@@ -2,7 +2,10 @@ import { POST } from '../../app/api/calculate-market-value/[playerId]/route';
 import { NextRequest } from 'next/server';
 
 // Mock the market value service
-jest.mock('../../../src/services/marketValueService');
+jest.mock('../../../src/services/marketValueService', () => ({
+  getPlayerMarketValue: jest.fn(),
+  getCachedMarketValue: jest.fn(),
+}));
 
 describe('/api/calculate-market-value/[playerId]', () => {
   beforeEach(() => {
