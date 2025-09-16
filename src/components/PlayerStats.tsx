@@ -126,7 +126,12 @@ export default function PlayerStats({ player, marketValueEstimate, progressionDa
     if (marketValueEstimate?.breakdown?.positionPremium && marketValueEstimate.breakdown.positionPremium > 0) {
       tags.push({
         text: 'Multiple positions',
-        type: 'positions'
+        type: 'positions',
+        icon: (
+          <svg className="w-4 h-4 mr-1" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M18 4l-4 4h3v6h-3l4 4 4-4h-3V8h3l-4-4zM6 8H3l4-4 4 4H8v6h3l-4 4-4-4h3V8z"/>
+          </svg>
+        )
       });
     }
     
@@ -197,9 +202,11 @@ export default function PlayerStats({ player, marketValueEstimate, progressionDa
     },
     {
       label: 'Market Value Est',
-      value: isCalculatingMarketValue ? 'Calculating...' : (marketValueEstimate ? `$${marketValueEstimate.estimatedValue.toLocaleString()}` : undefined),
+      value: isCalculatingMarketValue ? 'Calculating...' : (marketValueEstimate ? 
+        (marketValueEstimate.estimatedValue === 0 ? 'Unknown' : `$${marketValueEstimate.estimatedValue.toLocaleString()}`) 
+        : undefined),
       isMarketValue: true,
-      confidence: marketValueEstimate?.confidence,
+      confidence: marketValueEstimate?.estimatedValue === 0 ? undefined : marketValueEstimate?.confidence,
       breakdown: marketValueEstimate?.breakdown,
       details: marketValueEstimate?.details,
       isCalculating: isCalculatingMarketValue
@@ -343,7 +350,7 @@ export default function PlayerStats({ player, marketValueEstimate, progressionDa
                         {stat.value.map((tag: any, index: number) => (
                           <span 
                             key={index}
-                            className={`text-xs font-medium px-2 py-1 rounded-md ${
+                            className={`font-medium px-2 py-1 rounded-md flex items-center ${
                               tag.type === 'slow'
                                 ? 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200'
                                 : tag.type === 'fast'
@@ -358,8 +365,10 @@ export default function PlayerStats({ player, marketValueEstimate, progressionDa
                                 ? 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200'
                                 : 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200'
                             }`}
+                            style={{ fontSize: '16px' }}
                           >
-                            {tag.text}
+                            {tag.icon && tag.icon}
+                            <span>{tag.text}</span>
                           </span>
                         ))}
                       </div>

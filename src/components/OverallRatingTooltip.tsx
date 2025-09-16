@@ -1,19 +1,23 @@
 import React from 'react';
-import { getPlayerPreciseOverall } from '@/src/utils/overallRatingCalculator';
+import { getPlayerPreciseOverall, getPlayerPreciseOverallForPosition } from '@/src/utils/overallRatingCalculator';
+import { MFLPosition } from '@/src/types/positionOvr';
 
 interface OverallRatingTooltipProps {
   player: any;
   children: React.ReactNode;
   className?: string;
+  position?: MFLPosition;
 }
 
 export const OverallRatingTooltip: React.FC<OverallRatingTooltipProps> = ({ 
   player, 
   children, 
-  className = '' 
+  className = '',
+  position
 }) => {
-  const preciseOverall = getPlayerPreciseOverall(player);
-  const displayedOverall = player.metadata.overall;
+  const preciseOverall = position 
+    ? getPlayerPreciseOverallForPosition(player, position)
+    : getPlayerPreciseOverall(player);
 
   return (
     <div className={`relative group ${className}`}>

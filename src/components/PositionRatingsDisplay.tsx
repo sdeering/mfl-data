@@ -321,8 +321,8 @@ function PositionRatingItem({ rating, player, matchRating }: {
               {difference > 0 ? '+' : ''}{difference}
             </span>
           )}
-          {familiarity === 'PRIMARY' ? (
-            <OverallRatingTooltip player={player}>
+          {(familiarity === 'PRIMARY' || familiarity === 'SECONDARY') ? (
+            <OverallRatingTooltip player={player} position={position}>
               <div 
                 className={`font-bold px-3 py-2 rounded-lg shadow-sm ${tierColors.text} ${tierColors.bg} ${tierColors.border}`}
                 style={{ fontSize: '22px' }}

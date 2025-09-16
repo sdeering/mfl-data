@@ -115,7 +115,12 @@ export async function fetchMarketData(params: {
     console.log(`🔍 Fetching market data from: ${url}`);
     
     // Use our server-side API route to avoid CORS issues
-    const apiUrl = `/api/market-data?${new URLSearchParams({
+    // Handle both frontend (relative URL) and backend (absolute URL) contexts
+    const baseUrl = typeof window !== 'undefined' 
+      ? '' // Frontend context - use relative URL
+      : 'http://localhost:3000'; // Backend context - use absolute URL
+    
+    const apiUrl = `${baseUrl}/api/market-data?${new URLSearchParams({
       limit: limit.toString(),
       type: 'PLAYER',
       status: 'AVAILABLE',

@@ -5,7 +5,7 @@ import type { ProgressionDataPoint } from '../types/playerExperience';
 
 export interface MarketValueEstimate {
   estimatedValue: number;
-  confidence: 'high' | 'medium' | 'low';
+  confidence: 'high' | 'medium' | 'low' | 'unknown';
   breakdown: {
     comparableListings: number;
     recentSales: number;
@@ -107,39 +107,67 @@ export function calculateMarketValue(
     }
   }
   
-  // If no market data available, use enhanced fallback calculation
+  // Check if we have insufficient data for reliable market value estimation
+  // Return "Unknown" only if we have fewer than 3 comparable listings AND no recent sales
+  const hasInsufficientData = (comparableListings.length === 0 && recentSales.length === 0) || 
+                             (comparableListings.length < 3 && recentSales.length === 0);
+  
+  if (hasInsufficientData) {
+    // Return 0 for insufficient data - no random mock data
+    return {
+      estimatedValue: 0,
+      confidence: 'unknown',
+      breakdown: {
+        comparableListings: comparableListings.length,
+        recentSales: recentSales.length,
+        ageAdjustment: 0,
+        overallAdjustment: 0,
+        positionPremium: 0,
+        progressionPremium: 0,
+        retirementPenalty: 0,
+        newlyMintPremium: 0,
+        pacePenalty: 0,
+        pacePremium: 0,
+        heightAdjustment: 0,
+        totalAdjustments: 0
+      },
+      details: {
+        comparableListings,
+        recentSales: recentSalesData,
+        comparableAverage: 0,
+        recentSalesAverage: 0,
+        baseValue: 0
+      }
+    };
+  }
+  
+  // If no market data available, return 0 - no random mock data
   if (baseValue === 0) {
-    // Enhanced fallback calculation based on multiple factors
-    let fallbackBaseValue = 0;
-    
-    // Base value by overall rating tiers (more realistic curve)
-    if (player.overall >= 90) {
-      fallbackBaseValue = 800 + (player.overall - 90) * 100; // $800-$1300 for 90+
-    } else if (player.overall >= 85) {
-      fallbackBaseValue = 400 + (player.overall - 85) * 80; // $400-$800 for 85-89
-    } else if (player.overall >= 80) {
-      fallbackBaseValue = 200 + (player.overall - 80) * 40; // $200-$400 for 80-84
-    } else if (player.overall >= 75) {
-      fallbackBaseValue = 100 + (player.overall - 75) * 20; // $100-$200 for 75-79
-    } else if (player.overall >= 70) {
-      fallbackBaseValue = 50 + (player.overall - 70) * 10; // $50-$100 for 70-74
-    } else {
-      fallbackBaseValue = Math.max(25, player.overall * 3); // $25-$210 for <70
-    }
-    
-    // Age adjustment (younger players more valuable)
-    const ageAdjustment = player.age <= 25 ? fallbackBaseValue * 0.2 : 
-                         player.age <= 30 ? 0 : 
-                         player.age <= 35 ? fallbackBaseValue * -0.1 : fallbackBaseValue * -0.3;
-    
-    // Position premium (attacking positions more valuable)
-    const positionPremium = player.positions.some(pos => ['ST', 'CF', 'CAM', 'LW', 'RW'].includes(pos)) ? 
-                           fallbackBaseValue * 0.15 : 0;
-    
-    // Multiple positions bonus
-    const multiPositionBonus = player.positions.length > 1 ? fallbackBaseValue * 0.1 : 0;
-    
-    baseValue = fallbackBaseValue + ageAdjustment + positionPremium + multiPositionBonus;
+    return {
+      estimatedValue: 0,
+      confidence: 'unknown',
+      breakdown: {
+        comparableListings: comparableListings.length,
+        recentSales: recentSales.length,
+        ageAdjustment: 0,
+        overallAdjustment: 0,
+        positionPremium: 0,
+        progressionPremium: 0,
+        retirementPenalty: 0,
+        newlyMintPremium: 0,
+        pacePenalty: 0,
+        pacePremium: 0,
+        heightAdjustment: 0,
+        totalAdjustments: 0
+      },
+      details: {
+        comparableListings,
+        recentSales: recentSalesData,
+        comparableAverage: 0,
+        recentSalesAverage: 0,
+        baseValue: 0
+      }
+    };
   }
   
   // Round base value to whole number for display consistency
@@ -168,44 +196,20 @@ export function calculateMarketValue(
     totalAdjustments += overallAdjustment;
   }
   
-  // Position premium (dynamic based on calculated position ratings within 5 points of overall)
+  // Position premium (based on declared positions, not calculated ratings)
   let positionPremium = 0;
   
-  if (positionRatings) {
-    // Count positions where the calculated rating is within 6 points of overall
-    const playablePositions = Object.entries(positionRatings).filter(([position, rating]) => {
-      return rating > 0 && Math.abs((rating || 0) - (player.overall || 0)) <= 6;
-    });
-    
-    const playablePositionCount = playablePositions.length;
-    
-
-    
-    if (playablePositionCount > 1) {
-      // Position premium based on number of playable positions
-      if (playablePositionCount === 2) {
-        positionPremium = roundedBaseValue * 0.10; // +10% for 2 playable positions
-      } else if (playablePositionCount === 3) {
-        positionPremium = roundedBaseValue * 0.15; // +15% for 3 playable positions
-      } else if (playablePositionCount >= 4) {
-        positionPremium = roundedBaseValue * 0.20; // +20% for 4+ playable positions
-      }
-      
-      totalAdjustments += positionPremium;
+  // Use declared positions for position premium calculation
+  if (player.positions.length > 1) {
+    if (player.positions.length === 2) {
+      positionPremium = roundedBaseValue * 0.10; // +10% for 2 positions
+    } else if (player.positions.length === 3) {
+      positionPremium = roundedBaseValue * 0.15; // +15% for 3 positions
+    } else if (player.positions.length >= 4) {
+      positionPremium = roundedBaseValue * 0.20; // +20% for 4+ positions
     }
-  } else {
-    // Fallback to original logic if position ratings not available
-    if (player.positions.length > 1) {
-      if (player.positions.length === 2) {
-        positionPremium = roundedBaseValue * 0.10; // +10% for 2 positions
-      } else if (player.positions.length === 3) {
-        positionPremium = roundedBaseValue * 0.15; // +15% for 3 positions
-      } else if (player.positions.length >= 4) {
-        positionPremium = roundedBaseValue * 0.20; // +20% for 4+ positions
-      }
-      
-      totalAdjustments += positionPremium;
-    }
+    
+    totalAdjustments += positionPremium;
   }
   
 
@@ -219,16 +223,19 @@ export function calculateMarketValue(
                 const tenYearsAgo = currentAge - 10;
 
                 // Find progression points within the past 10 age years
-                const recentProgression = progressionData.filter(point => {
-                  const pointAge = point.age;
-                  return pointAge !== undefined && pointAge >= tenYearsAgo && pointAge <= currentAge;
-                });
+                const recentProgression = progressionData
+                  .filter(point => {
+                    const pointAge = point.age;
+                    return pointAge !== undefined && pointAge >= tenYearsAgo && pointAge <= currentAge;
+                  })
+                  .sort((a, b) => (a.age || 0) - (b.age || 0)); // Sort by age to ensure correct order
 
                 if (recentProgression.length >= 2) {
                   // Calculate overall progression over the period
                   const oldestPoint = recentProgression[0];
                   const newestPoint = recentProgression[recentProgression.length - 1];
                   const overallProgression = (newestPoint.overall || 0) - (oldestPoint.overall || 0);
+                  
                   
 
 

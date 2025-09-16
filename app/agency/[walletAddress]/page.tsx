@@ -1,38 +1,31 @@
-"use client";
+'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
-import { useWallet } from '../contexts/WalletContext';
+import { useParams } from 'next/navigation';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { supabaseDataService } from '../services/supabaseDataService';
-import { MFLPlayer } from '../types/mflApi';
-import { useSupabaseSync } from '../hooks/useSupabaseSync';
-import { GlobalSyncProgress } from './GlobalSyncProgress';
-import { OverallRatingTooltip } from './OverallRatingTooltip';
-import MarketValueSyncProgress from './MarketValueSyncProgress';
+import { supabaseDataService } from '../../../src/services/supabaseDataService';
+import { MFLPlayer } from '../../../src/types/mflApi';
+import { OverallRatingTooltip } from '../../../src/components/OverallRatingTooltip';
 import * as XLSX from 'xlsx';
 
-const AgencyPage: React.FC = () => {
-  const { isConnected, account } = useWallet();
-  const { startSync, isSyncing, isVisible: isSyncVisible, closeProgress } = useSupabaseSync();
+export default function DynamicAgencyPage() {
+  const params = useParams();
+  const router = useRouter();
+  const walletAddress = params.walletAddress as string;
+  
   const [players, setPlayers] = useState<MFLPlayer[]>([]);
   const [filteredPlayers, setFilteredPlayers] = useState<MFLPlayer[]>([]);
   const [displayedPlayers, setDisplayedPlayers] = useState<MFLPlayer[]>([]);
   const [marketValues, setMarketValues] = useState<Map<number, number>>(new Map());
   const [marketValueDetails, setMarketValueDetails] = useState<Map<number, any>>(new Map());
   const [searchTerm, setSearchTerm] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [sortField, setSortField] = useState<string>('overall');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
   const [currentPage, setCurrentPage] = useState(1);
-  const [hasCheckedWallet, setHasCheckedWallet] = useState(false);
-  const [hasAttemptedLoad, setHasAttemptedLoad] = useState(false);
-  const [refreshingPlayers, setRefreshingPlayers] = useState<Set<number>>(new Set());
-  const [syncJobId, setSyncJobId] = useState<string | null>(null);
+  const [playerCount, setPlayerCount] = useState(0);
   const playersPerPage = 50;
-  const router = useRouter();
-  const prevIsSyncingRef = useRef(false);
-  const hasAutoSyncedRef = useRef(false);
 
   // Helper functions for formatting player data
   const formatPlayerName = (player: MFLPlayer): string => {
@@ -106,7 +99,6 @@ const AgencyPage: React.FC = () => {
     );
   };
 
-  // Helper function to get sort value for a player
   const getSortValue = (player: MFLPlayer, field: string): string | number => {
     switch (field) {
       case 'name':
@@ -260,7 +252,7 @@ const AgencyPage: React.FC = () => {
 
     // Generate filename with timestamp
     const timestamp = new Date().toISOString().split('T')[0];
-    const filename = `agency-players-${timestamp}.xlsx`;
+    const filename = `agency-players-${walletAddress}-${timestamp}.xlsx`;
 
     // Save file
     XLSX.writeFile(wb, filename);
@@ -305,27 +297,26 @@ const AgencyPage: React.FC = () => {
     }
   };
 
-  // Redirect if not connected (with delay to allow wallet to initialize)
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setHasCheckedWallet(true);
-      if (!isConnected) {
-        router.push('/');
-      }
-    }, 1000); // 1 second delay
-
-    return () => clearTimeout(timer);
-  }, [isConnected, router]);
-
-  // Fetch market values for agency players
-  const fetchMarketValues = async () => {
-    if (!account) return;
+  // Fetch players for the specified wallet
+  const fetchPlayers = async () => {
+    if (!walletAddress) return;
+    
+    setIsLoading(true);
+    setError(null);
     
     try {
-      console.log('💰 Fetching market values from database for wallet:', account);
-      const marketValuesData = await supabaseDataService.getAgencyPlayerMarketValues(account);
-      console.log('💰 Fetched market values from database:', marketValuesData?.length || 0, 'players');
+      console.log(`🔍 Fetching players for wallet: ${walletAddress}`);
+      const playerData = await supabaseDataService.getAgencyPlayers(walletAddress);
+      console.log(`📊 Fetched ${playerData.length} players for wallet: ${walletAddress}`);
+      console.log('📊 Sample player data:', playerData[0]);
       
+      setPlayers(playerData);
+      setFilteredPlayers(playerData);
+      setPlayerCount(playerData.length);
+      
+      // Fetch market values
+      const marketValuesData = await supabaseDataService.getAgencyPlayerMarketValues(walletAddress);
+      console.log('📊 Market values data:', marketValuesData);
       if (marketValuesData && marketValuesData.length > 0) {
         const marketValuesMap = new Map<number, number>();
         const marketValueDetailsMap = new Map<number, any>();
@@ -338,7 +329,7 @@ const AgencyPage: React.FC = () => {
             marketValueDetailsMap.set(item.player_id, {
               market_value: item.market_value,
               position_ratings: item.position_ratings,
-              confidence: 'medium', // Default confidence for cached values
+              confidence: item.confidence || 'medium',
               breakdown: {
                 positionPremium: 0, // We don't store this in DB yet
                 progressionPremium: 0,
@@ -361,179 +352,28 @@ const AgencyPage: React.FC = () => {
           }
         });
         
+        console.log('📊 Market values map:', marketValuesMap);
+        console.log('📊 Market values map size:', marketValuesMap.size);
+        console.log('📊 Sample market value entry:', Array.from(marketValuesMap.entries())[0]);
         setMarketValues(marketValuesMap);
         setMarketValueDetails(marketValueDetailsMap);
       } else {
         setMarketValues(new Map());
         setMarketValueDetails(new Map());
       }
-    } catch (err) {
-      console.error('❌ Error fetching market values:', err);
-      // Don't set error state for market values as it's not critical
-    }
-  };
-
-  const fetchMFLPlayers = async () => {
-    if (!account) return;
-    
-    console.log('🔍 fetchMFLPlayers called for account:', account);
-    setIsLoading(true);
-    setError(null);
-    setHasAttemptedLoad(true);
-    
-    try {
-      // Use Supabase data service instead of MFL API
-      console.log('🔍 Fetching agency players from database...');
-      const playerData = await supabaseDataService.getAgencyPlayers(account);
-      console.log('📊 Fetched players from database:', playerData.length, 'players');
-      
-      if (playerData.length === 0) {
-        console.log('⚠️ No players found in database, this might be a cache issue');
-      }
-      
-      setPlayers(playerData);
-      setFilteredPlayers(playerData);
-      
-      // Fetch market values after players are loaded
-      await fetchMarketValues();
       
     } catch (error: any) {
-      console.error('❌ Error fetching players from database:', error);
-      setError('Failed to load your player collection from database. Please try again.');
+      console.error('❌ Error fetching players:', error);
+      setError(`Failed to load players for wallet ${walletAddress}. ${error.message}`);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleSyncPlayers = async () => {
-    if (!account) return;
-    
-    try {
-      await startSync(true, true); // Force refresh and show display
-    } catch (error) {
-      console.error('Error starting sync:', error);
-      setError('Failed to start sync. Please try again.');
-    }
-  };
-
-  // Function to start bulk market value sync for all players
-  const startMarketValueSync = async () => {
-    if (!account || players.length === 0) return;
-    
-    try {
-      console.log(`🔄 Starting market value sync for ${players.length} players...`);
-      
-      const response = await fetch('/api/sync/player-market-values', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          walletAddress: account,
-          playerIds: players.map(p => p.id.toString()),
-          forceRecalculate: true
-          // No limit - process all players for production
-        })
-      });
-      
-      if (!response.ok) {
-        throw new Error(`Failed to start market value sync: ${response.statusText}`);
-      }
-      
-      const result = await response.json();
-      
-      if (result.success && result.jobId) {
-        console.log(`✅ Market value sync started with job ID: ${result.jobId}`);
-        setSyncJobId(result.jobId);
-      } else {
-        console.error('❌ Failed to start market value sync:', result.error);
-      }
-      
-    } catch (error) {
-      console.error('❌ Error starting market value sync:', error);
-    }
-  };
-
-  // Function to handle sync completion
-  const handleSyncComplete = (results: Array<{ playerId: string; marketValue: number; success: boolean }>) => {
-    console.log('✅ Market value sync completed:', results);
-    
-    // Update market values for successful calculations
-    const newMarketValues = new Map(marketValues);
-    results.forEach(result => {
-      if (result.success) {
-        newMarketValues.set(parseInt(result.playerId), result.marketValue);
-      }
-    });
-    setMarketValues(newMarketValues);
-    
-    // Close the sync progress modal
-    setSyncJobId(null);
-  };
-
-  // Function to close sync progress
-  const handleCloseSync = () => {
-    setSyncJobId(null);
-  };
-
-
+  // Load players on component mount
   useEffect(() => {
-    if (isConnected && account) {
-      hasAutoSyncedRef.current = false; // Reset auto-sync flag for new account
-      fetchMFLPlayers();
-    }
-  }, [isConnected, account]);
-
-  // Auto-sync when no players are found (only if global sync is not already running)
-  useEffect(() => {
-    if (hasAttemptedLoad && !isLoading && !error && players.length === 0 && account && !isSyncing && !hasAutoSyncedRef.current) {
-      console.log('No players found, auto-syncing...');
-      hasAutoSyncedRef.current = true; // Prevent multiple auto-syncs
-      handleSyncPlayers();
-    }
-  }, [hasAttemptedLoad, isLoading, error, players.length, account, isSyncing]);
-
-  // Refetch players when sync completes
-  useEffect(() => {
-    // Check if sync just completed (was syncing, now not syncing)
-    if (hasAttemptedLoad && !isSyncing && prevIsSyncingRef.current && account) {
-      console.log('✅ Sync completed, clearing cache and refetching players...');
-      // Clear the agency players cache to ensure we get fresh data
-      supabaseDataService.clearCache(`agency_players_${account}`);
-      // Also clear market values cache
-      supabaseDataService.clearCache(`agency_market_values_${account}`);
-      fetchMFLPlayers();
-    }
-    
-    // Update previous sync state
-    prevIsSyncingRef.current = isSyncing;
-  }, [isSyncing, account, hasAttemptedLoad]);
-
-  // Refresh market values periodically during sync
-  useEffect(() => {
-    if (!isSyncing || !account) return;
-
-    const interval = setInterval(async () => {
-      try {
-        console.log('🔄 Refreshing market values during sync...');
-        const marketValuesData = await supabaseDataService.getAgencyPlayerMarketValues(account);
-        
-        if (marketValuesData && marketValuesData.length > 0) {
-          const marketValuesMap = new Map<number, number>();
-          marketValuesData.forEach((item: any) => {
-            marketValuesMap.set(item.player_id, item.market_value);
-          });
-          setMarketValues(marketValuesMap);
-          console.log(`💰 Updated market values for ${marketValuesData.length} players`);
-        }
-      } catch (error) {
-        console.warn('⚠️ Error refreshing market values during sync:', error);
-      }
-    }, 10000); // Refresh every 10 seconds during sync (reduced frequency)
-
-    return () => clearInterval(interval);
-  }, [isSyncing, account]);
-
+    fetchPlayers();
+  }, [walletAddress]);
 
   // Filter and sort players based on search term and sort settings
   useEffect(() => {
@@ -566,7 +406,7 @@ const AgencyPage: React.FC = () => {
     
     // Reset to first page when search term changes
     setCurrentPage(1);
-  }, [searchTerm, players, sortField, sortDirection]);
+  }, [searchTerm, players, sortField, sortDirection, marketValues]);
 
   // Update displayed players based on current page
   useEffect(() => {
@@ -576,26 +416,25 @@ const AgencyPage: React.FC = () => {
     setDisplayedPlayers(paginatedPlayers);
   }, [filteredPlayers, currentPage, playersPerPage]);
 
-  if (!isConnected) {
+  if (isLoading) {
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <div className="text-center">
-            <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">
-              My MFL Agency
-            </h1>
-            {!hasCheckedWallet ? (
-              <div className="flex items-center justify-center">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-                <span className="ml-2 text-lg text-gray-600 dark:text-gray-400">
-                  Checking wallet connection...
-                </span>
-              </div>
-            ) : (
-              <p className="text-lg text-gray-600 dark:text-gray-400">
-                Please connect your wallet to view your players
-              </p>
-            )}
+          <div className="flex items-center justify-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+            <span className="ml-2 text-gray-600 dark:text-gray-400">Loading players...</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
+            <strong>Error:</strong> {error}
           </div>
         </div>
       </div>
@@ -604,96 +443,23 @@ const AgencyPage: React.FC = () => {
 
   return (
     <div className="min-h-screen">
-      {/* Global Sync Progress - Show when syncing */}
-      <GlobalSyncProgress isVisible={isSyncVisible} onClose={closeProgress} isSyncing={isSyncing} />
-      
-      {/* Market Value Sync Progress */}
-      <MarketValueSyncProgress 
-        jobId={syncJobId} 
-        onComplete={handleSyncComplete}
-        onClose={handleCloseSync}
-      />
-      
       <div className="mb-8">
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-3">
             <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-              My MFL Agency ({filteredPlayers.length}{filteredPlayers.length !== players.length ? ` of ${players.length}` : ''} players)
+              Agency Players ({filteredPlayers.length}{filteredPlayers.length !== players.length ? ` of ${players.length}` : ''} players)
             </h1>
-            {isSyncing && (
-              <div className="flex items-center gap-2 px-3 py-1 bg-blue-100 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 rounded-full">
-                <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-600"></div>
-                <span className="text-xs text-blue-700 dark:text-blue-300 font-medium">Syncing</span>
-              </div>
-            )}
           </div>
         </div>
+        <p className="text-sm text-gray-600 dark:text-gray-400">
+          Wallet: <span className="font-mono text-sm">{walletAddress}</span>
+        </p>
         {totalPages > 1 && (
           <p className="text-sm text-gray-600 dark:text-gray-400">
             Showing {((currentPage - 1) * playersPerPage) + 1}-{Math.min(currentPage * playersPerPage, filteredPlayers.length)} of {filteredPlayers.length} players
           </p>
         )}
       </div>
-
-      {isLoading && (
-        <div className="flex items-center justify-center py-12">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-          <span className="ml-3 text-gray-600 dark:text-gray-400">Loading your players from database...</span>
-        </div>
-      )}
-
-      {error && (
-        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4 mb-6">
-          <p className="text-red-800 dark:text-red-200">{error}</p>
-          <button
-            onClick={fetchMFLPlayers}
-            className="mt-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
-          >
-            Try Again
-          </button>
-        </div>
-      )}
-
-      {!isLoading && !error && hasAttemptedLoad && players.length === 0 && !isSyncing && (
-        <div className="text-center py-12">
-          <div className="text-gray-400 dark:text-gray-600 mb-4">
-            <svg className="w-16 h-16 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z" />
-            </svg>
-          </div>
-          <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
-            No Players Found
-          </h3>
-          <p className="text-gray-600 dark:text-gray-400 mb-4">
-            No players found in your agency. Try syncing your data.
-          </p>
-          <button
-            onClick={handleSyncPlayers}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-          >
-            Sync Players
-          </button>
-        </div>
-      )}
-
-      {!isLoading && !error && hasAttemptedLoad && players.length === 0 && isSyncing && (
-        <div className="text-center py-12">
-          <div className="text-gray-400 dark:text-gray-600 mb-4">
-            <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-600 mx-auto"></div>
-          </div>
-          <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
-            Syncing Your Players
-          </h3>
-          <p className="text-gray-600 dark:text-gray-400">
-            Syncing your MFL data...
-          </p>
-          <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
-            <p className="text-sm text-blue-800 dark:text-white">
-              💡 You can navigate to other pages while data syncs in the background
-            </p>
-          </div>
-        </div>
-      )}
 
       {!isLoading && !error && players.length > 0 && (
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden">
@@ -715,6 +481,7 @@ const AgencyPage: React.FC = () => {
                   </div>
                 </div>
               </div>
+
           {displayedPlayers.length === 0 && searchTerm ? (
             <div className="text-center py-8">
               <div className="text-gray-400 dark:text-gray-600 mb-4">
@@ -872,28 +639,12 @@ const AgencyPage: React.FC = () => {
                     <div className="flex items-center justify-between">
                       <div className="flex items-center space-x-1">
                         <span>Value</span>
-                        {isSyncing && (
-                          <div className="animate-spin rounded-full h-3 w-3 border-b border-blue-600"></div>
-                        )}
                         {sortField === 'marketValue' && (
                           <span className="text-blue-600 dark:text-blue-400">
                             {sortDirection === 'asc' ? '↑' : '↓'}
                           </span>
                         )}
                       </div>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          startMarketValueSync();
-                        }}
-                        className="p-1 text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors cursor-pointer"
-                        title="Sync all market values"
-                        disabled={!account || players.length === 0}
-                      >
-                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                        </svg>
-                      </button>
                     </div>
                   </th>
                   <th 
@@ -976,7 +727,8 @@ const AgencyPage: React.FC = () => {
                     <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-900 dark:text-white">
                       {(() => {
                         const marketValue = marketValues.get(player.id);
-                        const isRefreshing = refreshingPlayers.has(player.id);
+                        console.log(`🔍 Looking up market value for player ${player.id}:`, marketValue);
+                        console.log(`🔍 Market values map has ${marketValues.size} entries`);
                         
                         if (marketValue) {
                           if (marketValue === 0) {
@@ -987,18 +739,9 @@ const AgencyPage: React.FC = () => {
                             );
                           }
                           return (
-                            <span className={`font-semibold text-green-600 dark:text-green-400 ${isSyncing ? 'animate-pulse' : ''}`}>
+                            <span className="font-semibold text-green-600 dark:text-green-400">
                               ${marketValue.toLocaleString()}
                             </span>
-                          );
-                        }
-                        
-                        if (isRefreshing) {
-                          return (
-                            <div className="flex items-center space-x-1">
-                              <div className="animate-spin rounded-full h-3 w-3 border-b border-blue-600"></div>
-                              <span className="text-xs text-blue-600 dark:text-blue-400">Calculating...</span>
-                            </div>
                           );
                         }
                         
@@ -1015,6 +758,7 @@ const AgencyPage: React.FC = () => {
               </tbody>
             </table>
             </div>
+
             
             {/* Pagination Controls */}
             {totalPages > 1 && (
@@ -1124,6 +868,4 @@ const AgencyPage: React.FC = () => {
       )}
     </div>
   );
-};
-
-export default AgencyPage;
+}

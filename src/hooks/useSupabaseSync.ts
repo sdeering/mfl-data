@@ -259,7 +259,7 @@ export const useSupabaseSync = () => {
     }
   }, [isConnected, account, isSyncing, clearAutoSyncLock])
 
-  // Update progress from service
+  // Update progress from service (reduced frequency to 3 seconds)
   useEffect(() => {
     if (!isVisible) return
 
@@ -275,7 +275,7 @@ export const useSupabaseSync = () => {
         }
         setIsSyncing(isSyncInProgress)
       }
-    }, 1000)
+    }, 3000) // Reduced from 1000ms to 3000ms (3 seconds)
 
     return () => clearInterval(interval)
   }, [isVisible])

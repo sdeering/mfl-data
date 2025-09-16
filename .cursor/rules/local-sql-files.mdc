@@ -1,0 +1,5 @@
+---
+description: Put all .sql files that you want the user to run to update the database schema into folder /SQL. Make sure you inform the user very clear you need him to run this SQL now.
+globs:
+alwaysApply: true
+---

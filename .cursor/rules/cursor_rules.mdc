@@ -51,3 +51,16 @@ alwaysApply: true
   - Include both DO and DON'T examples
   - Reference actual code over theoretical examples
   - Use consistent formatting across rules 
+
+  🚨 IMPORTANT:
+Always read MFLDATA.md before writing any code.
+After major features, update MFLDATA.md.
+Document the entire database schema here.
+Add new migrations to the same file.
+
+✅ What Goes in the File:
+→ Complete database schema
+→ API endpoints and their purposes
+→ Key business logic rules
+→ Current feature status
+→ Known issues/constraints

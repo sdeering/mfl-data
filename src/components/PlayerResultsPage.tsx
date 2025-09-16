@@ -3,9 +3,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { mflApi } from '../services/mflApi';
-import { fetchMarketData } from '../services/marketDataService';
-import { calculateMarketValue } from '../utils/marketValueCalculator';
-import { fetchPlayerSaleHistory } from '../services/playerSaleHistoryService';
+import { getPlayerMarketValue } from '../services/marketValueService';
 import { fetchPlayerExperienceHistory, processProgressionData } from '../services/playerExperienceService';
 import { fetchPlayerMatches } from '../services/playerMatchesService';
 import { calculateAllPositionOVRs } from '../utils/ruleBasedPositionCalculator';
@@ -70,139 +68,6 @@ const PlayerResultsPage: React.FC<PlayerResultsPageProps> = ({ propPlayerId, ini
   const [error, setError] = useState<string | null>(initialError || null);
   const { setIsLoading: setGlobalLoading } = useLoading();
 
-  // Check if market value data has expired (7 days)
-  const isMarketValueExpired = useCallback((lastCalculated: string): boolean => {
-    const now = new Date();
-    const calculatedDate = new Date(lastCalculated);
-    const daysDiff = (now.getTime() - calculatedDate.getTime()) / (1000 * 60 * 60 * 24);
-    return daysDiff > 7;
-  }, []);
-
-  // Store position ratings and market value in database
-  const storePlayerMarketData = useCallback(async (
-    player: MFLPlayer, 
-    positionRatings: any, 
-    marketValueEstimate: MarketValueEstimate
-  ) => {
-    try {
-      const walletAddress = account || 'anonymous';
-      console.log('💾 Storing player market data in database for player:', player.id, 'wallet:', walletAddress);
-      
-      const marketValueData = {
-        mfl_player_id: player.id,
-        data: {
-          estimatedValue: Math.round(marketValueEstimate.estimatedValue),
-          overall_rating: player.metadata.overall,
-          positions: player.metadata.positions,
-          position_ratings: Object.entries(positionRatings).reduce((acc, [position, result]) => {
-            if (result.success) {
-              acc[position] = {
-                rating: result.ovr,
-                familiarity: result.familiarity,
-                penalty: result.penalty,
-                difference: result.difference
-              };
-            }
-            return acc;
-          }, {} as any),
-          last_calculated: new Date().toISOString(),
-          wallet_address: walletAddress
-        },
-        last_synced: new Date().toISOString()
-      };
-
-      const { error } = await supabase
-        .from(TABLES.MARKET_VALUES)
-        .upsert(marketValueData, {
-          onConflict: 'mfl_player_id'
-        });
-
-      if (error) {
-        console.error('❌ Error storing player market data:', error);
-      } else {
-        console.log('✅ Successfully stored player market data for player:', player.id);
-      }
-    } catch (error) {
-      console.error('❌ Error in storePlayerMarketData:', error);
-    }
-  }, [account]);
-
-  // Update wallet addresses from 'anonymous' to actual wallet when user logs in
-  const updateAnonymousWalletAddresses = useCallback(async (playerId: number) => {
-    if (!account) return; // Only run when user is logged in
-    
-    try {
-      console.log('🔄 Updating anonymous wallet addresses for player:', playerId);
-      
-      // First get the current data
-      const { data: currentData, error: fetchError } = await supabase
-        .from(TABLES.MARKET_VALUES)
-        .select('data')
-        .eq('mfl_player_id', playerId)
-        .eq('data->>wallet_address', 'anonymous')
-        .single();
-
-      if (fetchError || !currentData) {
-        console.warn('⚠️ No anonymous market value found to update:', fetchError);
-        return;
-      }
-
-      // Update the wallet address in the data
-      const updatedData = {
-        ...currentData.data,
-        wallet_address: account
-      };
-
-      const { error } = await supabase
-        .from(TABLES.MARKET_VALUES)
-        .update({ data: updatedData })
-        .eq('mfl_player_id', playerId)
-        .eq('data->>wallet_address', 'anonymous');
-
-      if (error) {
-        console.warn('⚠️ Failed to update anonymous wallet address:', error);
-      } else {
-        console.log('✅ Updated anonymous wallet address to:', account);
-      }
-    } catch (error) {
-      console.warn('⚠️ Error updating anonymous wallet address:', error);
-    }
-  }, [account]);
-
-  // Check if we need to recalculate market value (expired or doesn't exist)
-  const shouldRecalculateMarketValue = useCallback(async (player: MFLPlayer): Promise<boolean> => {
-    try {
-      const walletAddress = account || 'anonymous';
-      const { data, error } = await supabase
-        .from(TABLES.MARKET_VALUES)
-        .select('last_calculated')
-        .eq('player_id', player.id)
-        .eq('wallet_address', walletAddress)
-        .maybeSingle();
-
-      if (error) {
-        console.log('Could not check existing market value, will recalculate:', error.message);
-        return true;
-      }
-
-      if (!data || !data.last_calculated) {
-        console.log('No existing market value found, will recalculate');
-        return true;
-      }
-
-      const isExpired = isMarketValueExpired(data.last_calculated);
-      if (isExpired) {
-        console.log('Market value has expired (7+ days old), will recalculate');
-        return true;
-      }
-
-      console.log('Market value is still valid (less than 7 days old), skipping recalculation');
-      return false;
-    } catch (error) {
-      console.log('Error checking market value expiration, will recalculate:', error);
-      return true;
-    }
-  }, [account, isMarketValueExpired]);
 
   const calculateMarketValueForPlayer = useCallback(async (player: MFLPlayer) => {
     try {
@@ -212,87 +77,48 @@ const PlayerResultsPage: React.FC<PlayerResultsPageProps> = ({ propPlayerId, ini
         return;
       }
 
-      // Always do fresh calculation to ensure consistency between popup and widget
-      console.log('🔄 Calculating fresh market value for player:', player.id);
+      console.log('🔄 Calculating market value for player:', player.id);
       setIsCalculatingMarketValue(true);
 
-      const [marketResponse, historyResponse, progressionResponse, matchesResponse] = await Promise.all([
-        fetchMarketData({
-          positions: player.metadata.positions,
-          ageMin: Math.max(1, player.metadata.age - 1),
-          ageMax: player.metadata.age + 1,
-          overallMin: Math.max(1, player.metadata.overall - 1),
-          overallMax: player.metadata.overall + 1,
-          limit: 50
-        }),
-        fetchPlayerSaleHistory(player.id.toString()),
-        fetchPlayerExperienceHistory(player.id.toString()),
-        fetchPlayerMatches(player.id.toString())
-      ]);
+      // Use the centralized market value calculation service
+      const result = await getPlayerMarketValue(
+        player.id.toString(),
+        account || 'anonymous',
+        false // Use cached value if available
+      );
 
-      // Calculate position ratings
-      const playerForOVR = {
-        id: player.id,
-        name: `${player.metadata.firstName} ${player.metadata.lastName}`,
-        attributes: {
-          PAC: player.metadata.pace,
-          SHO: player.metadata.shooting,
-          PAS: player.metadata.passing,
-          DRI: player.metadata.dribbling,
-          DEF: player.metadata.defense,
-          PHY: player.metadata.physical,
-          GK: player.metadata.goalkeeping || 0
-        },
-        positions: player.metadata.positions,
-        overall: player.metadata.overall
-      };
-      const positionRatingsResult = calculateAllPositionOVRs(playerForOVR);
-      const positionRatings = positionRatingsResult.results;
-      
-
-
-      // Store progression data and match count for tags
-      if (progressionResponse.success) {
-        setProgressionData(processProgressionData(progressionResponse.data));
-      }
-      if (matchesResponse.success) {
-        setMatchCount(matchesResponse.data.length);
-      }
-
-      if (marketResponse.success && player.metadata) {
-  
-        // Convert position ratings to the expected format
-        const positionRatingsForMarketValue = Object.entries(positionRatings).reduce((acc, [position, result]) => {
-          if (result.success) {
-            acc[position] = result.ovr;
-          }
-          return acc;
-        }, {} as { [position: string]: number });
-
-        const estimate = calculateMarketValue(
-          player.metadata,
-          marketResponse.data,
-          historyResponse.success ? historyResponse.data : [],
-          progressionResponse.success ? processProgressionData(progressionResponse.data) : [],
-          positionRatingsForMarketValue,
-          player.metadata.retirementYears,
-          matchesResponse.success ? matchesResponse.data.length : undefined,
-          player.id // Pass the actual player ID
-        );
-
-        setMarketValueEstimate(estimate);
+      if (result.success && result.details) {
+        // Convert the result to the expected format for the component
+        const estimate: MarketValueEstimate = {
+          estimatedValue: result.marketValue!,
+          confidence: result.confidence!,
+          breakdown: result.details.breakdown,
+          details: result.details.details
+        };
         
-        // Store the position ratings and market value in database
-        await storePlayerMarketData(player, positionRatings, estimate);
-      } else {
+        setMarketValueEstimate(estimate);
 
+        // Still need to fetch progression and match data for tags
+        const [progressionResponse, matchesResponse] = await Promise.all([
+          fetchPlayerExperienceHistory(player.id.toString()),
+          fetchPlayerMatches(player.id.toString())
+        ]);
+
+        if (progressionResponse.success) {
+          setProgressionData(processProgressionData(progressionResponse.data));
+        }
+        if (matchesResponse.success) {
+          setMatchCount(matchesResponse.data.length);
+        }
+      } else {
+        console.error('Failed to calculate market value:', result.error);
       }
     } catch (error) {
       console.error('Failed to calculate market value:', error);
     } finally {
       setIsCalculatingMarketValue(false);
     }
-  }, [storePlayerMarketData, shouldRecalculateMarketValue]);
+  }, [account]);
 
   const fetchPlayerData = useCallback(async (playerId: string) => {
     setIsLoading(true);
@@ -339,7 +165,7 @@ const PlayerResultsPage: React.FC<PlayerResultsPageProps> = ({ propPlayerId, ini
       setIsLoading(false);
       setGlobalLoading(false);
     }
-  }, [setGlobalLoading, calculateMarketValueForPlayer]);
+  }, [setGlobalLoading]);
 
   // Initialize player data on component mount
   useEffect(() => {
@@ -348,14 +174,8 @@ const PlayerResultsPage: React.FC<PlayerResultsPageProps> = ({ propPlayerId, ini
     if (currentPlayerId) {
       fetchPlayerData(currentPlayerId);
     }
-  }, [propPlayerId, searchParams, fetchPlayerData]);
+  }, [propPlayerId, searchParams]);
 
-  // Update anonymous wallet addresses when user logs in
-  useEffect(() => {
-    if (account && player) {
-      updateAnonymousWalletAddresses(player.id);
-    }
-  }, [account, player, updateAnonymousWalletAddresses]);
 
   // Loading state
   if (isLoading) {

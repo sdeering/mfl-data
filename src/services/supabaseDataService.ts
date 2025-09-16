@@ -46,13 +46,38 @@ class SupabaseDataService {
   async getAgencyPlayerMarketValues(walletAddress: string) {
     const cacheKey = `agency_market_values_${walletAddress}`
     
+    // Clear cache to ensure fresh data
+    this.clearCache(cacheKey);
+    
     return this.getCachedData(cacheKey, async () => {
       try {
+        console.log(`🔍 Querying market values for agency players for wallet: ${walletAddress}`)
+        
+        // First, get the agency players for this wallet
+        const { data: agencyPlayers, error: agencyError } = await supabase
+          .from(TABLES.AGENCY_PLAYERS)
+          .select('mfl_player_id')
+          .eq('wallet_address', walletAddress)
+
+        if (agencyError) {
+          console.error('Error fetching agency players:', agencyError)
+          throw agencyError
+        }
+
+        if (!agencyPlayers || agencyPlayers.length === 0) {
+          console.log(`📊 No agency players found for wallet: ${walletAddress}`)
+          return []
+        }
+
+        const playerIds = agencyPlayers.map(ap => ap.mfl_player_id)
+        console.log(`📊 Found ${playerIds.length} agency players for wallet: ${walletAddress}`)
+
+        // Now get market values only for these specific players
         const { data, error } = await supabase
           .from(TABLES.MARKET_VALUES)
           .select('*')
-          .eq('data->>wallet_address', walletAddress)
-          .order('data->>estimatedValue', { ascending: false })
+          .in('mfl_player_id', playerIds)
+          .order('data->>market_value', { ascending: false })
 
         if (error) {
           // Check if it's a table not found error
@@ -60,20 +85,21 @@ class SupabaseDataService {
             console.log('📊 Market values table does not exist yet, returning empty array')
             return []
           }
-          console.error('Error fetching agency player market values:', error)
+          console.error('Error fetching market values:', error)
           throw error
         }
 
-        console.log(`📊 Fetched market values from database: ${data?.length || 0} players`)
+        console.log(`📊 Raw market values query result:`, data)
+        console.log(`📊 Fetched market values from database: ${data?.length || 0} players for wallet: ${walletAddress}`)
         
         // Transform the data to match what the agency page expects
         const transformedData = (data || []).map(item => ({
-          player_id: item.mfl_player_id, // Use mfl_player_id as player_id for compatibility
-          market_value: item.data?.estimatedValue || item.data?.market_value || 0,
+          player_id: item.mfl_player_id, // This should match player.id from the players table
+          market_value: item.data?.market_value || 0,
           position_ratings: item.data?.position_ratings || {},
-          confidence: 'medium', // Default confidence for cached values
+          confidence: item.data?.confidence || 'medium',
           created_at: item.created_at,
-          last_calculated: item.data?.last_calculated
+          last_calculated: item.data?.calculated_at
         }));
 
         return transformedData
@@ -152,21 +178,50 @@ class SupabaseDataService {
   async getAgencyPlayers(walletAddress: string): Promise<MFLPlayer[]> {
     const cacheKey = `agency_players_${walletAddress}`
     
+    // Clear cache to ensure fresh data
+    this.clearCache(cacheKey);
+    
     return this.getCachedData(cacheKey, async () => {
-      // Join agency_players with players table to get player data
-      const { data, error } = await supabase
+      console.log(`🔍 Querying agency players for wallet: ${walletAddress}`)
+      
+      // First get the agency player IDs
+      const { data: agencyData, error: agencyError } = await supabase
         .from(TABLES.AGENCY_PLAYERS)
-        .select(`
-          mfl_player_id,
-          last_synced,
-          players!inner(data)
-        `)
+        .select('mfl_player_id, last_synced')
         .eq('wallet_address', walletAddress)
         .order('last_synced', { ascending: false })
 
-      if (error) throw error
+      if (agencyError) {
+        console.error('❌ Error querying agency players:', agencyError)
+        throw agencyError
+      }
 
-      return data?.map(item => item.players.data) || []
+      if (!agencyData || agencyData.length === 0) {
+        console.log(`📊 No agency players found for wallet: ${walletAddress}`)
+        return []
+      }
+
+      // Get the player IDs
+      const playerIds = agencyData.map(item => item.mfl_player_id)
+      
+      // Then get the player data
+      const { data: playersData, error: playersError } = await supabase
+        .from(TABLES.PLAYERS)
+        .select('*')
+        .in('mfl_player_id', playerIds)
+
+      if (playersError) {
+        console.error('❌ Error querying players data:', playersError)
+        throw playersError
+      }
+
+      console.log(`📊 Fetched agency players from database: ${agencyData?.length || 0} players`)
+      console.log(`📊 Fetched player data: ${playersData?.length || 0} players`)
+      
+      const players = playersData?.map(player => player.data) || []
+      console.log(`📊 Mapped players data:`, players.length, 'players')
+      
+      return players
     })
   }
 

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import SearchBar from './SearchBar';
 import ThemeToggle from './ThemeToggle';
@@ -13,6 +13,9 @@ export const Header: React.FC = () => {
   const pathname = usePathname();
   const { isLoading } = useLoading();
   const { isConnected } = useWallet();
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isHydrated, setIsHydrated] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
 
   // Extract player ID from current path
   const getCurrentPlayerId = () => {
@@ -27,6 +30,40 @@ export const Header: React.FC = () => {
     } else {
       router.push('/compare');
     }
+  };
+
+  // Handle hydration
+  useEffect(() => {
+    setIsHydrated(true);
+  }, []);
+
+  // Close menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setIsMenuOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
+
+  // Menu items
+  const menuItems = [
+    { label: 'Agency (Players)', path: '/agency' },
+    { label: 'Clubs', path: '/clubs' },
+    { label: 'Matches', path: '/matches' },
+    { label: 'Players Compare', path: '/compare' },
+    { label: 'Upcoming Match Tactics', path: '/matches/tactics' },
+    { label: 'Useful MFL Resources', path: '/resources' }
+  ];
+
+  const handleMenuClick = (path: string) => {
+    router.push(path);
+    setIsMenuOpen(false);
   };
 
 
@@ -46,34 +83,55 @@ export const Header: React.FC = () => {
               <h1 className="text-xl font-bold text-gray-900 dark:text-white">MFL Data</h1>
             </button>
             
-            {/* Navigation Links - Only show when logged in */}
-            {isConnected && (
-              <nav className="hidden lg:flex items-center space-x-6">
-                <button 
-                  onClick={() => router.push('/agency')}
-                  className="text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors cursor-pointer"
-                >
-                  Agency
-                </button>
-                <button 
-                  onClick={() => router.push('/clubs')}
-                  className="text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors cursor-pointer"
-                >
-                  Clubs
-                </button>
-                <button 
-                  onClick={() => router.push('/matches')}
-                  className="text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors cursor-pointer"
-                >
-                  Matches
-                </button>
-                <button 
-                  onClick={() => router.push('/matches/tactics')}
-                  className="text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors cursor-pointer"
-                >
-                  Tactics
-                </button>
-              </nav>
+            {/* Navigation Dropdown - Only show when logged in and hydrated */}
+            {isHydrated ? (
+              isConnected && (
+                <div className="relative" ref={menuRef}>
+                  <button
+                    onClick={() => setIsMenuOpen(!isMenuOpen)}
+                    className="flex items-center space-x-2 text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors cursor-pointer"
+                  >
+                    <span>Menu</span>
+                    <svg 
+                      className={`w-4 h-4 transition-transform ${isMenuOpen ? 'rotate-180' : ''}`} 
+                      fill="none" 
+                      stroke="currentColor" 
+                      viewBox="0 0 24 24"
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </button>
+                  
+                  {/* Dropdown Menu */}
+                  {isMenuOpen && (
+                    <div className="absolute top-full left-0 mt-2 w-64 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-50">
+                      <div className="py-2">
+                        {menuItems.map((item, index) => (
+                          <button
+                            key={index}
+                            onClick={() => handleMenuClick(item.path)}
+                            className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors ${
+                              pathname === item.path 
+                                ? 'text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20' 
+                                : 'text-gray-700 dark:text-gray-300'
+                            }`}
+                          >
+                            {item.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )
+            ) : (
+              // Placeholder to maintain layout during hydration
+              <div className="flex items-center space-x-2 text-gray-600 dark:text-gray-400 opacity-0">
+                <span>Menu</span>
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </div>
             )}
             
 
@@ -86,7 +144,7 @@ export const Header: React.FC = () => {
                   onClick={handleCompareClick}
                   className="px-3 py-2 text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors cursor-pointer"
                 >
-                  Compare
+                  Compare vs Player
                 </button>
               </div>
             )}
@@ -134,7 +192,7 @@ export const Header: React.FC = () => {
                 onClick={handleCompareClick}
                 className="px-3 py-2 text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors cursor-pointer text-sm"
               >
-                Compare
+                Compare vs Player
               </button>
             </div>
           </div>

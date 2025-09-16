@@ -995,9 +995,109 @@ class SupabaseSyncService {
   private async syncAgencyPlayerMarketValues(walletAddress: string, options: SyncOptions = {}, limit?: number) {
     const dataType = 'agency_player_market_values'
     
-    // Track market data API failures
-    let marketDataApiFailures = 0;
-    const maxMarketDataFailures = 3; // Skip market data after 3 failures
+    // NEW BACKEND SYNC IMPLEMENTATION
+    try {
+      console.log('🔄 Starting agency player market values sync for wallet:', walletAddress)
+      this.updateProgress(dataType, SYNC_STATUS.IN_PROGRESS, 0, 'Loading agency players...')
+      
+      // Step 1: Get all agency players
+      console.log('🔍 Fetching agency players for market value calculation...')
+      const { data: agencyPlayers, error: agencyError } = await supabase
+        .from(TABLES.AGENCY_PLAYERS)
+        .select(`
+          *,
+          player:players(*)
+        `)
+        .eq('wallet_address', walletAddress)
+
+      if (agencyError) {
+        console.error('❌ Error fetching agency players:', agencyError)
+        throw agencyError
+      }
+
+      if (!agencyPlayers || agencyPlayers.length === 0) {
+        console.log('ℹ️ No agency players found for market value calculation')
+        this.updateProgress(dataType, SYNC_STATUS.COMPLETED, 100, 'No agency players found')
+        return
+      }
+
+      console.log(`📊 Found ${agencyPlayers.length} agency players for market value calculation`)
+      this.updateProgress(dataType, SYNC_STATUS.IN_PROGRESS, 20, `Found ${agencyPlayers.length} agency players`)
+
+      // Step 2: Start backend sync job
+      this.updateProgress(dataType, SYNC_STATUS.IN_PROGRESS, 40, 'Starting backend market value sync...')
+      
+      const playerIds = agencyPlayers.map(p => p.mfl_player_id.toString())
+      const syncLimit = limit // No default limit for production
+      
+      console.log(`🚀 Starting backend sync for ${playerIds.length} players${syncLimit ? ` (limited to ${syncLimit})` : ' (no limit)'}`)
+      
+      const response = await fetch('/api/sync/player-market-values', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          walletAddress,
+          playerIds,
+          forceRecalculate: true,
+          limit: syncLimit
+        })
+      })
+
+      if (!response.ok) {
+        throw new Error(`Backend sync failed: ${response.statusText}`)
+      }
+
+      const result = await response.json()
+      console.log('✅ Backend sync started:', result)
+      
+      this.updateProgress(dataType, SYNC_STATUS.IN_PROGRESS, 60, `Backend sync started for ${result.limitedPlayers} players`)
+
+      // Step 3: Poll for completion
+      const jobId = result.jobId
+      let completed = false
+      let attempts = 0
+      const maxAttempts = 300 // 5 minutes max (1 second intervals)
+      
+      while (!completed && attempts < maxAttempts) {
+        await new Promise(resolve => setTimeout(resolve, 1000)) // Wait 1 second
+        attempts++
+        
+        try {
+          const statusResponse = await fetch(`/api/sync/player-market-values?jobId=${jobId}`)
+          if (statusResponse.ok) {
+            const status = await statusResponse.json()
+            
+            const progress = 60 + (status.percentage * 0.4) // 60-100% range
+            this.updateProgress(dataType, SYNC_STATUS.IN_PROGRESS, Math.round(progress), status.currentPlayer || `Processing ${status.progress}/${status.total} players`)
+            
+            if (status.status === 'completed') {
+              console.log('✅ Backend market value sync completed:', status.results)
+              this.updateProgress(dataType, SYNC_STATUS.COMPLETED, 100, `Market value sync completed for ${status.results.filter((r: any) => r.success).length} players`)
+              completed = true
+            } else if (status.status === 'failed') {
+              throw new Error(`Backend sync failed: ${status.error}`)
+            }
+          }
+        } catch (error) {
+          console.warn('⚠️ Error polling sync status:', error)
+        }
+      }
+      
+      if (!completed) {
+        throw new Error('Backend sync timed out')
+      }
+
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+      console.error('❌ Error in syncAgencyPlayerMarketValues:', error)
+      this.updateProgress(dataType, SYNC_STATUS.FAILED, 0, 'Failed to sync agency player market values', errorMessage)
+      throw error
+    }
+    
+    // OLD FRONTEND SYNC IMPLEMENTATION - COMMENTED OUT
+    /*
     
     try {
       console.log('🔄 Starting agency player market values sync for wallet:', walletAddress)
@@ -1339,6 +1439,7 @@ class SupabaseSyncService {
       this.updateProgress(dataType, SYNC_STATUS.FAILED, 0, 'Failed to sync agency player market values', errorMessage)
       throw error
     }
+    */
   }
 
   /**

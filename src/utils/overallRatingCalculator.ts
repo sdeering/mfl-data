@@ -82,3 +82,38 @@ export function getPlayerPreciseOverall(player: any): string {
   
   return formatPreciseOverallRating(attributes);
 }
+
+/**
+ * Get the precise overall rating for a specific position
+ */
+export function getPlayerPreciseOverallForPosition(player: any, position: MFLPosition): string {
+  const { pace, shooting, passing, dribbling, defense, physical, goalkeeping, positions } = player.metadata;
+  
+  // Create a player object for the position calculator
+  const playerForOVR = {
+    id: 0, // Not needed for calculation
+    name: '', // Not needed for calculation
+    positions: positions as MFLPosition[],
+    attributes: {
+      PAS: passing,
+      SHO: shooting,
+      DEF: defense,
+      DRI: dribbling,
+      PAC: pace,
+      PHY: physical,
+      GK: goalkeeping || 0
+    }
+  };
+  
+  // Use the position calculator to get the precise rating for the specific position
+  const calculator = new RuleBasedPositionCalculator();
+  const result = calculator.calculatePositionOVR(playerForOVR, position);
+  
+  if (result.success) {
+    // Return the weighted average (before rounding and penalty) for precise decimal value
+    return result.weightedAverage.toFixed(2);
+  } else {
+    // Fallback to simple calculation if position calculator fails
+    return ((pace + shooting + passing + dribbling + defense + physical) / 6).toFixed(2);
+  }
+}

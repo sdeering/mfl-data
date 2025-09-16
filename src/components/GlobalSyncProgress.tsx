@@ -14,20 +14,19 @@ export const GlobalSyncProgress: React.FC<GlobalSyncProgressProps> = ({ isVisibl
   const [isLoading, setIsLoading] = useState(true)
   const [isMinimized, setIsMinimized] = useState(false)
 
-  // Debug logging
-  useEffect(() => {
-    console.log('GlobalSyncProgress visibility changed:', { isVisible, isSyncing, progress: progress.length })
-  }, [isVisible, isSyncing, progress])
   const [hasInitialized, setHasInitialized] = useState(false)
 
   useEffect(() => {
     if (!isVisible) {
+      console.log('🔄 GlobalSyncProgress: Component becoming invisible, resetting state');
       setIsLoading(true)
       setHasInitialized(false)
       setProgress([])
-      setIsMinimized(false)
+      setIsMinimized(false) // Only reset minimized state when hiding the component
       return
     }
+    
+    console.log('🔄 GlobalSyncProgress: Component becoming visible, isMinimized:', isMinimized);
 
     // Auto-close after 5 seconds if manually triggered but no sync is active
     const autoCloseTimeout = setTimeout(() => {
@@ -77,7 +76,7 @@ export const GlobalSyncProgress: React.FC<GlobalSyncProgressProps> = ({ isVisibl
 
     fetchSyncStatus()
 
-    // Set up interval to update progress
+    // Set up interval to update progress (reduced frequency to 3 seconds)
     const interval = setInterval(() => {
       const currentProgress = supabaseSyncService.getCurrentProgress()
       if (currentProgress.length > 0) {
@@ -111,7 +110,7 @@ export const GlobalSyncProgress: React.FC<GlobalSyncProgressProps> = ({ isVisibl
         console.log('🔄 Auto-closing sync progress - all completed')
         onClose()
       }
-    }, 1000)
+    }, 3000) // Reduced from 1000ms to 3000ms (3 seconds)
 
     return () => {
       clearInterval(interval)
@@ -119,29 +118,19 @@ export const GlobalSyncProgress: React.FC<GlobalSyncProgressProps> = ({ isVisibl
     }
   }, [isVisible, hasInitialized, onClose, isSyncing, progress.length])
 
-  // Debug logging for conditional rendering
-  console.log('GlobalSyncProgress render check:', { 
-    isVisible, 
-    isLoading, 
-    progressLength: progress.length, 
-    isSyncing, 
-    hasInitialized 
-  })
 
   // Don't show if not visible or still loading initial data
   if (!isVisible || isLoading) {
-    console.log('GlobalSyncProgress: Not showing - not visible or loading')
     return null
   }
   
   // If manually triggered (isVisible is true), always show the component
   // This ensures the sync dialog appears immediately when user clicks sync
   if (isVisible) {
-    console.log('GlobalSyncProgress: Showing - manually triggered (isVisible=true)')
+    // Show the component
   } else {
     // Don't show if we have no progress data and no active sync (for auto-sync)
     if (progress.length === 0 && !isSyncing && hasInitialized) {
-      console.log('GlobalSyncProgress: Not showing - no progress and not syncing')
       return null
     }
   }
@@ -150,7 +139,6 @@ export const GlobalSyncProgress: React.FC<GlobalSyncProgressProps> = ({ isVisibl
   const allCompleted = progress.length > 0 && progress.every(p => p.progress === 100 && p.status === 'completed')
   const hasErrors = progress.some(p => p.status === 'failed')
   if (allCompleted && !hasErrors) {
-    console.log('GlobalSyncProgress: Not showing - all completed')
     return null
   }
 
@@ -217,7 +205,14 @@ export const GlobalSyncProgress: React.FC<GlobalSyncProgressProps> = ({ isVisibl
               </button>
             )}
             <button
-              onClick={() => setIsMinimized(!isMinimized)}
+              onClick={() => {
+                console.log('🔄 Minimize button clicked, current state:', isMinimized);
+                setIsMinimized(prev => {
+                  const newState = !prev;
+                  console.log('🔄 Minimize state changing from', prev, 'to', newState);
+                  return newState;
+                });
+              }}
               className="p-1 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
               title={isMinimized ? "Maximize" : "Minimize"}
             >
