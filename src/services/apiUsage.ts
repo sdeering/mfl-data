@@ -25,7 +25,12 @@ export async function incrementUsage(source: string, endpoint?: string): Promise
       return
     }
 
-    // Fallback to API route
+    // If in browser without public Supabase creds, skip to avoid ad-blocked network errors
+    if (isBrowser) {
+      return
+    }
+
+    // Server-side fallback to API route
     const body = JSON.stringify({ source, endpoint: endpoint ?? 'misc' })
     const base = process.env.NEXT_PUBLIC_SITE_URL
       || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000')
