@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { incrementUsage } from './apiUsage'
 
 export interface MFLMatch {
   id: number;
@@ -177,6 +178,7 @@ class MatchesService {
       console.log('Fetching past matches from:', url, 'with params:', params);
       
       const response = await axios.get(url, { params });
+      try { await incrementUsage('mfl', '/matches'); } catch {}
       
       console.log('Past matches response:', response.data);
       console.log('Past matches count:', response.data?.length);
@@ -251,6 +253,7 @@ class MatchesService {
       console.log('Fetching upcoming matches from:', url, 'with params:', params);
       
       const response = await axios.get(url, { params });
+      try { await incrementUsage('mfl', '/matches'); } catch {}
       
       console.log('Upcoming matches response:', response.data);
       console.log('Upcoming matches count:', response.data?.length);
@@ -350,6 +353,7 @@ class MatchesService {
       console.log('Fetching opponent past matches for squad ID:', opponentSquadId);
       
       const response = await axios.get(url, { params });
+      try { await incrementUsage('mfl', '/matches'); } catch {}
       
       console.log(`Found ${response.data.length} past matches for squad ${opponentSquadId}`);
 
@@ -390,6 +394,7 @@ class MatchesService {
       const url = `https://z519wdyajg.execute-api.us-east-1.amazonaws.com/prod/matches/${matchId}?withFormations=true`;
       
       const response = await axios.get(url);
+      try { await incrementUsage('mfl', '/clubs/:id'); } catch {}
       const matchData = response.data;
       
       // Extract formation type from the match data

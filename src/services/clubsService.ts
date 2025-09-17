@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { incrementUsage } from './apiUsage'
 
 export interface MFLClub {
   id: number;
@@ -47,6 +48,8 @@ class ClubsService {
       const response = await axios.get<MFLClubData[]>(
         `https://z519wdyajg.execute-api.us-east-1.amazonaws.com/prod/clubs?walletAddress=${walletAddress}`
       );
+
+      try { await incrementUsage('mfl', '/clubs'); } catch {}
 
       const clubs = response.data;
       

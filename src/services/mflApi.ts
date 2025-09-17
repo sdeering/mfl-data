@@ -14,6 +14,7 @@ import {
   MFLMatchDetails,
   MFLMatchReport
 } from '../types/mflApi';
+import { incrementUsage } from './apiUsage'
 
 // ============================================================================
 // CONFIGURATION
@@ -215,8 +216,10 @@ class HTTPClient {
           timeout,
         });
 
-        // Record successful request
+        // Record successful request (only real outbound network path)
         this.rateLimiter.recordRequest(endpoint);
+        // Increment usage counter best-effort
+        try { await incrementUsage('mfl', endpoint); } catch {}
 
         // Cache successful GET responses
         if (method === 'GET') {

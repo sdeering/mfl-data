@@ -166,8 +166,8 @@ async function processMarketValueSync(
     for (let batchIndex = 0; batchIndex < batches.length; batchIndex++) {
       const batch = batches[batchIndex];
       
-      // Update progress for the batch
-      job.currentPlayer = `Processing batch ${batchIndex + 1}/${batches.length} (${batch.length} players)`;
+      // Update progress for the batch (show total players in brackets)
+      job.currentPlayer = `Processing batch ${batchIndex + 1}/${batches.length} (${job.total} players total)`;
       
       // Process batch in parallel
       const batchPromises = batch.map(async (playerId, playerIndex) => {

@@ -620,12 +620,6 @@ const AgencyPage: React.FC = () => {
             <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
               My MFL Agency ({filteredPlayers.length}{filteredPlayers.length !== players.length ? ` of ${players.length}` : ''} players)
             </h1>
-            {isSyncing && (
-              <div className="flex items-center gap-2 px-3 py-1 bg-blue-100 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 rounded-full">
-                <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-600"></div>
-                <span className="text-xs text-blue-700 dark:text-black-700 font-medium">Syncing</span>
-              </div>
-            )}
           </div>
         </div>
         {totalPages > 1 && (
