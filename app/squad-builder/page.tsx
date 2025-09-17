@@ -80,8 +80,8 @@ function calculatePositionRating(player: MFLPlayer, position: string): number {
     }
   }
 
-  // Apply familiarity penalty
-  const familiarityPenalty = positions.includes(position as any) ? 0 : -10;
+  // Apply small familiarity adjustment but keep value bounded
+  const familiarityPenalty = positions.includes(position as any) ? 0 : -5;
   return Math.max(0, Math.round(rating + familiarityPenalty));
 }
 
@@ -114,7 +114,7 @@ function calculateSquadStats(squad: Squad, players: MFLPlayer[]) {
   }, 0);
   const averageOverall = Math.round(totalOverall / totalPlayers);
 
-  // Calculate average stats
+  // Calculate average stats (chemistry removed per spec)
   const stats = {
     pace: Math.round(squadPlayers.reduce((sum, p) => sum + (p?.player.metadata.pace || 0), 0) / totalPlayers),
     shooting: Math.round(squadPlayers.reduce((sum, p) => sum + (p?.player.metadata.shooting || 0), 0) / totalPlayers),
@@ -124,27 +124,8 @@ function calculateSquadStats(squad: Squad, players: MFLPlayer[]) {
     physical: Math.round(squadPlayers.reduce((sum, p) => sum + (p?.player.metadata.physical || 0), 0) / totalPlayers)
   };
 
-  // Calculate chemistry (based on position compatibility)
-  let chemistryScore = 0;
-  let totalPositions = 0;
-  
-  squadPlayers.forEach(squadPlayer => {
-    if (!squadPlayer) return;
-    
-    const player = squadPlayer.player;
-    const position = squadPlayer.position;
-    const positionRating = calculatePositionRating(player, position as any);
-    
-    // Chemistry based on position rating
-    if (positionRating >= 80) chemistryScore += 100;
-    else if (positionRating >= 70) chemistryScore += 80;
-    else if (positionRating >= 60) chemistryScore += 60;
-    else chemistryScore += 40;
-    
-    totalPositions++;
-  });
-  
-  const chemistry = totalPositions > 0 ? Math.round(chemistryScore / totalPositions) : 0;
+  // Chemistry removed
+  const chemistry = 0;
 
   // Calculate formation effectiveness (based on how well players fit the formation)
   const formationPositions = squad.formation.positions;
@@ -168,201 +149,22 @@ function calculateSquadStats(squad: Squad, players: MFLPlayer[]) {
 function validatePlayerPosition(player: MFLPlayer, position: string) {
   const playerPositions = player.metadata.positions;
   const positionRating = calculatePositionRating(player, position as any);
-  
-  // Check if player can play this position
-  if (playerPositions.includes(position as any)) {
-    return { isValid: true, reason: 'Primary or secondary position' };
-  }
-  
-  // Check if position rating is acceptable (above 60)
-  if (positionRating >= 60) {
-    return { isValid: true, reason: `Acceptable rating (${positionRating})` };
-  }
-  
-  // Check if it's a goalkeeper trying to play outfield or vice versa
+  const overall = player.metadata.overall;
+
   const isGoalkeeper = playerPositions.includes('GK');
   const isGoalkeeperPosition = position === 'GK';
-  
-  if (isGoalkeeper && !isGoalkeeperPosition) {
-    return { isValid: false, reason: 'Goalkeeper cannot play outfield' };
-  }
-  
-  if (!isGoalkeeper && isGoalkeeperPosition) {
-    return { isValid: false, reason: 'Outfield player cannot play goalkeeper' };
-  }
-  
-  // Check for similar positions (e.g., CB can play LB/RB)
-  const similarPositions: { [key: string]: string[] } = {
-    'CB': ['LB', 'RB'],
-    'LB': ['CB', 'LWB'],
-    'RB': ['CB', 'RWB'],
-    'LWB': ['LB', 'LM'],
-    'RWB': ['RB', 'RM'],
-    'CDM': ['CM', 'CB'],
-    'CM': ['CDM', 'CAM'],
-    'CAM': ['CM', 'ST', 'CF'],
-    'ST': ['CF', 'CAM'],
-    'CF': ['ST', 'CAM'],
-    'LW': ['LM', 'ST'],
-    'RW': ['RM', 'ST'],
-    'LM': ['LW', 'CM'],
-    'RM': ['RW', 'CM']
-  };
-  
-  for (const [primaryPos, similarPos] of Object.entries(similarPositions)) {
-    if (playerPositions.includes(primaryPos as any) && similarPos.includes(position as any)) {
-      return { isValid: true, reason: `Similar position to ${primaryPos}` };
-    }
-  }
-  
-  return { isValid: false, reason: `Low rating (${positionRating}) and not a natural position` };
+  if (isGoalkeeper && !isGoalkeeperPosition) return { isValid: false, reason: 'Goalkeeper cannot play outfield' };
+  if (!isGoalkeeper && isGoalkeeperPosition) return { isValid: false, reason: 'Outfield player cannot play goalkeeper' };
+
+  if (playerPositions.includes(position as any)) return { isValid: true, reason: 'Natural position' };
+
+  // Playable if within ±6 of overall
+  if (Math.abs(positionRating - overall) <= 6) return { isValid: true, reason: `Within ±6 OVR (${positionRating})` };
+
+  return { isValid: false, reason: `Position rating too far from overall (${positionRating} vs ${overall})` };
 }
 
-// Enhanced squad validation function
-function validateSquad(squad: Squad, formation: Formation) {
-  const squadPlayers = Object.values(squad.players);
-  const formationPositions = formation.positions;
-  const filledPositions = Object.keys(squad.players).length;
-  
-  const validation = {
-    isValid: true,
-    warnings: [] as string[],
-    errors: [] as string[],
-    recommendations: [] as string[]
-  };
-
-  // Check if all positions are filled
-  if (filledPositions < formationPositions.length) {
-    const missingPositions = formationPositions.filter(pos => !squad.players[pos]);
-    validation.warnings.push(`Missing players for: ${missingPositions.join(', ')}`);
-  }
-
-  // Check for duplicate players
-  const playerIds = squadPlayers.map(sp => sp.player.id);
-  const uniquePlayerIds = new Set(playerIds);
-  if (playerIds.length !== uniquePlayerIds.size) {
-    validation.errors.push('Duplicate players found in squad');
-    validation.isValid = false;
-  }
-
-  // Check for goalkeeper requirement
-  const hasGoalkeeper = squadPlayers.some(sp => sp.player.metadata.positions.includes('GK'));
-  if (!hasGoalkeeper) {
-    validation.errors.push('Squad must have at least one goalkeeper');
-    validation.isValid = false;
-  }
-
-  // Check for minimum squad size
-  if (filledPositions < 7) {
-    validation.warnings.push('Squad has fewer than 7 players');
-  }
-
-  // Check for maximum squad size
-  if (filledPositions > formationPositions.length) {
-    validation.errors.push('Too many players in squad');
-    validation.isValid = false;
-  }
-
-  // Check position compatibility
-  const positionMismatches: string[] = [];
-  Object.entries(squad.players).forEach(([position, squadPlayer]) => {
-    const player = squadPlayer.player;
-    const canPlayPosition = validatePlayerPosition(player, position as any);
-    if (!canPlayPosition.isValid) {
-      positionMismatches.push(`${player.metadata.firstName} ${player.metadata.lastName} cannot play ${position}`);
-    }
-  });
-
-  if (positionMismatches.length > 0) {
-    validation.errors.push(...positionMismatches);
-    validation.isValid = false;
-  }
-
-  // Check for balanced squad composition
-  const positionCounts = {
-    defenders: 0,
-    midfielders: 0,
-    forwards: 0,
-    goalkeepers: 0
-  };
-
-  squadPlayers.forEach(sp => {
-    const positions = sp.player.metadata.positions;
-    if (positions.includes('GK')) positionCounts.goalkeepers++;
-    else if (positions.some(pos => ['CB', 'LB', 'RB', 'LWB', 'RWB', 'CDM'].includes(pos))) positionCounts.defenders++;
-    else if (positions.some(pos => ['CM', 'CAM', 'CDM', 'LM', 'RM', 'LWB', 'RWB'].includes(pos))) positionCounts.midfielders++;
-    else if (positions.some(pos => ['ST', 'CF', 'LW', 'RW', 'CAM'].includes(pos))) positionCounts.forwards++;
-  });
-
-  // Check for balanced formation
-  const expectedDefenders = formationPositions.filter(pos => ['CB', 'LB', 'RB', 'LWB', 'RWB', 'CDM'].includes(pos)).length;
-  const expectedMidfielders = formationPositions.filter(pos => ['CM', 'CAM', 'CDM', 'LM', 'RM', 'LWB', 'RWB'].includes(pos)).length;
-  const expectedForwards = formationPositions.filter(pos => ['ST', 'CF', 'LW', 'RW', 'CAM'].includes(pos)).length;
-
-  if (positionCounts.defenders < expectedDefenders) {
-    validation.warnings.push(`Need more defenders (${expectedDefenders - positionCounts.defenders} more required)`);
-  }
-  if (positionCounts.midfielders < expectedMidfielders) {
-    validation.warnings.push(`Need more midfielders (${expectedMidfielders - positionCounts.midfielders} more required)`);
-  }
-  if (positionCounts.forwards < expectedForwards) {
-    validation.warnings.push(`Need more forwards (${expectedForwards - positionCounts.forwards} more required)`);
-  }
-
-  // Check chemistry and overall rating
-  const stats = calculateSquadStats(squad, []);
-  if (stats.chemistry < 50) {
-    validation.warnings.push('Low squad chemistry - consider better position fits');
-  }
-  if (stats.chemistry < 30) {
-    validation.errors.push('Very low squad chemistry - squad may perform poorly');
-    validation.isValid = false;
-  }
-
-  // Check overall rating distribution
-  if (stats.averageOverall < 70) {
-    validation.warnings.push('Low average overall rating - consider higher-rated players');
-  }
-  if (stats.averageOverall < 60) {
-    validation.errors.push('Very low average overall rating - squad may struggle');
-    validation.isValid = false;
-  }
-
-  // Check for age balance
-  const ages = squadPlayers.map(sp => sp.player.metadata.age);
-  const averageAge = ages.reduce((sum, age) => sum + age, 0) / ages.length;
-  if (averageAge > 32) {
-    validation.warnings.push('Squad has high average age - consider younger players for stamina');
-  }
-  if (averageAge < 20) {
-    validation.warnings.push('Squad has low average age - consider experienced players for consistency');
-  }
-
-  // Check for position coverage
-  const coveredPositions = new Set();
-  squadPlayers.forEach(sp => {
-    sp.player.metadata.positions.forEach(pos => coveredPositions.add(pos));
-  });
-
-  const formationPositionsSet = new Set(formationPositions);
-  const uncoveredPositions = formationPositions.filter(pos => !coveredPositions.has(pos));
-  if (uncoveredPositions.length > 0) {
-    validation.warnings.push(`No players can play: ${uncoveredPositions.join(', ')}`);
-  }
-
-  // Add recommendations
-  if (validation.warnings.length === 0 && validation.errors.length === 0) {
-    validation.recommendations.push('Squad looks well-balanced!');
-  }
-  if (stats.chemistry > 80) {
-    validation.recommendations.push('Excellent squad chemistry!');
-  }
-  if (stats.averageOverall > 80) {
-    validation.recommendations.push('High-quality squad with strong overall ratings!');
-  }
-
-  return validation;
-}
+// Validation removed per spec
 
 // Calculate formation effectiveness for any formation
 function calculateFormationEffectiveness(squad: Squad, formation: Formation, allPlayers: MFLPlayer[]) {
@@ -712,7 +514,21 @@ export default function SquadBuilderPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedFormation, setSelectedFormation] = useState<Formation>(FORMATIONS[0]);
   const [filterPosition, setFilterPosition] = useState<string>('all');
-  const [filterRating, setFilterRating] = useState<string>('all');
+  // Attribute slider filters (minimum values)
+  const [attrFilters, setAttrFilters] = useState({
+    pace: 0,
+    shooting: 0,
+    passing: 0,
+    dribbling: 0,
+    defense: 0,
+    physical: 0,
+  });
+  const [overallMin, setOverallMin] = useState(0);
+  const [positionRatingMin, setPositionRatingMin] = useState(0);
+  // Debounced copies for performance
+  const [debouncedAttr, setDebouncedAttr] = useState(attrFilters);
+  const [debouncedOverallMin, setDebouncedOverallMin] = useState(overallMin);
+  const [debouncedPositionRatingMin, setDebouncedPositionRatingMin] = useState(positionRatingMin);
   const [sortBy, setSortBy] = useState<string>('overall');
   const [squad, setSquad] = useState<Squad>({
     name: '',
@@ -747,17 +563,58 @@ export default function SquadBuilderPage() {
       physical: 0
     }
   });
-  const [squadValidation, setSquadValidation] = useState({
-    isValid: true,
-    warnings: [] as string[],
-    errors: [] as string[],
-    recommendations: [] as string[]
-  });
+  // Validation UI removed per spec
+  const [squadValidation] = useState({ isValid: true, warnings: [] as string[], errors: [] as string[], recommendations: [] as string[] });
   const [squadHistory, setSquadHistory] = useState<Squad[]>([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
   const [isLoadingPlayers, setIsLoadingPlayers] = useState(false);
   const [playersError, setPlayersError] = useState<string | null>(null);
   const [isInitializing, setIsInitializing] = useState(true);
+
+  // View mode: 'table' | 'field' (default to table, persist)
+  const [viewMode, setViewMode] = useState<'table' | 'field'>(() => {
+    if (typeof window === 'undefined') return 'table';
+    try {
+      const saved = window.localStorage.getItem('sb:viewMode');
+      return saved === 'field' ? 'field' : 'table';
+    } catch {
+      return 'table';
+    }
+  });
+  useEffect(() => {
+    try {
+      window.localStorage.setItem('sb:viewMode', viewMode);
+    } catch {}
+  }, [viewMode]);
+
+  // Table sorting (independent of sidebar sort controls)
+  const [tableSortKey, setTableSortKey] = useState<'name'|'overall'|'pace'|'shooting'|'passing'|'dribbling'|'defense'|'physical'>('overall');
+  const [tableSortDir, setTableSortDir] = useState<'asc'|'desc'>('desc');
+  const handleTableSort = (key: typeof tableSortKey) => {
+    setTableSortKey(prev => {
+      if (prev === key) {
+        setTableSortDir(d => (d === 'asc' ? 'desc' : 'asc'));
+        return prev;
+      }
+      setTableSortDir('desc');
+      return key;
+    });
+  };
+  const tableSortedPlayers = [...filteredPlayers].sort((a, b) => {
+    const dir = tableSortDir === 'asc' ? 1 : -1;
+    if (tableSortKey === 'name') {
+      const nameA = `${a.metadata.firstName} ${a.metadata.lastName}`;
+      const nameB = `${b.metadata.firstName} ${b.metadata.lastName}`;
+      return nameA.localeCompare(nameB) * dir;
+    }
+    const map: any = {
+      overall: 'overall', pace: 'pace', shooting: 'shooting', passing: 'passing',
+      dribbling: 'dribbling', defense: 'defense', physical: 'physical'
+    };
+    const ka = (a.metadata as any)[map[tableSortKey]] ?? 0;
+    const kb = (b.metadata as any)[map[tableSortKey]] ?? 0;
+    return (ka - kb) * dir;
+  });
 
 
   // Drag and drop sensors
@@ -800,7 +657,6 @@ export default function SquadBuilderPage() {
         console.log(`📊 Loaded ${agencyPlayers.length} agency players`);
         setPlayers(agencyPlayers);
         setFilteredPlayers(agencyPlayers);
-        success('Players Loaded', `Successfully loaded ${agencyPlayers.length} players from your agency`);
         
       } catch (err) {
         console.error('❌ Error loading agency players:', err);
@@ -820,6 +676,20 @@ export default function SquadBuilderPage() {
     }
   }, [account]);
 
+  // Debounce attribute/rating sliders
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedAttr(attrFilters), 200);
+    return () => clearTimeout(t);
+  }, [attrFilters]);
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedOverallMin(overallMin), 200);
+    return () => clearTimeout(t);
+  }, [overallMin]);
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedPositionRatingMin(positionRatingMin), 200);
+    return () => clearTimeout(t);
+  }, [positionRatingMin]);
+
   // Load saved squads
   useEffect(() => {
     const loadSavedSquads = async () => {
@@ -830,9 +700,6 @@ export default function SquadBuilderPage() {
         const squads = await getSquads(account);
         setSavedSquads(squads);
         console.log(`✅ Loaded ${squads.length} saved squads`);
-        if (squads.length > 0) {
-          info('Squads Loaded', `Found ${squads.length} saved squad${squads.length > 1 ? 's' : ''}`);
-        }
       } catch (error) {
         console.error('❌ Error loading saved squads:', error);
         const errorMessage = error instanceof Error ? error.message : 'Failed to load saved squads. Please try again.';
@@ -851,14 +718,6 @@ export default function SquadBuilderPage() {
   const handleSaveSquad = async () => {
     if (!account || !squadName.trim()) {
       setSaveError('Please enter a squad name');
-      return;
-    }
-
-    // Validate squad before saving
-    const validation = validateSquad(squad, selectedFormation);
-    if (!validation.isValid) {
-      setSaveError('Cannot save invalid squad. Please fix the errors first.');
-      showError('Invalid Squad', 'Cannot save squad with errors. Please fix the issues and try again.');
       return;
     }
 
@@ -979,8 +838,7 @@ export default function SquadBuilderPage() {
     const stats = calculateSquadStats(squad, players);
     setSquadStats(stats);
     
-    const validation = validateSquad(squad, selectedFormation);
-    setSquadValidation(validation);
+    // Skip validation updates (disabled per spec)
   }, [squad, players, selectedFormation]);
 
   // Filter and sort players
@@ -1005,14 +863,26 @@ export default function SquadBuilderPage() {
       );
     }
 
-    // Rating filter
-    if (filterRating !== 'all') {
-      const [min, max] = filterRating.split('-').map(Number);
-      filtered = filtered.filter(player => {
-        const rating = player.metadata.overall;
-        return rating >= min && rating <= max;
-      });
-    }
+    // Attribute slider minimum filters (debounced)
+    filtered = filtered.filter(player => (
+      player.metadata.pace >= debouncedAttr.pace &&
+      player.metadata.shooting >= debouncedAttr.shooting &&
+      player.metadata.passing >= debouncedAttr.passing &&
+      player.metadata.dribbling >= debouncedAttr.dribbling &&
+      player.metadata.defense >= debouncedAttr.defense &&
+      player.metadata.physical >= debouncedAttr.physical
+    ));
+
+    // Overall rating minimum (debounced)
+    filtered = filtered.filter(player => player.metadata.overall >= debouncedOverallMin);
+
+    // Position rating minimum (debounced) – use a reasonable default position: best fit among player's positions
+    filtered = filtered.filter(player => {
+      const best = player.metadata.positions
+        .map(pos => calculatePositionRating(player, pos as any))
+        .reduce((a, b) => Math.max(a, b), 0);
+      return best >= debouncedPositionRatingMin;
+    });
 
     // Sort players
     filtered.sort((a, b) => {
@@ -1031,7 +901,7 @@ export default function SquadBuilderPage() {
     });
 
     setFilteredPlayers(filtered);
-  }, [searchTerm, filterPosition, filterRating, sortBy, players]);
+  }, [searchTerm, filterPosition, sortBy, players, debouncedAttr, debouncedOverallMin, debouncedPositionRatingMin]);
 
   // Handle formation change
   const handleFormationChange = (formation: Formation) => {
@@ -1146,8 +1016,24 @@ export default function SquadBuilderPage() {
       onDragEnd={handleDragEnd}
     >
       <div className="min-h-screen">
-        <div className="mb-6">
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">Squad Builder</h1>
+        <div className="mb-6 flex items-center justify-between gap-3 flex-wrap">
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Squad Builder</h1>
+          <div className="inline-flex items-center rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
+            <button
+              className={`px-3 py-1.5 text-sm ${viewMode === 'table' ? 'bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white' : 'text-gray-600 dark:text-gray-300'}`}
+              onClick={() => setViewMode('table')}
+              title="Table view"
+            >
+              Table
+            </button>
+            <button
+              className={`px-3 py-1.5 text-sm ${viewMode === 'field' ? 'bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white' : 'text-gray-600 dark:text-gray-300'}`}
+              onClick={() => setViewMode('field')}
+              title="Field view"
+            >
+              Field
+            </button>
+          </div>
         </div>
 
         {isInitializing && (
@@ -1194,7 +1080,7 @@ export default function SquadBuilderPage() {
                               const agencyPlayers = await supabaseDataService.getAgencyPlayers(account);
                               setPlayers(agencyPlayers);
                               setFilteredPlayers(agencyPlayers);
-                              success('Players Loaded', `Successfully loaded ${agencyPlayers.length} players from your agency`);
+                              // Silent on initial visit: no popup
                             } catch (err) {
                               const errorMessage = err instanceof Error ? err.message : 'Failed to load agency players';
                               setPlayersError(errorMessage);
@@ -1255,24 +1141,58 @@ export default function SquadBuilderPage() {
                 </select>
               </div>
 
-              {/* Rating Filter */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Rating
-                </label>
-                <select
-                  value={filterRating}
-                  onChange={(e) => setFilterRating(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                >
-                  <option value="all">All Ratings</option>
-                  <option value="90-99">90-99 (Elite)</option>
-                  <option value="85-89">85-89 (Excellent)</option>
-                  <option value="80-84">80-84 (Very Good)</option>
-                  <option value="75-79">75-79 (Good)</option>
-                  <option value="70-74">70-74 (Average)</option>
-                  <option value="60-69">60-69 (Below Average)</option>
-                </select>
+              {/* Attribute Sliders */}
+              <div className="grid grid-cols-2 gap-3">
+                {([
+                  ['pace','PAC'],['shooting','SHO'],['passing','PAS'],['dribbling','DRI'],['defense','DEF'],['physical','PHY']
+                ] as Array<[keyof typeof attrFilters,string]>).map(([key,label]) => (
+                  <div key={key} className="col-span-1">
+                    <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      {label} ≥ {attrFilters[key]}
+                    </label>
+                    <input
+                      type="range"
+                      min={0}
+                      max={99}
+                      step={1}
+                      value={attrFilters[key]}
+                      onChange={(e) => setAttrFilters(prev => ({ ...prev, [key]: Number(e.target.value) }))}
+                      className="w-full"
+                    />
+                  </div>
+                ))}
+              </div>
+
+              {/* Rating Sliders */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Overall ≥ {overallMin}
+                  </label>
+                  <input
+                    type="range"
+                    min={0}
+                    max={99}
+                    step={1}
+                    value={overallMin}
+                    onChange={(e) => setOverallMin(Number(e.target.value))}
+                    className="w-full"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Position rating ≥ {positionRatingMin}
+                  </label>
+                  <input
+                    type="range"
+                    min={0}
+                    max={99}
+                    step={1}
+                    value={positionRatingMin}
+                    onChange={(e) => setPositionRatingMin(Number(e.target.value))}
+                    className="w-full"
+                  />
+                </div>
               </div>
 
               {/* Sort By */}
@@ -1306,7 +1226,8 @@ export default function SquadBuilderPage() {
         {/* Main Squad Builder Area */}
         <div className="lg:col-span-3">
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-            {/* Formation Selector with Analysis */}
+            {/* Formation Selector with Analysis (hidden in table view) */}
+            {viewMode === 'field' && (
             <div className="mb-6">
               <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
                 Formation Analysis
@@ -1482,14 +1403,15 @@ export default function SquadBuilderPage() {
                 </div>
               </div>
             </div>
+            )}
 
-            {/* Enhanced Squad Statistics */}
+            {/* Enhanced Squad Statistics (always shown) */}
             <div className="mb-6 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
               <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
                 Squad Statistics
               </h3>
               
-              {/* Primary Statistics with Progress Bars */}
+              {/* Primary Statistics with Progress Bars (chemistry hidden per spec) */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-4 mb-6">
                 <div className="text-center">
                   <div className="text-2xl font-bold text-blue-600 dark:text-blue-400 mb-1">
@@ -1503,21 +1425,7 @@ export default function SquadBuilderPage() {
                     ></div>
                   </div>
                 </div>
-                <div className="text-center">
-                  <div className="text-2xl font-bold text-green-600 dark:text-green-400 mb-1">
-                    {squadStats.chemistry}%
-                  </div>
-                  <div className="text-sm text-gray-600 dark:text-gray-400 mb-2">Chemistry</div>
-                  <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
-                    <div 
-                      className={`h-2 rounded-full transition-all duration-300 ${
-                        squadStats.chemistry >= 80 ? 'bg-green-600' :
-                        squadStats.chemistry >= 60 ? 'bg-yellow-500' : 'bg-red-500'
-                      }`}
-                      style={{ width: `${squadStats.chemistry}%` }}
-                    ></div>
-                  </div>
-                </div>
+                {/* Formation Fit retained */}
                 <div className="text-center">
                   <div className="text-2xl font-bold text-purple-600 dark:text-purple-400 mb-1">
                     {squadStats.formationEffectiveness}%
@@ -1535,18 +1443,9 @@ export default function SquadBuilderPage() {
                 </div>
                 <div className="text-center">
                   <div className="text-2xl font-bold text-orange-600 dark:text-orange-400 mb-1">
-                    {squadStats.totalPlayers}/{selectedFormation.positions.length}
+                    {squadStats.totalPlayers}
                   </div>
-                  <div className="text-sm text-gray-600 dark:text-gray-400 mb-2">Players</div>
-                  <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
-                    <div 
-                      className={`h-2 rounded-full transition-all duration-300 ${
-                        squadStats.totalPlayers === selectedFormation.positions.length ? 'bg-orange-600' :
-                        squadStats.totalPlayers >= selectedFormation.positions.length * 0.7 ? 'bg-yellow-500' : 'bg-red-500'
-                      }`}
-                      style={{ width: `${(squadStats.totalPlayers / selectedFormation.positions.length) * 100}%` }}
-                    ></div>
-                  </div>
+                  <div className="text-sm text-gray-600 dark:text-gray-400 mb-2">Players (no max)</div>
                 </div>
               </div>
 
@@ -1711,93 +1610,10 @@ export default function SquadBuilderPage() {
               </div>
             </div>
 
-            {/* Squad Validation */}
-            <div className="mb-6 p-4 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-                Squad Validation
-              </h3>
-              
-              {/* Validation Status */}
-              <div className="mb-4">
-                <div className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${
-                  squadValidation.isValid 
-                    ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300' 
-                    : 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300'
-                }`}>
-                  <svg className={`w-4 h-4 mr-2 ${squadValidation.isValid ? 'text-green-600' : 'text-red-600'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    {squadValidation.isValid ? (
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    ) : (
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    )}
-                  </svg>
-                  {squadValidation.isValid ? 'Squad is Valid' : 'Squad has Issues'}
-                </div>
-              </div>
+            {/* Squad Validation removed per spec */}
 
-              {/* Errors */}
-              {squadValidation.errors.length > 0 && (
-                <div className="mb-4">
-                  <h4 className="text-sm font-medium text-red-800 dark:text-red-200 mb-2">Errors</h4>
-                  <div className="space-y-1">
-                    {squadValidation.errors.map((error, index) => (
-                      <div key={index} className="flex items-start">
-                        <svg className="w-4 h-4 text-red-500 mr-2 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                        <span className="text-sm text-red-700 dark:text-red-300">{error}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Warnings */}
-              {squadValidation.warnings.length > 0 && (
-                <div className="mb-4">
-                  <h4 className="text-sm font-medium text-yellow-800 dark:text-yellow-200 mb-2">Warnings</h4>
-                  <div className="space-y-1">
-                    {squadValidation.warnings.map((warning, index) => (
-                      <div key={index} className="flex items-start">
-                        <svg className="w-4 h-4 text-yellow-500 mr-2 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
-                        </svg>
-                        <span className="text-sm text-yellow-700 dark:text-yellow-300">{warning}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Recommendations */}
-              {squadValidation.recommendations.length > 0 && (
-                <div className="mb-4">
-                  <h4 className="text-sm font-medium text-blue-800 dark:text-blue-200 mb-2">Recommendations</h4>
-                  <div className="space-y-1">
-                    {squadValidation.recommendations.map((recommendation, index) => (
-                      <div key={index} className="flex items-start">
-                        <svg className="w-4 h-4 text-blue-500 mr-2 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-                        </svg>
-                        <span className="text-sm text-blue-700 dark:text-blue-300">{recommendation}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* No issues message */}
-              {squadValidation.errors.length === 0 && squadValidation.warnings.length === 0 && squadValidation.recommendations.length === 0 && (
-                <div className="text-center py-4">
-                  <svg className="w-8 h-8 text-gray-400 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  <p className="text-sm text-gray-600 dark:text-gray-400">No validation issues found</p>
-                </div>
-              )}
-            </div>
-
-            {/* Formation Display */}
+            {/* Formation Display (hidden in table view) */}
+            {viewMode === 'field' && (
             <div className="mb-6">
               <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
                 {selectedFormation.name} Formation
@@ -1825,6 +1641,45 @@ export default function SquadBuilderPage() {
                 </SortableContext>
               </div>
             </div>
+            )}
+
+            {/* Table View: reuse club page styles */}
+            {viewMode === 'table' && (
+              <div className="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                    <thead className="bg-gray-50 dark:bg-gray-700">
+                      <tr>
+                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600 select-none" onClick={() => handleTableSort('name')}>Player</th>
+                        <th className="px-3 py-2 text-center text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600 select-none" onClick={() => handleTableSort('overall')}>Overall</th>
+                        <th className="px-3 py-2 text-center text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer" onClick={() => handleTableSort('pace')}>PAC</th>
+                        <th className="px-3 py-2 text-center text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer" onClick={() => handleTableSort('shooting')}>SHO</th>
+                        <th className="px-3 py-2 text-center text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer" onClick={() => handleTableSort('passing')}>PAS</th>
+                        <th className="px-3 py-2 text-center text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer" onClick={() => handleTableSort('dribbling')}>DRI</th>
+                        <th className="px-3 py-2 text-center text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer" onClick={() => handleTableSort('defense')}>DEF</th>
+                        <th className="px-3 py-2 text-center text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer" onClick={() => handleTableSort('physical')}>PHY</th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                      {tableSortedPlayers.map((p) => (
+                        <tr key={p.id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
+                          <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-900 dark:text-white">
+                            {p.metadata.firstName} {p.metadata.lastName}
+                          </td>
+                          <td className="px-3 py-2 whitespace-nowrap text-sm text-center text-gray-900 dark:text-white">{p.metadata.overall}</td>
+                          <td className="px-3 py-2 whitespace-nowrap text-sm text-center text-gray-700 dark:text-gray-300">{p.metadata.pace}</td>
+                          <td className="px-3 py-2 whitespace-nowrap text-sm text-center text-gray-700 dark:text-gray-300">{p.metadata.shooting}</td>
+                          <td className="px-3 py-2 whitespace-nowrap text-sm text-center text-gray-700 dark:text-gray-300">{p.metadata.passing}</td>
+                          <td className="px-3 py-2 whitespace-nowrap text-sm text-center text-gray-700 dark:text-gray-300">{p.metadata.dribbling}</td>
+                          <td className="px-3 py-2 whitespace-nowrap text-sm text-center text-gray-700 dark:text-gray-300">{p.metadata.defense}</td>
+                          <td className="px-3 py-2 whitespace-nowrap text-sm text-center text-gray-700 dark:text-gray-300">{p.metadata.physical}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
 
             {/* Squad Actions */}
             <div className="flex flex-wrap gap-2 md:gap-4">
@@ -1856,12 +1711,24 @@ export default function SquadBuilderPage() {
               >
                 Save Squad
               </button>
-              <button
-                className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
-                onClick={() => setShowLoadModal(true)}
-              >
-                Load Squad
-              </button>
+              <div className="relative">
+                <select
+                  onChange={async (e) => {
+                    const id = e.target.value;
+                    if (!id) return;
+                    const ss = savedSquads.find(s => s.id === id);
+                    if (ss) await handleLoadSquad(ss);
+                    e.currentTarget.selectedIndex = 0;
+                  }}
+                  className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                  defaultValue=""
+                >
+                  <option value="" disabled>Load Squad...</option>
+                  {savedSquads.map(s => (
+                    <option key={s.id} value={s.id}>{s.squad_name}</option>
+                  ))}
+                </select>
+              </div>
               <button
                 className="px-6 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
                 onClick={() => {
