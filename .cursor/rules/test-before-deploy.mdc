@@ -1,5 +1,5 @@
 ---
-description: Fix all failing tests before pushing code to GitHub
+description: Fix all failing tests before pushing code to GitHub (if small updates then just cherry pick those tests that relate to the changes done to save time)
 globs:
 alwaysApply: true
 ---

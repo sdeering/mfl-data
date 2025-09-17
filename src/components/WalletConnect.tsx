@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useWallet } from '../contexts/WalletContext';
-import { useSupabaseSync } from '../hooks/useSupabaseSync';
+import { useSupabaseSyncUI } from '../contexts/SupabaseSyncContext';
 
 interface WalletConnectProps {
   className?: string;
@@ -16,7 +16,7 @@ const WalletConnect: React.FC<WalletConnectProps> = ({
   size = 'md' 
 }) => {
   const { isConnected, account, connectWallet, disconnectWallet, isLoading, error } = useWallet();
-  const { startSync, isSyncing } = useSupabaseSync();
+  const { startSync, isSyncing } = useSupabaseSyncUI();
   const [showDropdown, setShowDropdown] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 

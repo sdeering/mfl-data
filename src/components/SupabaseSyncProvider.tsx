@@ -1,7 +1,7 @@
 'use client'
 
 import React from 'react'
-import { useSupabaseSync } from '../hooks/useSupabaseSync'
+import { SupabaseSyncContextProvider, useSupabaseSyncUI } from '../contexts/SupabaseSyncContext'
 import { GlobalSyncProgress } from './GlobalSyncProgress'
 
 interface SupabaseSyncProviderProps {
@@ -9,16 +9,19 @@ interface SupabaseSyncProviderProps {
 }
 
 export const SupabaseSyncProvider: React.FC<SupabaseSyncProviderProps> = ({ children }) => {
-  const { isVisible, progress, isSyncing, closeProgress, retrySync } = useSupabaseSync()
+  return (
+    <SupabaseSyncContextProvider>
+      <Inner>{children}</Inner>
+    </SupabaseSyncContextProvider>
+  )
+}
 
+const Inner: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { isVisible, isSyncing, closeProgress } = useSupabaseSyncUI()
   return (
     <>
       {children}
-      <GlobalSyncProgress 
-        isVisible={isVisible}
-        isSyncing={isSyncing}
-        onClose={closeProgress}
-      />
+      <GlobalSyncProgress isVisible={isVisible} isSyncing={isSyncing} onClose={closeProgress} />
     </>
   )
 }
