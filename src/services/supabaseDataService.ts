@@ -74,7 +74,9 @@ class SupabaseDataService {
           .from(TABLES.MARKET_VALUES)
           .select('*')
           .in('mfl_player_id', playerIds)
-          .order('data->>market_value', { ascending: false })
+          // Order by latest calculation or created_at when available. Some Supabase clients
+          // don’t support JSON path in order reliably; prefer timestamps.
+          .order('created_at', { ascending: false })
 
         if (error) {
           // Check if it's a table not found error
@@ -91,12 +93,14 @@ class SupabaseDataService {
         
         // Transform the data to match what the agency page expects
         const transformedData = (data || []).map(item => ({
-          player_id: item.mfl_player_id, // This should match player.id from the players table
-          market_value: item.data?.market_value || 0,
+          player_id: item.mfl_player_id,
+          // Align with writer which stores estimatedValue
+          market_value: (item.data?.estimatedValue ?? item.data?.market_value ?? 0),
           position_ratings: item.data?.position_ratings || {},
           confidence: item.data?.confidence || 'medium',
           created_at: item.created_at,
-          last_calculated: item.data?.calculated_at
+          // Align with writer which stores last_calculated
+          last_calculated: (item.data?.last_calculated ?? item.data?.calculated_at ?? null)
         }));
 
         return transformedData
