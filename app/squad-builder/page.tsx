@@ -1332,76 +1332,7 @@ export default function SquadBuilderPage() {
                 </div>
               </div>
 
-              {/* Formation Recommendations */}
-              <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4">
-                <h3 className="text-md font-medium text-gray-900 dark:text-white mb-3">Recommendations</h3>
-                <div className="space-y-2">
-                  {(() => {
-                    const recommendations = [];
-                    const currentEffectiveness = squadStats.formationEffectiveness;
-                    
-                    // Find better formations
-                    const betterFormations = FORMATIONS.filter(f => 
-                      f.id !== selectedFormation.id && 
-                      calculateFormationEffectiveness(squad, f, players) > currentEffectiveness
-                    ).sort((a, b) => 
-                      calculateFormationEffectiveness(squad, b, players) - calculateFormationEffectiveness(squad, a, players)
-                    ).slice(0, 2);
-
-                    if (betterFormations.length > 0) {
-                      betterFormations.forEach(formation => {
-                        const effectiveness = calculateFormationEffectiveness(squad, formation, players);
-                        recommendations.push(
-                          <div key={formation.id} className="flex items-center justify-between text-sm">
-                            <span className="text-gray-700 dark:text-gray-300">
-                              Try <span className="font-medium text-blue-600 dark:text-blue-400">{formation.name}</span> for better fit
-                            </span>
-                            <span className="text-green-600 dark:text-green-400 font-medium">
-                              +{effectiveness - currentEffectiveness}%
-                            </span>
-                          </div>
-                        );
-                      });
-                    } else {
-                      recommendations.push(
-                        <div key="optimal" className="text-sm text-green-600 dark:text-green-400">
-                          ✅ Current formation is optimal for your squad
-                        </div>
-                      );
-                    }
-
-                    // Add tactical suggestions
-                    const { stats } = squadStats;
-                    if (stats.pace > 75 && selectedFormation.id !== '433-attack') {
-                      recommendations.push(
-                        <div key="pace" className="text-sm text-gray-700 dark:text-gray-300">
-                          💨 High pace squad - consider more attacking formations
-                        </div>
-                      );
-                    }
-                    if (stats.defense > 75 && selectedFormation.id !== '532') {
-                      recommendations.push(
-                        <div key="defense" className="text-sm text-gray-700 dark:text-gray-300">
-                          🛡️ Strong defense - consider defensive formations for stability
-                        </div>
-                      );
-                    }
-                    if (stats.passing > 75 && selectedFormation.id !== '4231') {
-                      recommendations.push(
-                        <div key="passing" className="text-sm text-gray-700 dark:text-gray-300">
-                          🎯 Great passing - consider possession-based formations
-                        </div>
-                      );
-                    }
-
-                    return recommendations.length > 0 ? recommendations : [
-                      <div key="none" className="text-sm text-gray-500 dark:text-gray-400">
-                        No specific recommendations - squad works well with current formation
-                      </div>
-                    ];
-                  })()}
-                </div>
-              </div>
+              {/* Recommendations removed per spec */}
             </div>
             )}
 

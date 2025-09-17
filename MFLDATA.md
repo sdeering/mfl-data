@@ -51,3 +51,16 @@ When adding new calculation services, ensure proper database schema updates are 
 - Indexes for performance
 - RLS policies for security
 - Once database .SQL files have been run by user, delete the file in local filesystem
+
+## Squad Builder – Current Feature Status (2025-09-17)
+
+- Views: Table and Field. Default is Table. Selection persists in `localStorage` (`sb:viewMode`).
+- Table View: Reuses club table styling. Hides formation/validation panels. Shows overall squad stats header.
+- Filters: Sidebar sliders for PAC, PHY, DRI, SHO, PAS, DEF (min thresholds, 0–99), plus Overall min and Position Rating min (best-fit among player positions). Debounced ~200ms.
+- Playable Positions: A position is playable if position rating is within ±6 of the player’s overall; GK exceptions enforced.
+- Saved Squads: Header “Load squad” dropdown to directly load a saved squad; Save/Delete actions remain.
+- Removed: Recommendations, Chemistry, and all Validation logic/UI. No max players constraint.
+- Popups: No initial toasts on first visit to `/squad-builder`.
+
+Known follow-ups
+- Add tests for: view toggle persistence, slider/rating filters, load dropdown, playable tolerance.
