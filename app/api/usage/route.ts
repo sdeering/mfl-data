@@ -24,8 +24,13 @@ export async function POST(req: NextRequest) {
     }
     const today = new Date().toISOString().slice(0, 10)
 
-    // Use RPC for atomic increment (created in SQL): increment_api_usage(source)
-    const { error } = await supabase.rpc('increment_api_usage', { p_source: source, p_endpoint: endpoint ?? null })
+    // Use RPC for atomic increment. Prefer legacy arg names (endpoint, src) to avoid PGRST202 on older schemas.
+    let { error } = await supabase.rpc('increment_api_usage', { endpoint: endpoint ?? null, src: source })
+    if (error) {
+      // Try with new arg names if the old ones aren't present
+      const retry = await supabase.rpc('increment_api_usage', { p_source: source, p_endpoint: endpoint ?? null })
+      error = retry.error
+    }
     if (error) {
       console.warn('POST /api/usage increment_api_usage error, falling back:', error)
       // Fallback (non-atomic): ensure row exists, then bump count
@@ -81,8 +86,15 @@ export async function GET(req: NextRequest) {
     const fromDate = new Date(Date.now() - 29 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
 
     // Use RPC that runs as SECURITY DEFINER to bypass RLS for safe reads
-    const { data, error } = await supabase
+    let { data, error } = await supabase
       .rpc('get_api_usage', { from_date: fromDate, p_source: source ?? null, p_endpoint: null })
+    if (error) {
+      // Try legacy param names if new ones aren't present in schema cache
+      const retry = await supabase
+        .rpc('get_api_usage', { from_date: fromDate, src: source ?? null, endpoint: null })
+      data = retry.data as any
+      error = retry.error as any
+    }
     if (!error && Array.isArray(data)) {
       return NextResponse.json({ data })
     }
