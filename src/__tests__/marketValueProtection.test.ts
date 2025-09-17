@@ -38,10 +38,10 @@ class RateLimiter {
 
 // Market value expiration logic
 const isMarketValueExpired = (lastCalculated: string): boolean => {
-  const now = new Date();
-  const calculatedDate = new Date(lastCalculated);
-  const daysDiff = (now.getTime() - calculatedDate.getTime()) / (1000 * 60 * 60 * 24);
-  return daysDiff > 7;
+  const now = Date.now();
+  const ts = new Date(lastCalculated).getTime();
+  const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
+  return now - ts > sevenDaysMs; // strictly greater than 7 days
 };
 
 // Player limit logic

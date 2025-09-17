@@ -228,6 +228,37 @@ export async function getPlayerMarketValue(
   if (!forceRecalculate) {
     const cached = await getCachedMarketValue(playerId, walletAddress);
     if (cached) {
+      // If cache reports 0 (Unknown), verify against live data; recalc if sales/listings exist
+      if (cached.marketValue === 0) {
+        try {
+          const playerIdStr = playerId.toString();
+          // Lightweight checks: recent sales and comparable listings count
+          const player = await mflApi.getPlayer(playerIdStr);
+          const [historyResponse, marketResponse] = await Promise.all([
+            fetchPlayerSaleHistory(playerIdStr, 5),
+            fetchMarketData({
+              positions: player.metadata.positions,
+              ageMin: Math.max(1, player.metadata.age - 1),
+              ageMax: player.metadata.age + 1,
+              overallMin: Math.max(1, player.metadata.overall - 1),
+              overallMax: player.metadata.overall + 1,
+              limit: 50
+            })
+          ]);
+
+          const hasRecentSales = historyResponse.success && historyResponse.data.length > 0;
+          const hasListings = marketResponse.success && marketResponse.data.length > 0;
+
+          if (hasRecentSales || hasListings) {
+            console.log(`♻️ Recalculating player ${playerId} (cached 0 but sales/listings exist)`);
+            return await calculatePlayerMarketValue(playerId, walletAddress);
+          }
+        } catch (e) {
+          // If verification fails, fall back to cached value
+          console.warn(`⚠️ Zero-value cache verification failed for player ${playerId}:`, e);
+        }
+      }
+
       console.log(`📋 Using cached market value for player ${playerId} (${cached.marketValue === 0 ? 'Unknown' : `$${cached.marketValue}`})`);
       return cached;
     }

@@ -1,3 +1,118 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { calculatePlayerMarketValue } from '@/src/services/marketValueService'
+
+type JobStatus = 'pending' | 'in_progress' | 'completed' | 'failed'
+
+interface SyncJob {
+  jobId: string
+  walletAddress?: string
+  status: JobStatus
+  progress: number
+  total: number
+  currentPlayer?: string
+  results: Array<{ playerId: string; success: boolean; error?: string; value?: number }>
+  error?: string
+  startedAt: number
+  updatedAt: number
+}
+
+// In-memory job store (note: serverless instances may not share state)
+const jobs = new Map<string, SyncJob>()
+
+function createJobId() {
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+}
+
+export async function GET(req: NextRequest) {
+  try {
+    const { searchParams } = new URL(req.url)
+    const jobId = searchParams.get('jobId') || undefined
+    const walletAddress = searchParams.get('walletAddress') || undefined
+
+    if (jobId) {
+      const job = jobs.get(jobId)
+      if (!job) return NextResponse.json({ success: false, error: 'job not found' }, { status: 404 })
+      const percentage = job.total > 0 ? Math.min(100, Math.round((job.progress / job.total) * 100)) : 0
+      return NextResponse.json({ success: true, ...job, percentage })
+    }
+
+    if (walletAddress) {
+      const activeJobs = Array.from(jobs.values()).filter(j => j.walletAddress?.toLowerCase() === walletAddress.toLowerCase() && (j.status === 'pending' || j.status === 'in_progress'))
+      return NextResponse.json({ success: true, activeJobs })
+    }
+
+    return NextResponse.json({ success: true, jobs: Array.from(jobs.values()) })
+  } catch (e: any) {
+    return NextResponse.json({ success: false, error: e?.message || 'error' }, { status: 500 })
+  }
+}
+
+export async function POST(req: NextRequest) {
+  try {
+    const body = await req.json()
+    const walletAddress: string | undefined = body.walletAddress
+    const playerIds: string[] = Array.isArray(body.playerIds) ? body.playerIds : []
+    const forceRecalculate: boolean = !!body.forceRecalculate
+    const limit: number | undefined = typeof body.limit === 'number' ? body.limit : undefined
+
+    if (!playerIds.length) {
+      return NextResponse.json({ success: false, error: 'playerIds required' }, { status: 400 })
+    }
+
+    const ids = limit ? playerIds.slice(0, limit) : playerIds
+    const jobId = createJobId()
+    const job: SyncJob = {
+      jobId,
+      walletAddress,
+      status: 'pending',
+      progress: 0,
+      total: ids.length,
+      currentPlayer: undefined,
+      results: [],
+      startedAt: Date.now(),
+      updatedAt: Date.now(),
+    }
+    jobs.set(jobId, job)
+
+    // Run async without blocking response
+    ;(async () => {
+      try {
+        job.status = 'in_progress'
+        job.updatedAt = Date.now()
+
+        for (let i = 0; i < ids.length; i++) {
+          const pid = ids[i]
+          job.currentPlayer = `Processing ${i + 1}/${ids.length} (${ids.length} players total)`
+          job.updatedAt = Date.now()
+          try {
+            const res = await calculatePlayerMarketValue(pid, walletAddress)
+            if (res.success) {
+              job.results.push({ playerId: pid, success: true, value: res.marketValue })
+            } else {
+              job.results.push({ playerId: pid, success: false, error: res.error })
+            }
+          } catch (err: any) {
+            job.results.push({ playerId: pid, success: false, error: err?.message || 'calc error' })
+          }
+          job.progress = i + 1
+        }
+
+        job.status = 'completed'
+        job.currentPlayer = 'Completed'
+        job.updatedAt = Date.now()
+      } catch (err: any) {
+        job.status = 'failed'
+        job.error = err?.message || 'failed'
+        job.updatedAt = Date.now()
+      }
+    })()
+
+    return NextResponse.json({ success: true, jobId })
+  } catch (e: any) {
+    return NextResponse.json({ success: false, error: e?.message || 'error' }, { status: 500 })
+  }
+}
+
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js'
 import { getPlayerMarketValue } from '../../../../src/services/marketValueService';
