@@ -15,6 +15,23 @@ export default function ApiUsagePage() {
   const [error, setError] = useState<string | null>(null)
   const [expandedDates, setExpandedDates] = useState<Record<string, boolean>>({})
 
+  const normalizeEndpointForGrouping = (endpoint?: string): string => {
+    if (!endpoint || endpoint === 'unknown') return 'unknown'
+    try {
+      const [rawPath, rawQuery] = endpoint.split('?')
+      const normPath = rawPath
+        .split('/')
+        .map(seg => (/^\d+$/.test(seg) ? ':id' : seg))
+        .join('/')
+      if (!rawQuery) return normPath
+      const params = new URLSearchParams(rawQuery)
+      const keys = Array.from(new Set(Array.from(params.keys()))).sort()
+      return keys.length ? `${normPath}?${keys.join('&')}` : normPath
+    } catch {
+      return endpoint
+    }
+  }
+
   useEffect(() => {
     async function load() {
       try {
@@ -83,7 +100,8 @@ export default function ApiUsagePage() {
       const entry = grouped.get(r.date) || { total: 0, endpoints: [] }
       entry.total += r.count || 0
       // @ts-ignore include endpoint if present on row (from API fallback)
-      const ep = (r as any).endpoint || 'unknown'
+      const originalEndpoint = (r as any).endpoint || 'unknown'
+      const ep = normalizeEndpointForGrouping(originalEndpoint)
       const existing = entry.endpoints.find(e => e.endpoint === ep)
       if (existing) {
         existing.count += r.count || 0
