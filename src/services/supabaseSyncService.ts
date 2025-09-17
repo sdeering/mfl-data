@@ -994,11 +994,33 @@ class SupabaseSyncService {
    */
   private async syncAgencyPlayerMarketValues(walletAddress: string, options: SyncOptions = {}, limit?: number) {
     const dataType = 'agency_player_market_values'
+    // Use a wallet-scoped key so 7‑day freshness is per user
+    const dataTypeKey = `${dataType}:${walletAddress}`
+    const updateMV = (status: SyncStatus, progress: number, message: string, error?: string) =>
+      this.updateProgress(dataTypeKey, status, progress, message, error)
     
     // NEW BACKEND SYNC IMPLEMENTATION
     try {
+      // Respect 7-day cache before starting/resuming any backend job
+      // Check central sync status timestamp (acts as a coarse-grained gate)
+      try {
+        const { data: existingStatus } = await supabase
+          .from(TABLES.SYNC_STATUS)
+          .select('last_synced')
+          .eq('data_type', dataTypeKey)
+          .maybeSingle()
+
+        if (!this.needsSync(dataType, existingStatus?.last_synced ?? null, options.forceRefresh)) {
+          updateMV(SYNC_STATUS.COMPLETED, 100, 'Agency player market values are up to date (≤ 7 days)')
+          return
+        }
+      } catch (gateError) {
+        // Non-fatal; continue if status table is unavailable
+        console.warn('Warning: Could not check market values sync gate:', gateError)
+      }
+
       console.log('🔄 Starting agency player market values sync for wallet:', walletAddress)
-      this.updateProgress(dataType, SYNC_STATUS.IN_PROGRESS, 0, 'Loading agency players...')
+      updateMV(SYNC_STATUS.IN_PROGRESS, 0, 'Loading agency players...')
       
       // Step 1: Get all agency players
       console.log('🔍 Fetching agency players for market value calculation...')
@@ -1022,10 +1044,10 @@ class SupabaseSyncService {
       }
 
       console.log(`📊 Found ${agencyPlayers.length} agency players for market value calculation`)
-      this.updateProgress(dataType, SYNC_STATUS.IN_PROGRESS, 20, `Found ${agencyPlayers.length} agency players`)
+      updateMV(SYNC_STATUS.IN_PROGRESS, 20, `Found ${agencyPlayers.length} agency players`)
 
       // Step 2: Check for existing sync jobs first
-      this.updateProgress(dataType, SYNC_STATUS.IN_PROGRESS, 30, 'Checking for existing sync jobs...')
+      updateMV(SYNC_STATUS.IN_PROGRESS, 30, 'Checking for existing sync jobs...')
       
       const playerIds = agencyPlayers.map(p => p.mfl_player_id.toString())
       const syncLimit = limit // No default limit for production
@@ -1043,10 +1065,10 @@ class SupabaseSyncService {
         jobId = existingJob.jobId
         isResumed = true
         console.log(`🔄 Resuming existing sync job ${jobId} for wallet ${walletAddress}`)
-        this.updateProgress(dataType, SYNC_STATUS.IN_PROGRESS, 40, `Resuming existing sync (${existingJob.progress}/${existingJob.total})...`)
+        updateMV(SYNC_STATUS.IN_PROGRESS, 40, `Resuming existing sync (${existingJob.progress}/${existingJob.total})...`)
       } else {
         // Start new sync job
-        this.updateProgress(dataType, SYNC_STATUS.IN_PROGRESS, 40, 'Starting backend market value sync...')
+        updateMV(SYNC_STATUS.IN_PROGRESS, 40, 'Starting backend market value sync...')
         console.log(`🚀 Starting new backend sync for ${playerIds.length} players${syncLimit ? ` (limited to ${syncLimit})` : ' (no limit)'}`)
         
         const response = await fetch('/api/sync/player-market-values', {
@@ -1071,15 +1093,15 @@ class SupabaseSyncService {
         console.log(`✅ Backend sync job started: ${jobId}`)
       }
       
-      this.updateProgress(dataType, SYNC_STATUS.IN_PROGRESS, 60, `Backend sync ${isResumed ? 'resumed' : 'started'} for ${playerIds.length} players`)
+      updateMV(SYNC_STATUS.IN_PROGRESS, 60, `Backend sync ${isResumed ? 'resumed' : 'started'} for ${playerIds.length} players`)
 
       // Step 3: Poll for completion
       let completed = false
       let attempts = 0
-      const maxAttempts = 300 // 5 minutes max (1 second intervals)
+      const maxAttempts = 600 // 5 minutes max (500ms intervals)
       
       while (!completed && attempts < maxAttempts) {
-        await new Promise(resolve => setTimeout(resolve, 1000)) // Wait 1 second
+        await new Promise(resolve => setTimeout(resolve, 500)) // Wait 500ms for faster updates
         attempts++
         
         try {
@@ -1088,11 +1110,11 @@ class SupabaseSyncService {
             const status = await statusResponse.json()
             
             const progress = 60 + (status.percentage * 0.4) // 60-100% range
-            this.updateProgress(dataType, SYNC_STATUS.IN_PROGRESS, Math.round(progress), status.currentPlayer || `Processing ${status.progress}/${status.total} players`)
+            updateMV(SYNC_STATUS.IN_PROGRESS, Math.round(progress), status.currentPlayer || `Processing ${status.progress}/${status.total} players`)
             
             if (status.status === 'completed') {
               console.log('✅ Backend market value sync completed:', status.results)
-              this.updateProgress(dataType, SYNC_STATUS.COMPLETED, 100, `Market value sync completed for ${status.results.filter((r: any) => r.success).length} players`)
+              updateMV(SYNC_STATUS.COMPLETED, 100, `Market value sync completed for ${status.results.filter((r: any) => r.success).length} players`)
               completed = true
             } else if (status.status === 'failed') {
               throw new Error(`Backend sync failed: ${status.error}`)
@@ -1110,7 +1132,7 @@ class SupabaseSyncService {
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error'
       console.error('❌ Error in syncAgencyPlayerMarketValues:', error)
-      this.updateProgress(dataType, SYNC_STATUS.FAILED, 0, 'Failed to sync agency player market values', errorMessage)
+      updateMV(SYNC_STATUS.FAILED, 0, 'Failed to sync agency player market values', errorMessage)
       throw error
     }
     

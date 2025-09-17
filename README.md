@@ -125,7 +125,7 @@ The project includes comprehensive tests covering:
 
 ## 📁 Project Structure
 
-```
+``` 
 mfl-player-search/
 ├── app/                    # Next.js app directory
 │   ├── layout.tsx         # Root layout with dark mode

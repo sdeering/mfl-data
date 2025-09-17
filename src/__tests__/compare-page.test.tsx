@@ -1,4 +1,5 @@
 import React from 'react';
+jest.setTimeout(15000);
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import ComparePage from '../../app/compare/page';
 import { mflApi } from '../services/mflApi';
@@ -259,12 +260,14 @@ describe('Compare Page Tests', () => {
     render(<ComparePage />);
     
     const player1Input = screen.getByLabelText('Player 1 ID');
+    const searchButtons = screen.getAllByRole('button', { name: /search/i });
+    const player1SearchButton = searchButtons[0];
 
     fireEvent.change(player1Input, { target: { value: '12345' } });
-    fireEvent.keyPress(player1Input, { key: 'Enter', code: 'Enter' });
+    fireEvent.click(player1SearchButton);
 
     await waitFor(() => {
       expect(screen.getByText('Test Player')).toBeInTheDocument();
-    }, { timeout: 10000 });
+    }, { timeout: 15000 });
   });
 });

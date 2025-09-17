@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { createClient } from '@supabase/supabase-js'
 import { getPlayerMarketValue } from '../../../../src/services/marketValueService';
 
 // In-memory job queue (in production, use Redis with Bull/BullMQ)
@@ -154,46 +155,67 @@ async function processMarketValueSync(
   try {
     job.status = 'running';
     
-    for (let i = 0; i < playerIds.length; i++) {
-      const playerId = playerIds[i];
+    // Process players in batches for better performance
+    const BATCH_SIZE = 5; // Process 5 players in parallel
+    const batches = [];
+    
+    for (let i = 0; i < playerIds.length; i += BATCH_SIZE) {
+      batches.push(playerIds.slice(i, i + BATCH_SIZE));
+    }
+    
+    for (let batchIndex = 0; batchIndex < batches.length; batchIndex++) {
+      const batch = batches[batchIndex];
       
-      // Update progress
-      job.progress = i;
-      job.currentPlayer = `Calculating market value for player #${playerId} (${i + 1}/${playerIds.length})`;
+      // Update progress for the batch
+      job.currentPlayer = `Processing batch ${batchIndex + 1}/${batches.length} (${batch.length} players)`;
       
-      try {
-        console.log(`🔄 Processing player ${playerId} (${i + 1}/${playerIds.length})`);
+      // Process batch in parallel
+      const batchPromises = batch.map(async (playerId, playerIndex) => {
+        const globalIndex = batchIndex * BATCH_SIZE + playerIndex;
         
-        // Only force recalculate if explicitly requested, otherwise respect 7-day cache
-        const result = await getPlayerMarketValue(playerId, walletAddress, forceRecalculate);
-        
-        if (result.success) {
-          job.results.push({
-            playerId,
-            marketValue: result.marketValue || 0,
-            success: true
-          });
-          console.log(`✅ Player ${playerId}: $${result.marketValue}`);
-        } else {
-          job.results.push({
+        try {
+          console.log(`🔄 Processing player ${playerId} (${globalIndex + 1}/${playerIds.length})`);
+          
+          // Only force recalculate if explicitly requested, otherwise respect 7-day cache
+          const result = await getPlayerMarketValue(playerId, walletAddress, forceRecalculate);
+          
+          if (result.success) {
+            console.log(`✅ Player ${playerId}: $${result.marketValue}`);
+            return {
+              playerId,
+              marketValue: result.marketValue || 0,
+              success: true
+            };
+          } else {
+            console.log(`❌ Player ${playerId}: ${result.error}`);
+            return {
+              playerId,
+              marketValue: 0,
+              success: false
+            };
+          }
+          
+        } catch (error) {
+          console.error(`❌ Error processing player ${playerId}:`, error);
+          return {
             playerId,
             marketValue: 0,
             success: false
-          });
-          console.log(`❌ Player ${playerId}: ${result.error}`);
+          };
         }
-        
-      } catch (error) {
-        console.error(`❌ Error processing player ${playerId}:`, error);
-        job.results.push({
-          playerId,
-          marketValue: 0,
-          success: false
-        });
-      }
+      });
       
-      // Small delay to prevent overwhelming the API
-      await new Promise(resolve => setTimeout(resolve, 100));
+      // Wait for batch to complete
+      const batchResults = await Promise.all(batchPromises);
+      job.results.push(...batchResults);
+      
+      // Update progress
+      job.progress = Math.min((batchIndex + 1) * BATCH_SIZE, playerIds.length);
+      
+      // Small delay between batches to prevent overwhelming the system
+      if (batchIndex < batches.length - 1) {
+        await new Promise(resolve => setTimeout(resolve, 50));
+      }
     }
     
     // Mark as completed
@@ -202,6 +224,30 @@ async function processMarketValueSync(
     job.currentPlayer = 'Sync completed';
     
     console.log(`✅ Market value sync completed for ${playerIds.length} players`);
+
+    // Write wallet-scoped SYNC_STATUS gate so front-end will not resync for 7 days
+    try {
+      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
+      const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+      if (supabaseUrl && supabaseAnonKey) {
+        const supabase = createClient(supabaseUrl, supabaseAnonKey)
+        const dataType = `agency_player_market_values:${walletAddress}`
+        await supabase
+          .from('sync_status')
+          .upsert({
+            data_type: dataType,
+            status: 'completed',
+            progress_percentage: 100,
+            last_synced: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+            error_message: null
+          }, { onConflict: 'data_type' })
+      } else {
+        console.warn('Skipping SYNC_STATUS write: Supabase env vars not set')
+      }
+    } catch (e) {
+      console.warn('Warning: could not update SYNC_STATUS for market values gate:', e)
+    }
     
   } catch (error) {
     console.error('❌ Market value sync failed:', error);

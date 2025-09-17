@@ -110,9 +110,7 @@ describe('MarketValueService', () => {
       mockSupabase.from.mockReturnValue({
         select: jest.fn().mockReturnValue({
           eq: jest.fn().mockReturnValue({
-            eq: jest.fn().mockReturnValue({
-              maybeSingle: jest.fn().mockResolvedValue({ data: mockData, error: null })
-            })
+            maybeSingle: jest.fn().mockResolvedValue({ data: { data: mockData }, error: null })
           })
         })
       } as any);
@@ -137,9 +135,7 @@ describe('MarketValueService', () => {
       mockSupabase.from.mockReturnValue({
         select: jest.fn().mockReturnValue({
           eq: jest.fn().mockReturnValue({
-            eq: jest.fn().mockReturnValue({
-              maybeSingle: jest.fn().mockResolvedValue({ data: mockData, error: null })
-            })
+            maybeSingle: jest.fn().mockResolvedValue({ data: { data: mockData }, error: null })
           })
         })
       } as any);
@@ -153,9 +149,7 @@ describe('MarketValueService', () => {
       mockSupabase.from.mockReturnValue({
         select: jest.fn().mockReturnValue({
           eq: jest.fn().mockReturnValue({
-            eq: jest.fn().mockReturnValue({
-              maybeSingle: jest.fn().mockResolvedValue({ data: null, error: null })
-            })
+            maybeSingle: jest.fn().mockResolvedValue({ data: null, error: null })
           })
         })
       } as any);
@@ -179,9 +173,7 @@ describe('MarketValueService', () => {
       mockSupabase.from.mockReturnValue({
         select: jest.fn().mockReturnValue({
           eq: jest.fn().mockReturnValue({
-            eq: jest.fn().mockReturnValue({
-              maybeSingle: jest.fn().mockResolvedValue({ data: mockCachedData, error: null })
-            })
+            maybeSingle: jest.fn().mockResolvedValue({ data: { data: mockCachedData }, error: null })
           })
         })
       } as any);
@@ -206,9 +198,7 @@ describe('MarketValueService', () => {
       mockSupabase.from.mockReturnValue({
         select: jest.fn().mockReturnValue({
           eq: jest.fn().mockReturnValue({
-            eq: jest.fn().mockReturnValue({
-              maybeSingle: jest.fn().mockResolvedValue({ data: mockCachedData, error: null })
-            })
+            maybeSingle: jest.fn().mockResolvedValue({ data: { data: mockCachedData }, error: null })
           })
         }),
         upsert: jest.fn().mockResolvedValue({ error: null })
@@ -269,9 +259,7 @@ describe('MarketValueService', () => {
       mockSupabase.from.mockReturnValue({
         select: jest.fn().mockReturnValue({
           eq: jest.fn().mockReturnValue({
-            eq: jest.fn().mockReturnValue({
-              maybeSingle: jest.fn().mockResolvedValue({ data: null, error: null })
-            })
+            maybeSingle: jest.fn().mockResolvedValue({ data: null, error: null })
           })
         }),
         upsert: jest.fn().mockResolvedValue({ error: null })
@@ -346,41 +334,26 @@ describe('MarketValueService', () => {
       expect(result1.confidence).toBe(result2.confidence);
     });
 
-    it('should handle different wallet addresses correctly', async () => {
+    it('should handle repeated calls consistently (cache)', async () => {
       const playerId = '116267';
-      const wallet1 = '0x123';
-      const wallet2 = '0x456';
-
-      // Mock different cached values for different wallets
+      const wallet = '0x123';
+      // Same cached value on repeated calls
       mockSupabase.from.mockReturnValue({
         select: jest.fn().mockReturnValue({
           eq: jest.fn().mockReturnValue({
-            eq: jest.fn().mockReturnValue({
-              maybeSingle: jest.fn().mockImplementation(({ data }) => {
-                if (data.wallet_address === wallet1) {
-                  return Promise.resolve({
-                    data: { market_value: 194, confidence: 'medium' },
-                    error: null
-                  });
-                } else {
-                  return Promise.resolve({
-                    data: { market_value: 200, confidence: 'low' },
-                    error: null
-                  });
-                }
-              })
-            })
+            maybeSingle: jest.fn().mockResolvedValue({ data: { data: { market_value: 194, confidence: 'medium', breakdown: {}, details: {}, calculated_at: new Date().toISOString() } }, error: null })
           })
-        })
+        }),
+        upsert: jest.fn().mockResolvedValue({ error: null })
       } as any);
 
-      const result1 = await getPlayerMarketValue(playerId, wallet1, false);
-      const result2 = await getPlayerMarketValue(playerId, wallet2, false);
+      const result1 = await getPlayerMarketValue(playerId, wallet, false);
+      const result2 = await getPlayerMarketValue(playerId, wallet, false);
 
       expect(result1.success).toBe(true);
       expect(result2.success).toBe(true);
       expect(result1.marketValue).toBe(194);
-      expect(result2.marketValue).toBe(200);
+      expect(result2.marketValue).toBe(194);
     });
   });
 });

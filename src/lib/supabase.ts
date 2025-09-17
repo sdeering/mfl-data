@@ -49,7 +49,8 @@ export const CACHE_DURATIONS = {
   COMPETITIONS: 6 * 7 * 24 * 60 * 60 * 1000, // 6 weeks (competitions change with clubs)
   TEAM_STATISTICS: 4 * 60 * 60 * 1000, // 4 hours
   PLAYER_RATINGS: 4 * 60 * 60 * 1000, // 4 hours
-  MARKET_VALUES: 4 * 60 * 60 * 1000, // 4 hours
+  MARKET_VALUES: 7 * 24 * 60 * 60 * 1000, // 7 days (agency player market values)
+  agency_player_market_values: 7 * 24 * 60 * 60 * 1000, // 7 days (lowercase key used by gate)
   TRANSFER_HISTORY: 7 * 24 * 60 * 60 * 1000, // 7 days
   SEASONS: 7 * 24 * 60 * 60 * 1000, // 7 days
   LEAGUE_STANDINGS: 4 * 60 * 60 * 1000 // 4 hours

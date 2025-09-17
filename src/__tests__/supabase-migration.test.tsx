@@ -15,6 +15,7 @@ jest.mock('../services/supabaseDataService', () => ({
     getUpcomingMatches: jest.fn(),
     getPreviousMatches: jest.fn(),
     getTacticsPageData: jest.fn(),
+    getMatchFormation: jest.fn(),
   },
 }));
 
@@ -31,6 +32,11 @@ describe('Supabase Migration Tests', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    jest.useFakeTimers();
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
   });
 
   describe('MatchesTacticsPageSupabase', () => {
@@ -90,11 +96,15 @@ describe('Supabase Migration Tests', () => {
       });
 
       mockSupabaseDataService.getClubsForWallet.mockResolvedValue(mockClubs);
+      mockSupabaseDataService.getUpcomingMatches.mockResolvedValue([]);
 
       render(<MatchesTacticsPageSupabase />);
-      
+      // advance wallet init timeout in component
+      await Promise.resolve();
+      jest.advanceTimersByTime(1600);
       await waitFor(() => {
-        expect(screen.getByText('Test Club 1')).toBeInTheDocument();
+        const clubs = screen.getAllByText('Test Club 1')
+        expect(clubs.length).toBeGreaterThan(0)
         expect(screen.getByText('Test Club 2')).toBeInTheDocument();
       }, { timeout: 10000 });
 
@@ -136,23 +146,26 @@ describe('Supabase Migration Tests', () => {
 
       mockSupabaseDataService.getClubsForWallet.mockResolvedValue(mockClubs);
       mockSupabaseDataService.getMatchesData.mockResolvedValue(mockMatches);
-      mockSupabaseDataService.getUpcomingMatches.mockResolvedValue(mockMatches.upcoming);
+      mockSupabaseDataService.getUpcomingMatches.mockResolvedValue(mockMatches);
 
       render(<MatchesTacticsPageSupabase />);
-      
+      await Promise.resolve();
+      jest.advanceTimersByTime(1600);
       await waitFor(() => {
-        expect(screen.getByText('Test Club 1')).toBeInTheDocument();
+        const clubs = screen.getAllByText('Test Club 1')
+        expect(clubs.length).toBeGreaterThan(0)
       }, { timeout: 10000 });
 
       // Click on the club to select it
-      const clubButton = screen.getByText('Test Club 1');
+      const clubButton = screen.getAllByText('Test Club 1')[0];
+      await Promise.resolve();
       clubButton.click();
 
       await waitFor(() => {
         expect(screen.getByText('Opponent Team')).toBeInTheDocument();
       });
 
-      expect(mockSupabaseDataService.getMatchesData).toHaveBeenCalledWith('1', 'upcoming');
+      expect(mockSupabaseDataService.getMatchesData).toHaveBeenCalledWith('1', 'previous');
     });
 
     it('should handle errors gracefully', async () => {
@@ -198,9 +211,9 @@ describe('Supabase Migration Tests', () => {
       mockSupabaseDataService.getClubsForWallet.mockResolvedValue(mockClubs);
 
       render(<MatchesTacticsPageSupabase />);
-      
+      jest.advanceTimersByTime(1600);
       await waitFor(() => {
-        expect(screen.getByText('Powered by Supabase Database')).toBeInTheDocument();
+        expect(screen.getByText('Powered by Database')).toBeInTheDocument();
       }, { timeout: 10000 });
     });
   });

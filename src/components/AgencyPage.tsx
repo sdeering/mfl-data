@@ -509,7 +509,7 @@ const AgencyPage: React.FC = () => {
     prevIsSyncingRef.current = isSyncing;
   }, [isSyncing, account, hasAttemptedLoad]);
 
-  // Refresh market values periodically during sync
+  // Refresh market values periodically during sync (only if progress not yet at 100%)
   useEffect(() => {
     if (!isSyncing || !account) return;
 
@@ -529,7 +529,7 @@ const AgencyPage: React.FC = () => {
       } catch (error) {
         console.warn('⚠️ Error refreshing market values during sync:', error);
       }
-    }, 10000); // Refresh every 10 seconds during sync (reduced frequency)
+    }, 15000); // Refresh every 15 seconds during sync
 
     return () => clearInterval(interval);
   }, [isSyncing, account]);
@@ -623,7 +623,7 @@ const AgencyPage: React.FC = () => {
             {isSyncing && (
               <div className="flex items-center gap-2 px-3 py-1 bg-blue-100 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 rounded-full">
                 <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-600"></div>
-                <span className="text-xs text-blue-700 dark:text-blue-300 font-medium">Syncing</span>
+                <span className="text-xs text-blue-700 dark:text-black-700 font-medium">Syncing</span>
               </div>
             )}
           </div>

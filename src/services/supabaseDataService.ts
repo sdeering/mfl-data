@@ -46,9 +46,6 @@ class SupabaseDataService {
   async getAgencyPlayerMarketValues(walletAddress: string) {
     const cacheKey = `agency_market_values_${walletAddress}`
     
-    // Clear cache to ensure fresh data
-    this.clearCache(cacheKey);
-    
     return this.getCachedData(cacheKey, async () => {
       try {
         console.log(`🔍 Querying market values for agency players for wallet: ${walletAddress}`)

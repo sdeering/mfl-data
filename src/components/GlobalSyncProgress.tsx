@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
+import { useWallet } from '../contexts/WalletContext'
 import { supabaseSyncService, type SyncProgress } from '../services/supabaseSyncService'
 
 interface GlobalSyncProgressProps {
@@ -10,9 +11,10 @@ interface GlobalSyncProgressProps {
 }
 
 export const GlobalSyncProgress: React.FC<GlobalSyncProgressProps> = ({ isVisible, isSyncing, onClose }) => {
+  const { account } = useWallet()
   const [progress, setProgress] = useState<SyncProgress[]>([])
   const [isLoading, setIsLoading] = useState(true)
-  const [isMinimized, setIsMinimized] = useState(false)
+  const [isMinimized, setIsMinimized] = useState(true)
 
   const [hasInitialized, setHasInitialized] = useState(false)
 
@@ -22,7 +24,7 @@ export const GlobalSyncProgress: React.FC<GlobalSyncProgressProps> = ({ isVisibl
       setIsLoading(true)
       setHasInitialized(false)
       setProgress([])
-      setIsMinimized(false) // Only reset minimized state when hiding the component
+      setIsMinimized(true) // Keep dialog minimized by default when hidden
       return
     }
     
@@ -41,7 +43,7 @@ export const GlobalSyncProgress: React.FC<GlobalSyncProgressProps> = ({ isVisibl
       try {
         const status = await supabaseSyncService.getSyncStatus()
         // Only show status if there's an active sync or recent completed syncs (within last 5 minutes)
-        const recentStatus = status.filter(item => {
+        let recentStatus = status.filter(item => {
           if (item.status === 'in_progress') return true
           if (item.status === 'completed' && item.dataType !== 'sync_error') {
             // Check if this is a recent completion (within last 5 minutes)
@@ -50,6 +52,19 @@ export const GlobalSyncProgress: React.FC<GlobalSyncProgressProps> = ({ isVisibl
           }
           return false
         })
+        
+        // Filter by logged-in wallet if dataType is wallet-scoped (format: type:wallet)
+        if (account) {
+          const walletLc = account.toLowerCase()
+          recentStatus = recentStatus.filter(item => {
+            const parts = item.dataType.split(':')
+            if (parts.length > 1) {
+              return parts[parts.length - 1].toLowerCase() === walletLc
+            }
+            // Keep global statuses
+            return true
+          })
+        }
         
         // Check if all items are 100% complete and there are no errors
         const allCompleted = recentStatus.length > 0 && recentStatus.every(item => 
