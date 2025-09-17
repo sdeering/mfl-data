@@ -14,6 +14,15 @@ function getSupabase() {
 // POST: increment usage for a source (e.g., 'mfl') for today
 export async function POST(req: NextRequest) {
   try {
+    // Short-circuit in tests/CI to avoid DB writes and noise
+    if (
+      process.env.NEXT_PUBLIC_DISABLE_API_USAGE === '1' ||
+      process.env.DISABLE_API_USAGE === '1' ||
+      process.env.NODE_ENV === 'test'
+    ) {
+      return NextResponse.json({ success: true, disabled: true })
+    }
+
     const { source, endpoint } = await req.json()
     if (!source) return NextResponse.json({ error: 'source required' }, { status: 400 })
 

@@ -3,6 +3,15 @@
 
 export async function incrementUsage(source: string, endpoint?: string): Promise<void> {
   try {
+    // Skip logging in tests/CI or when explicitly disabled
+    if (
+      process.env.NEXT_PUBLIC_DISABLE_API_USAGE === '1' ||
+      process.env.DISABLE_API_USAGE === '1' ||
+      process.env.NODE_ENV === 'test'
+    ) {
+      return
+    }
+
     const isBrowser = typeof window !== 'undefined'
     if (isBrowser && (process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY)) {
       // Prefer client-side Supabase RPC (SECURITY DEFINER) so logging works even if server lacks env
