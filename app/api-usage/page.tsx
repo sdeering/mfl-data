@@ -31,7 +31,7 @@ export default function ApiUsagePage() {
               { auth: { persistSession: false } }
             )
             const fromDate = new Date(Date.now() - 29 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
-            const { data, error } = await supabase.rpc('get_api_usage', { from_date: fromDate, src: null })
+            const { data, error } = await supabase.rpc('get_api_usage', { from_date: fromDate, p_source: null, p_endpoint: null })
             if (!error && Array.isArray(data)) {
               setRows(data as any)
               loaded = true

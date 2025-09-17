@@ -25,7 +25,7 @@ export async function POST(req: NextRequest) {
     const today = new Date().toISOString().slice(0, 10)
 
     // Use RPC for atomic increment (created in SQL): increment_api_usage(source)
-    const { error } = await supabase.rpc('increment_api_usage', { src: source, endpoint: endpoint ?? null })
+    const { error } = await supabase.rpc('increment_api_usage', { p_source: source, p_endpoint: endpoint ?? null })
     if (error) {
       console.warn('POST /api/usage increment_api_usage error, falling back:', error)
       // Fallback (non-atomic): ensure row exists, then bump count
@@ -82,7 +82,7 @@ export async function GET(req: NextRequest) {
 
     // Use RPC that runs as SECURITY DEFINER to bypass RLS for safe reads
     const { data, error } = await supabase
-      .rpc('get_api_usage', { from_date: fromDate, src: source ?? null })
+      .rpc('get_api_usage', { from_date: fromDate, p_source: source ?? null, p_endpoint: null })
     if (!error && Array.isArray(data)) {
       return NextResponse.json({ data })
     }
