@@ -1,10 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+function getSupabase() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY;
+  if (!url || !key) {
+    throw new Error('Supabase environment variables are not set');
+  }
+  return createClient(url, key, { auth: { persistSession: false } });
+}
 
 // GET /api/squads/[id] - Get a specific squad
 export async function GET(
@@ -12,6 +16,7 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   try {
+    const supabase = getSupabase();
     const { data: squad, error } = await supabase
       .from('squads')
       .select('*')
@@ -42,6 +47,7 @@ export async function PUT(
   { params }: { params: { id: string } }
 ) {
   try {
+    const supabase = getSupabase();
     const body = await request.json();
     const { walletAddress, squadName, formationId, players } = body;
 
@@ -120,6 +126,7 @@ export async function DELETE(
   { params }: { params: { id: string } }
 ) {
   try {
+    const supabase = getSupabase();
     const { searchParams } = new URL(request.url);
     const walletAddress = searchParams.get('walletAddress');
 
