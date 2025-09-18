@@ -8,7 +8,7 @@ import { MFLPlayer } from '../types/mflApi';
 import { useSupabaseSync } from '../hooks/useSupabaseSync';
 import { GlobalSyncProgress } from './GlobalSyncProgress';
 import { OverallRatingTooltip } from './OverallRatingTooltip';
-import MarketValueSyncProgress from './MarketValueSyncProgress';
+// Removed market value sync UI on agency page
 import * as XLSX from 'xlsx';
 
 const AgencyPage: React.FC = () => {
@@ -17,8 +17,7 @@ const AgencyPage: React.FC = () => {
   const [players, setPlayers] = useState<MFLPlayer[]>([]);
   const [filteredPlayers, setFilteredPlayers] = useState<MFLPlayer[]>([]);
   const [displayedPlayers, setDisplayedPlayers] = useState<MFLPlayer[]>([]);
-  const [marketValues, setMarketValues] = useState<Map<number, number>>(new Map());
-  const [marketValueDetails, setMarketValueDetails] = useState<Map<number, any>>(new Map());
+  // Removed market values state (no longer shown on agency table)
   const [searchTerm, setSearchTerm] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -129,8 +128,9 @@ const AgencyPage: React.FC = () => {
         return player.metadata.defense;
       case 'physical':
         return player.metadata.physical;
+      // Removed marketValue from sorting
       case 'marketValue':
-        return marketValues.get(player.id) || 0;
+        return 0;
       case 'club':
         return getClubName(player).toLowerCase();
       default:
@@ -157,8 +157,7 @@ const AgencyPage: React.FC = () => {
 
     // Prepare data for export
     const exportData = players.map(player => {
-      const marketValue = marketValues.get(player.id);
-      const playerMarketValueDetails = marketValueDetails.get(player.id);
+      // Market value removed from export
       
       // Get position ratings and primary position
       const positionRatings = playerMarketValueDetails?.position_ratings || {};
@@ -184,8 +183,8 @@ const AgencyPage: React.FC = () => {
         'Defense': player.metadata.defense,
         'Physical': player.metadata.physical,
         'Goalkeeping': player.metadata.goalkeeping || 0,
-        'Market Value': marketValue ? (marketValue === 0 ? 'No Data' : `$${marketValue.toLocaleString()}`) : 'Not Calculated',
-        'Market Value Confidence': playerMarketValueDetails?.confidence === 'medium' ? 'N/A (Cached)' : (playerMarketValueDetails?.confidence || 'N/A'),
+        // 'Market Value': 'Removed',
+        // 'Market Value Confidence': 'Removed',
         'Club': getClubName(player),
         'Contract Status': player.activeContract ? 'Active' : 'No Contract',
         'Nationality': player.metadata.nationalities?.[0] || 'N/A',
@@ -228,8 +227,8 @@ const AgencyPage: React.FC = () => {
       { wch: 10 }, // Defense
       { wch: 10 }, // Physical
       { wch: 12 }, // Goalkeeping
-      { wch: 15 }, // Market Value
-      { wch: 20 }, // Market Value Confidence
+      // { wch: 15 }, // Market Value (removed)
+      // { wch: 20 }, // Market Value Confidence (removed)
       { wch: 20 }, // Club
       { wch: 15 }, // Contract Status
       { wch: 15 }, // Nationality
@@ -317,61 +316,7 @@ const AgencyPage: React.FC = () => {
     return () => clearTimeout(timer);
   }, [isConnected, router]);
 
-  // Fetch market values for agency players
-  const fetchMarketValues = async () => {
-    if (!account) return;
-    
-    try {
-      console.log('💰 Fetching market values from database for wallet:', account);
-      const marketValuesData = await supabaseDataService.getAgencyPlayerMarketValues(account);
-      console.log('💰 Fetched market values from database:', marketValuesData?.length || 0, 'players');
-      
-      if (marketValuesData && marketValuesData.length > 0) {
-        const marketValuesMap = new Map<number, number>();
-        const marketValueDetailsMap = new Map<number, any>();
-        
-        marketValuesData.forEach((item: any) => {
-          marketValuesMap.set(item.player_id, item.market_value);
-          
-          // Store detailed breakdown information for popup
-          if (item.position_ratings) {
-            marketValueDetailsMap.set(item.player_id, {
-              market_value: item.market_value,
-              position_ratings: item.position_ratings,
-              confidence: 'medium', // Default confidence for cached values
-              breakdown: {
-                positionPremium: 0, // We don't store this in DB yet
-                progressionPremium: 0,
-                retirementPenalty: 0,
-                newlyMintPremium: 0,
-                pacePenalty: 0,
-                pacePremium: 0,
-                heightAdjustment: 0,
-                comparableListings: 0,
-                recentSales: 0
-              },
-              details: {
-                baseValue: item.market_value,
-                comparableListings: [],
-                recentSales: [],
-                comparableAverage: 0,
-                recentSalesAverage: 0
-              }
-            });
-          }
-        });
-        
-        setMarketValues(marketValuesMap);
-        setMarketValueDetails(marketValueDetailsMap);
-      } else {
-        setMarketValues(new Map());
-        setMarketValueDetails(new Map());
-      }
-    } catch (err) {
-      console.error('❌ Error fetching market values:', err);
-      // Don't set error state for market values as it's not critical
-    }
-  };
+  // Removed: market values fetching on agency page
 
   const fetchMFLPlayers = async () => {
     if (!account) return;
@@ -394,8 +339,7 @@ const AgencyPage: React.FC = () => {
       setPlayers(playerData);
       setFilteredPlayers(playerData);
       
-      // Fetch market values after players are loaded
-      await fetchMarketValues();
+      // Market values removed from agency view
       
     } catch (error: any) {
       console.error('❌ Error fetching players from database:', error);
@@ -416,65 +360,11 @@ const AgencyPage: React.FC = () => {
     }
   };
 
-  // Function to start bulk market value sync for all players
-  const startMarketValueSync = async () => {
-    if (!account || players.length === 0) return;
-    
-    try {
-      console.log(`🔄 Starting market value sync for ${players.length} players...`);
-      
-      const response = await fetch('/api/sync/player-market-values', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          walletAddress: account,
-          playerIds: players.map(p => p.id.toString()),
-          forceRecalculate: true
-          // No limit - process all players for production
-        })
-      });
-      
-      if (!response.ok) {
-        throw new Error(`Failed to start market value sync: ${response.statusText}`);
-      }
-      
-      const result = await response.json();
-      
-      if (result.success && result.jobId) {
-        console.log(`✅ Market value sync started with job ID: ${result.jobId}`);
-        setSyncJobId(result.jobId);
-      } else {
-        console.error('❌ Failed to start market value sync:', result.error);
-      }
-      
-    } catch (error) {
-      console.error('❌ Error starting market value sync:', error);
-    }
-  };
+  // Removed: bulk market value sync action
 
-  // Function to handle sync completion
-  const handleSyncComplete = (results: Array<{ playerId: string; marketValue: number; success: boolean }>) => {
-    console.log('✅ Market value sync completed:', results);
-    
-    // Update market values for successful calculations
-    const newMarketValues = new Map(marketValues);
-    results.forEach(result => {
-      if (result.success) {
-        newMarketValues.set(parseInt(result.playerId), result.marketValue);
-      }
-    });
-    setMarketValues(newMarketValues);
-    
-    // Close the sync progress modal
-    setSyncJobId(null);
-  };
+  // Removed: market value sync completion handler
 
-  // Function to close sync progress
-  const handleCloseSync = () => {
-    setSyncJobId(null);
-  };
+  // Removed: close sync progress handler
 
 
   useEffect(() => {
@@ -607,12 +497,7 @@ const AgencyPage: React.FC = () => {
       {/* Global Sync Progress - Show when syncing */}
       <GlobalSyncProgress isVisible={isSyncVisible} onClose={closeProgress} isSyncing={isSyncing} />
       
-      {/* Market Value Sync Progress */}
-      <MarketValueSyncProgress 
-        jobId={syncJobId} 
-        onComplete={handleSyncComplete}
-        onClose={handleCloseSync}
-      />
+      {/* Market Value Sync UI removed */}
       
       <div className="mb-8">
         <div className="flex items-center justify-between mb-2">
@@ -859,37 +744,7 @@ const AgencyPage: React.FC = () => {
                       )}
                     </div>
                   </th>
-                  <th 
-                    className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600 select-none"
-                    onClick={() => handleSort('marketValue')}
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center space-x-1">
-                        <span>Value</span>
-                        {isSyncing && (
-                          <div className="animate-spin rounded-full h-3 w-3 border-b border-blue-600"></div>
-                        )}
-                        {sortField === 'marketValue' && (
-                          <span className="text-blue-600 dark:text-blue-400">
-                            {sortDirection === 'asc' ? '↑' : '↓'}
-                          </span>
-                        )}
-                      </div>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          startMarketValueSync();
-                        }}
-                        className="p-1 text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors cursor-pointer"
-                        title="Sync all market values"
-                        disabled={!account || players.length === 0}
-                      >
-                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                        </svg>
-                      </button>
-                    </div>
-                  </th>
+                  {/* Value column removed */}
                   <th 
                     className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600 select-none"
                     onClick={() => handleSort('club')}
@@ -967,40 +822,7 @@ const AgencyPage: React.FC = () => {
                     <td className="px-3 py-2 whitespace-nowrap w-20 text-center">
                       {renderAttributeValue(player, player.metadata.physical)}
                     </td>
-                    <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-900 dark:text-white">
-                      {(() => {
-                        const marketValue = marketValues.get(player.id);
-                        const isRefreshing = refreshingPlayers.has(player.id);
-                        
-                        if (marketValue) {
-                          if (marketValue === 0) {
-                            return (
-                              <span className="font-semibold text-gray-500 dark:text-gray-400">
-                                No Data
-                              </span>
-                            );
-                          }
-                          return (
-                            <span className={`font-semibold text-green-600 dark:text-green-400 ${isSyncing ? 'animate-pulse' : ''}`}>
-                              ${marketValue.toLocaleString()}
-                            </span>
-                          );
-                        }
-                        
-                        if (isRefreshing) {
-                          return (
-                            <div className="flex items-center space-x-1">
-                              <div className="animate-spin rounded-full h-3 w-3 border-b border-blue-600"></div>
-                              <span className="text-xs text-blue-600 dark:text-blue-400">Calculating...</span>
-                            </div>
-                          );
-                        }
-                        
-                        return (
-                          <span className="text-gray-400 dark:text-gray-500 text-xs">?</span>
-                        );
-                      })()}
-                    </td>
+                    {/* Value cell removed */}
                     <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-900 dark:text-white">
                       {getClubName(player)}
                     </td>

@@ -1766,16 +1766,7 @@ class SupabaseSyncService {
         console.log('✅ Agency players sync completed')
       }
       
-      if (!this.syncCancelled && !this.abortController?.signal.aborted) {
-        console.log('🔄 Starting agency player market values sync')
-        await this.withRetry(
-          () => this.syncAgencyPlayerMarketValues(walletAddress, options),
-          'Agency player market values sync',
-          options.maxRetries,
-          options.retryDelay
-        )
-        console.log('✅ Agency player market values sync completed')
-      }
+      // Removed: agency player market values background sync
       
       // Player data sync is handled on-demand when specific players are requested
       // This is more efficient than syncing all players at once
@@ -1803,16 +1794,7 @@ class SupabaseSyncService {
         console.log('✅ Upcoming opposition sync completed')
       }
       
-      if (!this.syncCancelled && !this.abortController?.signal.aborted) {
-        console.log('🔄 Starting opponent matches sync in main sync sequence')
-        await this.withRetry(
-          () => this.syncOpponentMatchesData(walletAddress, options),
-          'Opponent matches data sync',
-          options.maxRetries,
-          options.retryDelay
-        )
-        console.log('✅ Opponent matches sync completed in main sync sequence')
-      }
+      // Removed: opponent matches sync from main sequence (handled on tactics page only)
 
       // Call completion callback only if not cancelled
       if (!this.syncCancelled && !this.abortController?.signal.aborted && options.onComplete) {
