@@ -1,6 +1,10 @@
 import { mflApi } from '../services/mflApi';
 
-describe('Sale History Endpoint - Real API Tests', () => {
+const skipReal = process.env.DISABLE_REAL_API_TESTS === '1' || process.env.CI === 'true'
+
+const maybeDescribe = skipReal ? describe.skip : describe
+
+maybeDescribe('Sale History Endpoint - Real API Tests', () => {
   // These tests use real API calls to verify the endpoint works correctly
 
   describe('getPlayerSaleHistory', () => {
