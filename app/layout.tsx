@@ -91,7 +91,7 @@ export default function RootLayout({
           <WalletProvider>
             <LoadingProvider>
               <SupabaseSyncProvider>
-                <div className="max-w-[1200px] mx-auto">
+                <div className="max-w-[1240px] mx-auto">
                   <Header />
                   <div className="px-[30px] max-[412px]:px-[15px] bg-white dark:bg-[#111827] min-h-[calc(100vh-0px)]">
                     {children}

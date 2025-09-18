@@ -244,11 +244,11 @@ const PlayerResultsPage: React.FC<PlayerResultsPageProps> = ({ propPlayerId, ini
   return (
     <div className="min-h-screen bg-white dark:bg-[#111827]">
       {/* Main Content Area - Responsive Layout */}
-              <div className="px-4 lg:px-0 bg-white dark:bg-[#111827] rounded-lg">
+              <div className="px-4 lg:px-0 mt-5 bg-white dark:bg-[#111827] rounded-lg">
         {player ? (
           <>
             {/* Row 1 - Main player information */}
-            <div key={`player-${player.id}`} className="flex flex-wrap gap-6 lg:gap-[30px] h-full mb-6">
+            <div key={`player-${player.id}`} className="flex flex-wrap justify-center gap-6 lg:gap-[30px] h-full mb-6">
               {/* Column 1 - Player Card (Mobile: First, Desktop: Second) */}
               <div className="w-full lg:w-[375px] lg:flex-shrink-0 flex flex-col order-1 lg:order-2">
                 <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4 text-center hidden">Player Card</h2>
@@ -359,7 +359,7 @@ const PlayerResultsPage: React.FC<PlayerResultsPageProps> = ({ propPlayerId, ini
               </div>
 
               {/* Recent Matches */}
-              <div className="w-full lg:w-[350px]">
+              <div className="w-full lg:w-[397px]">
                 <div className="w-full p-[5px]">
                   <PlayerRecentMatches 
                     playerId={player.id.toString()} 

@@ -99,8 +99,10 @@ const AgencyPage: React.FC = () => {
     }
     const tierColors = getTierColor(value);
     return (
-      <div className={`flex items-center justify-center rounded-lg shadow-sm px-2 py-1 text-center font-bold w-12 ${tierColors.text} ${tierColors.bg} ${tierColors.border}`} style={{ fontSize: '16px' }}>
-        {value}
+      <div className="flex justify-center">
+        <div className={`flex items-center justify-center rounded-lg shadow-sm px-2 py-1 text-center font-bold w-12 ${tierColors.text} ${tierColors.bg} ${tierColors.border}`} style={{ fontSize: '16px' }}>
+          {value}
+        </div>
       </div>
     );
   };

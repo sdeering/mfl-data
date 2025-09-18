@@ -313,10 +313,11 @@ const FORMATIONS: Formation[] = [
 interface DraggablePlayerCardProps {
   player: MFLPlayer;
   onAdd: (player: MFLPlayer) => void;
+  onRemove?: (player: MFLPlayer) => void;
   isInSquad?: boolean;
 }
 
-function DraggablePlayerCard({ player, onAdd, isInSquad = false }: DraggablePlayerCardProps) {
+function DraggablePlayerCard({ player, onAdd, onRemove, isInSquad = false }: DraggablePlayerCardProps) {
   const {
     attributes,
     listeners,
@@ -326,10 +327,11 @@ function DraggablePlayerCard({ player, onAdd, isInSquad = false }: DraggablePlay
     isDragging,
   } = useSortable({ id: player.id.toString() });
 
-  const style = {
+  const style: React.CSSProperties = {
     transform: CSS.Transform.toString(transform),
     transition,
     opacity: isDragging ? 0.5 : 1,
+    ...(isInSquad ? { backgroundColor: '#1e1e1e' } : {})
   };
 
   // Tiered text color for stats, matching card tiers
@@ -348,10 +350,10 @@ function DraggablePlayerCard({ player, onAdd, isInSquad = false }: DraggablePlay
       style={style}
       {...attributes}
       {...listeners}
-      onClick={() => { if (!isInSquad) onAdd(player); }}
+      onClick={() => { if (isInSquad) { onRemove?.(player); } else { onAdd(player); } }}
       className={`p-2 md:p-3 border rounded-lg cursor-pointer transition-colors ${
         isInSquad
-          ? 'border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-800 opacity-80'
+          ? 'border-gray-300 dark:border-gray-600 opacity-80'
           : 'border-gray-200 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 hover:border-blue-400 dark:hover:border-blue-500'
       }`}
     >
@@ -568,6 +570,7 @@ export default function SquadBuilderPage() {
   // Simplified save flow: use inline squad.name and save directly
   const [showLoadModal, setShowLoadModal] = useState(false);
   const [isDeleting, setIsDeleting] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
   const [isLoadingSquads, setIsLoadingSquads] = useState(false);
   const { toasts, removeToast, success, error: showError, warning, info } = useToast();
   const [squadStats, setSquadStats] = useState({
@@ -598,6 +601,28 @@ export default function SquadBuilderPage() {
   const [sidebarPage, setSidebarPage] = useState(0);
   const pageSize = 20;
 
+  // Detect if any sidebar filters are active (non-default)
+  const isFiltersActive =
+    filterPosition !== 'all' ||
+    selectedCardTypes.length > 0 ||
+    overallMin !== 0 || overallMax !== 100 ||
+    positionRatingMin !== 0 || positionRatingMax !== 100 ||
+    Object.values(attrFilters).some(v => v !== 0) ||
+    Object.values(attrFiltersMax).some(v => v !== 100);
+
+  // Reset all sidebar filters to defaults
+  const resetFilters = () => {
+    setFilterPosition('all');
+    setSelectedCardTypes([]);
+    setOverallMin(0);
+    setOverallMax(100);
+    setPositionRatingMin(0);
+    setPositionRatingMax(100);
+    setAttrFilters({ pace: 0, shooting: 0, passing: 0, dribbling: 0, defense: 0, physical: 0 });
+    setAttrFiltersMax({ pace: 100, shooting: 100, passing: 100, dribbling: 100, defense: 100, physical: 100 });
+    setSidebarPage(0);
+  };
+
   // Table/stat tier color helper (match sidebar/card tiers)
   const getTierTextColorValue = (value: number): string => {
     if (value >= 95) return '#87f6f8';      // Ultimate
@@ -612,7 +637,14 @@ export default function SquadBuilderPage() {
   // Choose best available formation slot for a player (prefer valid within ±6 OVR, otherwise first empty)
   const pickTargetPositionForPlayer = (player: MFLPlayer, formation: Formation, current: Squad): string | null => {
     const emptyPositions = formation.positions.filter((pos) => !current.players[pos]);
-    if (emptyPositions.length === 0) return null;
+    // If no empty formation slots, create an expandable bench/extra slot key
+    const getNextExtraKey = () => {
+      const existing = Object.keys(current.players).filter(k => k.startsWith('EXTRA'));
+      const nums = existing.map(k => parseInt(k.replace('EXTRA',''), 10)).filter(n => !Number.isNaN(n));
+      const next = (nums.length ? Math.max(...nums) : 0) + 1;
+      return `EXTRA${next}`;
+    };
+    if (emptyPositions.length === 0) return getNextExtraKey();
     // Find valid positions per validation
     let bestPos: string | null = null;
     let bestDelta = Number.POSITIVE_INFINITY;
@@ -644,10 +676,7 @@ export default function SquadBuilderPage() {
       return key;
     });
   };
-  const tableSortedPlayers = [...selectedFormation.positions
-    .map(pos => squad.players[pos])
-    .filter(Boolean)
-    .map(sp => sp!.player)] as MFLPlayer[];
+  const tableSortedPlayers = Object.values(squad.players).map(sp => sp.player) as MFLPlayer[];
   tableSortedPlayers.sort((a, b) => {
     const dir = tableSortDir === 'asc' ? 1 : -1;
     const keyMap: any = { overall: 'overall', pace: 'pace', shooting: 'shooting', passing: 'passing', dribbling: 'dribbling', defense: 'defense', physical: 'physical' };
@@ -811,6 +840,7 @@ export default function SquadBuilderPage() {
       return;
     }
     try {
+      setIsSaving(true);
       // If a squad with the same name exists, overwrite it
       const existing = savedSquads.find(s => s.squad_name.toLowerCase() === name.toLowerCase());
       if (existing) {
@@ -821,10 +851,11 @@ export default function SquadBuilderPage() {
       // Refresh saved squads
       const squads = await getSquads(account);
       setSavedSquads(squads);
-      success('Squad Saved!', `"${name}" has been saved successfully.`, 2000);
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to save squad';
       showError('Save Failed', errorMessage, 2000);
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -849,7 +880,6 @@ export default function SquadBuilderPage() {
       });
 
       setShowLoadModal(false);
-      success('Squad Loaded!', `"${savedSquad.squad_name}" has been loaded successfully.`, 2000);
       console.log(`✅ Loaded squad: ${savedSquad.squad_name}`);
     } catch (error) {
       console.error('Error loading squad:', error);
@@ -1010,10 +1040,8 @@ export default function SquadBuilderPage() {
   };
 
   const handleAddToSquad = (player: MFLPlayer) => {
-    const targetPos = selectedFormation.positions.find(pos => !squad.players[pos]);
+    const targetPos = pickTargetPositionForPlayer(player, selectedFormation, squad);
     if (!targetPos) return;
-    const canPlayPosition = validatePlayerPosition(player, targetPos);
-    if (!canPlayPosition.isValid) return;
     const newSquad = {
       ...squad,
       players: { ...squad.players, [targetPos]: { player, position: targetPos } }
@@ -1115,6 +1143,38 @@ export default function SquadBuilderPage() {
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
     >
+      <style jsx global>{`
+        /* Force consistent border color in dark mode for the main squad table */
+        .sb-main-squad-table table,
+        .sb-main-squad-table thead,
+        .sb-main-squad-table tbody,
+        .sb-main-squad-table tr,
+        .sb-main-squad-table th,
+        .sb-main-squad-table td {
+          border-color: #374151 !important;
+        }
+        .sb-main-squad-table thead {
+          border-bottom: 1px solid #374151 !important;
+        }
+        .sb-main-squad-table th,
+        .sb-main-squad-table td {
+          border-top-color: #374151 !important;
+          border-right-color: #374151 !important;
+          border-bottom-color: #374151 !important;
+          border-left-color: #374151 !important;
+        }
+        .sb-main-squad-table .border,
+        .sb-main-squad-table .border-b,
+        .sb-main-squad-table .border-t,
+        .sb-main-squad-table .border-l,
+        .sb-main-squad-table .border-r,
+        .sb-main-squad-table .divide-y > :not([hidden]) ~ :not([hidden]) {
+          border-color: #374151 !important;
+        }
+        .dark .sb-main-squad-table tbody {
+          background-color: #1e1e1e !important;
+        }
+      `}</style>
       <div className="min-h-screen">
           <div className="mb-6 flex items-center justify-between gap-3 flex-wrap">
           <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Squad Builder</h1>
@@ -1142,10 +1202,14 @@ export default function SquadBuilderPage() {
               {/* Save Squad (only when there are players) */}
               {Object.keys(squad.players).length > 0 && (
                 <button
-                  className="px-4 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors cursor-pointer text-sm"
+                  className="px-4 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors cursor-pointer text-sm inline-flex items-center gap-2 disabled:opacity-70"
                   onClick={handleSaveSquad}
+                  disabled={isSaving}
                 >
-                  Save Squad
+                  {isSaving && (
+                    <span className="inline-block w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" aria-hidden="true"></span>
+                  )}
+                  {isSaving ? 'Saving…' : 'Save Squad'}
                 </button>
               )}
 
@@ -1157,7 +1221,6 @@ export default function SquadBuilderPage() {
                     const newSquad = { ...squad, players: {} };
                     addToHistory(newSquad);
                     setSquad(newSquad);
-                    info('Squad Cleared', 'All players have been removed from the squad.');
                   }}
                 >
                   Clear Squad
@@ -1256,12 +1319,24 @@ export default function SquadBuilderPage() {
             {/* Filters */}
             <div className="space-y-3 mb-2">
               {/* Rating Sliders (Overall first, Position rating second) */}
-              <button
-                className="w-full text-left px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white hover:bg-gray-50 dark:hover:bg-gray-600 cursor-pointer"
-                onClick={() => setShowSidebarFilters(v => !v)}
-              >
-                {showSidebarFilters ? 'Hide Filters' : 'Show Filters'}
-              </button>
+              <div className="flex items-center justify-between gap-2">
+                <button
+                  className="text-left px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white hover:bg-gray-50 dark:hover:bg-gray-600 cursor-pointer"
+                  onClick={() => setShowSidebarFilters(v => !v)}
+                >
+                  {showSidebarFilters ? 'Hide Filters' : 'Show Filters'}
+                </button>
+                {isFiltersActive && (
+                  <button
+                    type="button"
+                    onClick={resetFilters}
+                    className="text-sm text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
+                    title="Reset filters"
+                  >
+                    Reset
+                  </button>
+                )}
+              </div>
               <div className={`grid grid-cols-2 gap-3 ${showSidebarFilters ? '' : 'hidden'}`}>
                 {/* Card Type Filter */}
                 <div className="col-span-2">
@@ -1412,6 +1487,12 @@ export default function SquadBuilderPage() {
                       const newSquad: Squad = { ...squad, players: { ...squad.players, [targetPos]: { player: p, position: targetPos } } };
                       addToHistory(newSquad);
                       setSquad(newSquad);
+                    }} onRemove={(p) => {
+                      const newSquad: Squad = { ...squad };
+                      const entries = Object.entries(newSquad.players).filter(([_, v]) => v.player.id !== p.id);
+                      newSquad.players = Object.fromEntries(entries);
+                      addToHistory(newSquad);
+                      setSquad(newSquad);
                     }} />
                   </div>
                 )})}
@@ -1453,7 +1534,7 @@ export default function SquadBuilderPage() {
 
         {/* Main Squad Builder Area */}
         <div className="min-w-0">
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6 min-h-[830px]">
+          <div className="bg-[#1e1e1e] rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6 min-h-[830px]">
             {/* Formation Selector with Analysis (hidden in table view) */}
             {/* Formation analysis and field view removed */}
 
@@ -1468,12 +1549,6 @@ export default function SquadBuilderPage() {
                     {squadStats.averageOverall}
                   </div>
                   <div className="text-sm text-gray-600 dark:text-gray-400 mb-2">Avg Overall</div>
-                  <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
-                    <div 
-                      className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-                      style={{ width: `${squadStats.averageOverall}%` }}
-                    ></div>
-                  </div>
                 </div>
                 {/* Formation Fit removed */}
                 <div className="text-center">
@@ -1565,24 +1640,46 @@ export default function SquadBuilderPage() {
                 <div className="bg-white dark:bg-gray-700 rounded-lg p-3">
                   <h4 className="text-sm font-medium text-gray-900 dark:text-white mb-2">Squad Balance</h4>
                   <div className="space-y-2">
-                    <div className="flex justify-between items-center">
-                      <span className="text-xs text-gray-600 dark:text-gray-400">Attack</span>
-                      <span className="text-xs font-medium text-gray-900 dark:text-white">
-                        {Math.round((squadStats.stats.shooting + squadStats.stats.pace) / 2)}
-                      </span>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-xs text-gray-600 dark:text-gray-400">Midfield</span>
-                      <span className="text-xs font-medium text-gray-900 dark:text-white">
-                        {Math.round((squadStats.stats.passing + squadStats.stats.dribbling) / 2)}
-                      </span>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-xs text-gray-600 dark:text-gray-400">Defense</span>
-                      <span className="text-xs font-medium text-gray-900 dark:text-white">
-                        {Math.round((squadStats.stats.defense + squadStats.stats.physical) / 2)}
-                      </span>
-                    </div>
+                    {(() => {
+                      const normalize = (pos: string) => {
+                        const base = (pos || '').replace(/[0-9]+$/, '');
+                        if (base === 'CF') return 'ST';
+                        if (base === 'RWB') return 'RB';
+                        if (base === 'LWB') return 'LB';
+                        return base;
+                      };
+                      const counts = { attack: 0, midfield: 0, defense: 0, gk: 0 };
+                      Object.entries(squad.players).forEach(([slot, sp]) => {
+                        let base = normalize(slot);
+                        if (base === 'EXTRA') {
+                          base = normalize(sp.player.metadata.positions[0] || '');
+                        }
+                        if (base === 'GK') counts.gk++;
+                        else if (['ST','LW','RW'].includes(base)) counts.attack++;
+                        else if (['CAM','CM','CDM','LM','RM'].includes(base)) counts.midfield++;
+                        else if (['CB','LB','RB'].includes(base)) counts.defense++;
+                      });
+                      return (
+                        <>
+                          <div className="flex justify-between items-center">
+                            <span className="text-xs text-gray-600 dark:text-gray-400">Goalkeepers</span>
+                            <span className="text-xs font-medium text-gray-900 dark:text-white">{counts.gk}</span>
+                          </div>
+                          <div className="flex justify-between items-center">
+                            <span className="text-xs text-gray-600 dark:text-gray-400">Defense</span>
+                            <span className="text-xs font-medium text-gray-900 dark:text-white">{counts.defense}</span>
+                          </div>
+                          <div className="flex justify-between items-center">
+                            <span className="text-xs text-gray-600 dark:text-gray-400">Midfield</span>
+                            <span className="text-xs font-medium text-gray-900 dark:text-white">{counts.midfield}</span>
+                          </div>
+                          <div className="flex justify-between items-center">
+                            <span className="text-xs text-gray-600 dark:text-gray-400">Attack</span>
+                            <span className="text-xs font-medium text-gray-900 dark:text-white">{counts.attack}</span>
+                          </div>
+                        </>
+                      );
+                    })()}
                   </div>
                 </div>
 
@@ -1618,13 +1715,38 @@ export default function SquadBuilderPage() {
                   <h4 className="text-sm font-medium text-gray-900 dark:text-white mb-2">Position Coverage</h4>
                   <div className="space-y-2">
                     {(() => {
-                      const squadPlayers = Object.values(squad.players);
-                      const coveredPositions = new Set();
-                      squadPlayers.forEach(sp => {
-                        sp.player.metadata.positions.forEach(pos => coveredPositions.add(pos));
+                      // Required unique positions for full coverage
+                      const requiredPositions = ['GK', 'CB', 'LB', 'RB', 'CDM', 'CM', 'CAM', 'LM', 'RM', 'LW', 'RW', 'ST'];
+                      const normalize = (pos: string) => {
+                        const base = pos.replace(/[0-9]+$/, '');
+                        if (base === 'CF') return 'ST';
+                        if (base === 'RWB') return 'RB';
+                        if (base === 'LWB') return 'LB';
+                        return base;
+                      };
+
+                      // Use assigned squad slots (keys) to determine coverage, not all player capable positions
+                      const assignedBases = new Set<string>();
+                      Object.keys(squad.players).forEach(slot => {
+                        const b = normalize(slot);
+                        if (b !== 'EXTRA') assignedBases.add(b);
                       });
-                      const totalPositions = ['GK', 'CB', 'LB', 'RB', 'CDM', 'CM', 'CAM', 'LW', 'RW', 'ST'].length;
-                      const coveragePercent = Math.round((coveredPositions.size / totalPositions) * 100);
+
+                      // Count only intersections with required positions
+                      const coveredCount = requiredPositions.filter(r => assignedBases.has(r)).length;
+                      const total = requiredPositions.length;
+                      const coveragePercent = Math.max(0, Math.min(100, Math.round((coveredCount / total) * 100)));
+
+                      // Backup coverage: count positions that have 2 or more assigned players
+                      const counts: Record<string, number> = {};
+                      Object.keys(squad.players).forEach(slot => {
+                        const b = normalize(slot);
+                        if (b === 'EXTRA') return;
+                        counts[b] = (counts[b] || 0) + 1;
+                      });
+                      const backupCount = requiredPositions.filter(r => (counts[r] || 0) >= 2).length;
+                      const backupPercent = Math.max(0, Math.min(100, Math.round((backupCount / total) * 100)));
+
                       return (
                         <>
                           <div className="flex justify-between items-center">
@@ -1635,6 +1757,17 @@ export default function SquadBuilderPage() {
                             <div 
                               className="bg-blue-500 h-2 rounded-full transition-all duration-300"
                               style={{ width: `${coveragePercent}%` }}
+                            ></div>
+                          </div>
+
+                          <div className="flex justify-between items-center mt-3">
+                            <span className="text-xs text-gray-600 dark:text-gray-400">Backup Coverage</span>
+                            <span className="text-xs font-medium text-gray-900 dark:text-white">{backupPercent}%</span>
+                          </div>
+                          <div className="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-2">
+                            <div 
+                              className="bg-green-500 h-2 rounded-full transition-all duration-300"
+                              style={{ width: `${backupPercent}%` }}
                             ></div>
                           </div>
                         </>
@@ -1651,50 +1784,62 @@ export default function SquadBuilderPage() {
             {/* Field display removed */}
 
             {/* Table View: reuse club page styles. Show only players currently in squad */}
-            {/* Squad Name inline editor */}
-            <div className="mb-3">
-              <input
-                type="text"
-                value={squad.name}
-                onChange={(e) => setSquad(prev => ({ ...prev, name: e.target.value }))}
-                placeholder="Squad name..."
-                className="w-full max-w-md px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              />
+            {/* Squad Title (heading) */}
+            <div className="mb-[10px]">
+              <h3 className="text-[18px] font-semibold text-gray-900 dark:text-white">
+                {squad.name && squad.name.trim().length > 0 ? squad.name : 'SQUAD'}
+              </h3>
             </div>
-            <div className="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden sb-main-squad-table">
                 <div className="overflow-x-auto">
-                  <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                    <thead className="bg-gray-50 dark:bg-gray-700">
+                  <table className="min-w-full">
+                    <thead className="bg-gray-50 dark:bg-gray-700 border-b border-gray-200 dark:border-gray-700">
                       <tr>
-                        <th onClick={() => handleTableSort('name')} className="cursor-pointer px-4 py-3 text-left text-sm font-semibold text-gray-600 dark:text-white uppercase tracking-wider">Player</th>
-                        <th onClick={() => handleTableSort('overall')} className="cursor-pointer px-4 py-3 text-center text-sm font-semibold text-gray-600 dark:text-white uppercase tracking-wider">OVR {tableSortKey==='overall' ? (tableSortDir==='asc'?'↑':'↓') : ''}</th>
-                        <th className="px-4 py-3 text-left text-sm font-semibold text-gray-600 dark:text-white uppercase tracking-wider">Positions</th>
-                        <th onClick={() => handleTableSort('pace')} className="cursor-pointer px-4 py-3 text-center text-sm font-semibold text-gray-600 dark:text-white uppercase tracking-wider">PAC {tableSortKey==='pace' ? (tableSortDir==='asc'?'↑':'↓') : ''}</th>
-                        <th onClick={() => handleTableSort('shooting')} className="cursor-pointer px-4 py-3 text-center text-sm font-semibold text-gray-600 dark:text-white uppercase tracking-wider">SHO {tableSortKey==='shooting' ? (tableSortDir==='asc'?'↑':'↓') : ''}</th>
-                        <th onClick={() => handleTableSort('passing')} className="cursor-pointer px-4 py-3 text-center text-sm font-semibold text-gray-600 dark:text-white uppercase tracking-wider">PAS {tableSortKey==='passing' ? (tableSortDir==='asc'?'↑':'↓') : ''}</th>
-                        <th onClick={() => handleTableSort('dribbling')} className="cursor-pointer px-4 py-3 text-center text-sm font-semibold text-gray-600 dark:text-white uppercase tracking-wider">DRI {tableSortKey==='dribbling' ? (tableSortDir==='asc'?'↑':'↓') : ''}</th>
-                        <th onClick={() => handleTableSort('defense')} className="cursor-pointer px-4 py-3 text-center text-sm font-semibold text-gray-600 dark:text-white uppercase tracking-wider">DEF {tableSortKey==='defense' ? (tableSortDir==='asc'?'↑':'↓') : ''}</th>
-                        <th onClick={() => handleTableSort('physical')} className="cursor-pointer px-4 py-3 text-center text-sm font-semibold text-gray-600 dark:text-white uppercase tracking-wider">PHY {tableSortKey==='physical' ? (tableSortDir==='asc'?'↑':'↓') : ''}</th>
-                        <th className="px-4 py-3 text-center text-sm font-semibold text-gray-600 dark:text-white uppercase tracking-wider">Actions</th>
+                        <th onClick={() => handleTableSort('name')} className="cursor-pointer p-[5px] text-left text-sm font-semibold text-gray-600 dark:text-white uppercase tracking-wider"> 
+                          <span className="inline-flex items-center gap-1">Player {tableSortKey==='name' ? (tableSortDir==='asc'?'↑':'↓') : ''}</span>
+                        </th>
+                        <th onClick={() => handleTableSort('overall')} className="cursor-pointer p-[5px] text-center text-sm font-semibold text-gray-600 dark:text-white uppercase tracking-wider">
+                          <span className="inline-flex items-center gap-1 justify-center">OVR {tableSortKey==='overall' ? (tableSortDir==='asc'?'↑':'↓') : ''}</span>
+                        </th>
+                        <th className="p-[5px] text-left text-sm font-semibold text-gray-600 dark:text-white uppercase tracking-wider">Positions</th>
+                        <th onClick={() => handleTableSort('pace')} className="cursor-pointer p-[5px] text-center text-sm font-semibold text-gray-600 dark:text-white uppercase tracking-wider">
+                          <span className="inline-flex items-center gap-1 justify-center">PAC {tableSortKey==='pace' ? (tableSortDir==='asc'?'↑':'↓') : ''}</span>
+                        </th>
+                        <th onClick={() => handleTableSort('shooting')} className="cursor-pointer p-[5px] text-center text-sm font-semibold text-gray-600 dark:text-white uppercase tracking-wider">
+                          <span className="inline-flex items-center gap-1 justify-center">SHO {tableSortKey==='shooting' ? (tableSortDir==='asc'?'↑':'↓') : ''}</span>
+                        </th>
+                        <th onClick={() => handleTableSort('passing')} className="cursor-pointer p-[5px] text-center text-sm font-semibold text-gray-600 dark:text-white uppercase tracking-wider">
+                          <span className="inline-flex items-center gap-1 justify-center">PAS {tableSortKey==='passing' ? (tableSortDir==='asc'?'↑':'↓') : ''}</span>
+                        </th>
+                        <th onClick={() => handleTableSort('dribbling')} className="cursor-pointer p-[5px] text-center text-sm font-semibold text-gray-600 dark:text-white uppercase tracking-wider">
+                          <span className="inline-flex items-center gap-1 justify-center">DRI {tableSortKey==='dribbling' ? (tableSortDir==='asc'?'↑':'↓') : ''}</span>
+                        </th>
+                        <th onClick={() => handleTableSort('defense')} className="cursor-pointer p-[5px] text-center text-sm font-semibold text-gray-600 dark:text-white uppercase tracking-wider">
+                          <span className="inline-flex items-center gap-1 justify-center">DEF {tableSortKey==='defense' ? (tableSortDir==='asc'?'↑':'↓') : ''}</span>
+                        </th>
+                        <th onClick={() => handleTableSort('physical')} className="cursor-pointer p-[5px] text-center text-sm font-semibold text-gray-600 dark:text-white uppercase tracking-wider">
+                          <span className="inline-flex items-center gap-1 justify-center">PHY {tableSortKey==='physical' ? (tableSortDir==='asc'?'↑':'↓') : ''}</span>
+                        </th>
+                        <th className="p-[5px] text-center text-sm font-semibold text-gray-600 dark:text-white uppercase tracking-wider">&nbsp;</th>
                       </tr>
                     </thead>
-                    <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                    <tbody className="bg-white dark:bg-gray-800">
                       {tableSortedPlayers.length === 0 ? (
                         <tr>
-                          <td colSpan={10} className="px-4 py-8 text-center text-base text-gray-600 dark:text-gray-400">
+                          <td colSpan={10} className="p-[15px] text-center text-base text-gray-600 dark:text-gray-400">
                             To add players to your squad click or drag them from the left sidebar
                           </td>
                         </tr>
                       ) : null}
                       {tableSortedPlayers.map((p) => (
                         <tr key={p.id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
-                          <td className="px-4 py-3 whitespace-nowrap text-base text-gray-900 dark:text-white">
+                          <td className="p-[5px] whitespace-nowrap text-base text-gray-900 dark:text-white">
                             {p.metadata.firstName} {p.metadata.lastName}
                           </td>
-                          <td className="px-4 py-3 whitespace-nowrap text-base text-center">
+                          <td className="p-[5px] whitespace-nowrap text-base text-center">
                             <span className="font-semibold" style={{ color: getTierTextColorValue(p.metadata.overall) }}>{p.metadata.overall}</span>
                           </td>
-                          <td className="px-4 py-3 whitespace-nowrap text-base text-gray-900 dark:text-white">
+                          <td className="p-[5px] whitespace-nowrap text-base text-gray-900 dark:text-white">
                             {p.metadata.positions.slice(0,3).map(pos => {
                               const rating = calculatePositionRating(p, pos as any);
                               return (
@@ -1707,25 +1852,25 @@ export default function SquadBuilderPage() {
                               <span>+{p.metadata.positions.length - 3}</span>
                             )}
                           </td>
-                          <td className="px-4 py-3 whitespace-nowrap text-base text-center">
+                          <td className="p-[5px] whitespace-nowrap text-base text-center">
                             <span className="font-semibold" style={{ color: getTierTextColorValue(p.metadata.pace) }}>{p.metadata.pace}</span>
                           </td>
-                          <td className="px-4 py-3 whitespace-nowrap text-base text-center">
+                          <td className="p-[5px] whitespace-nowrap text-base text-center">
                             <span className="font-semibold" style={{ color: getTierTextColorValue(p.metadata.shooting) }}>{p.metadata.shooting}</span>
                           </td>
-                          <td className="px-4 py-3 whitespace-nowrap text-base text-center">
+                          <td className="p-[5px] whitespace-nowrap text-base text-center">
                             <span className="font-semibold" style={{ color: getTierTextColorValue(p.metadata.passing) }}>{p.metadata.passing}</span>
                           </td>
-                          <td className="px-4 py-3 whitespace-nowrap text-base text-center">
+                          <td className="p-[5px] whitespace-nowrap text-base text-center">
                             <span className="font-semibold" style={{ color: getTierTextColorValue(p.metadata.dribbling) }}>{p.metadata.dribbling}</span>
                           </td>
-                          <td className="px-4 py-3 whitespace-nowrap text-base text-center">
+                          <td className="p-[5px] whitespace-nowrap text-base text-center">
                             <span className="font-semibold" style={{ color: getTierTextColorValue(p.metadata.defense) }}>{p.metadata.defense}</span>
                           </td>
-                          <td className="px-4 py-3 whitespace-nowrap text-base text-center">
+                          <td className="p-[5px] whitespace-nowrap text-base text-center">
                             <span className="font-semibold" style={{ color: getTierTextColorValue(p.metadata.physical) }}>{p.metadata.physical}</span>
                           </td>
-                          <td className="px-4 py-3 whitespace-nowrap text-base text-center">
+                          <td className="p-[5px] whitespace-nowrap text-base text-center">
                             <button
                               onClick={() => {
                                 const newSquad = { ...squad } as Squad;

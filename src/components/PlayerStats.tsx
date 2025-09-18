@@ -128,7 +128,7 @@ export default function PlayerStats({ player, marketValueEstimate, progressionDa
         text: 'Multiple positions',
         type: 'positions',
         icon: (
-          <svg className="w-4 h-4 mr-1" viewBox="0 0 24 24" fill="currentColor">
+          <svg className="w-3 h-3 mr-1" viewBox="0 0 24 24" fill="currentColor">
             <path d="M18 4l-4 4h3v6h-3l4 4 4-4h-3V8h3l-4-4zM6 8H3l4-4 4 4H8v6h3l-4 4-4-4h3V8z"/>
           </svg>
         )
@@ -346,11 +346,11 @@ export default function PlayerStats({ player, marketValueEstimate, progressionDa
                     </span>
                   ) : stat.isTags ? (
                     stat.value && stat.value.length > 0 ? (
-                      <div className="flex flex-wrap gap-1">
+                      <div className="flex flex-wrap gap-1 items-center justify-end">
                         {stat.value.map((tag: any, index: number) => (
                           <span 
                             key={index}
-                            className={`font-medium px-2 py-1 rounded-md flex items-center ${
+                            className={`font-medium px-2 py-[2px] rounded-md flex items-center ${
                               tag.type === 'slow'
                                 ? 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200'
                                 : tag.type === 'fast'
