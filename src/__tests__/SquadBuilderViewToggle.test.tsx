@@ -1,6 +1,17 @@
 import React from 'react'
 import { render, screen, fireEvent, act } from '@testing-library/react'
 import '@testing-library/jest-dom'
+// Mock Radix Slider for jsdom
+jest.mock('@radix-ui/react-slider', () => {
+  const React = require('react')
+  return {
+    __esModule: true,
+    Root: ({ children }: any) => <div>{children}</div>,
+    Track: (props: any) => React.createElement('div', props),
+    Range: (props: any) => React.createElement('div', props),
+    Thumb: (props: any) => React.createElement('div', props),
+  }
+})
 
 // Mock wallet and services to avoid ESM deps and network
 jest.mock('../../src/contexts/WalletContext', () => ({
@@ -21,7 +32,7 @@ jest.mock('../../src/components/Toast', () => ({
 }))
 
 describe('Squad Builder - View Toggle', () => {
-  it('defaults to Table and can switch to Field', async () => {
+  it('renders table-only view', async () => {
     jest.useFakeTimers()
     // Lazy import to avoid Next.js routing specifics; render the component module default
     const Page = require('../../app/squad-builder/page').default
@@ -29,23 +40,10 @@ describe('Squad Builder - View Toggle', () => {
     await act(async () => {
       jest.advanceTimersByTime(1600)
     })
-    // Wait for buttons to appear
-    const tableBtn = await screen.findByRole('button', { name: /table/i })
-    const fieldBtn = await screen.findByRole('button', { name: /field/i })
-
-    expect(tableBtn).toBeInTheDocument()
-    expect(fieldBtn).toBeInTheDocument()
-
-    // Table view should render the club-style table header cells
-    // When no players loaded, table might be empty; still ensure thead exists
-    // Loosen assertion to presence of the table element
+    // Table should render
     const tables = await screen.findAllByRole('table')
     expect(tables.length).toBeGreaterThan(0)
-
-    // Switch to Field
-    fireEvent.click(fieldBtn)
-
-    // Field mode should render formation analysis section
-    expect(screen.getByText(/Formation Analysis/i)).toBeInTheDocument()
+    // No field toggle in table-only mode
+    expect(screen.queryByRole('button', { name: /field/i })).not.toBeInTheDocument()
   })
 })

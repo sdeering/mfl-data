@@ -71,7 +71,7 @@ function ToastComponent({ toast, onRemove }: ToastProps) {
   };
 
   return (
-    <div className={`max-w-sm w-full border rounded-lg shadow-lg pointer-events-auto ${getToastStyles()}`}>
+    <div className={`max-w-md md:max-w-lg w-full border rounded-lg shadow-lg pointer-events-auto ${getToastStyles()}`}>
       <div className="p-4">
         <div className="flex items-start">
           <div className="flex-shrink-0">
@@ -111,7 +111,7 @@ interface ToastContainerProps {
 
 export function ToastContainer({ toasts, onRemove }: ToastContainerProps) {
   return (
-    <div className="fixed top-4 right-4 z-50 space-y-2">
+    <div className="fixed bottom-6 right-6 z-50 space-y-3 w-[min(90vw,32rem)] pointer-events-none">
       {toasts.map((toast) => (
         <ToastComponent
           key={toast.id}
@@ -136,20 +136,20 @@ export function useToast() {
     setToasts(prev => prev.filter(toast => toast.id !== id));
   };
 
-  const success = (title: string, message?: string) => {
-    addToast({ type: 'success', title, message });
+  const success = (title: string, message?: string, duration?: number) => {
+    addToast({ type: 'success', title, message, duration });
   };
 
-  const error = (title: string, message?: string) => {
-    addToast({ type: 'error', title, message });
+  const error = (title: string, message?: string, duration?: number) => {
+    addToast({ type: 'error', title, message, duration });
   };
 
-  const warning = (title: string, message?: string) => {
-    addToast({ type: 'warning', title, message });
+  const warning = (title: string, message?: string, duration?: number) => {
+    addToast({ type: 'warning', title, message, duration });
   };
 
-  const info = (title: string, message?: string) => {
-    addToast({ type: 'info', title, message });
+  const info = (title: string, message?: string, duration?: number) => {
+    addToast({ type: 'info', title, message, duration });
   };
 
   return {

@@ -93,7 +93,7 @@ export default function RootLayout({
               <SupabaseSyncProvider>
                 <div className="max-w-[1200px] mx-auto">
                   <Header />
-                  <div className="p-[30px] max-[412px]:px-[15px] bg-white dark:bg-[#111827] min-h-[calc(100vh-200px)]">
+                  <div className="px-[30px] max-[412px]:px-[15px] bg-white dark:bg-[#111827] min-h-[calc(100vh-0px)]">
                     {children}
                   </div>
                   <Footer />

@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import * as Slider from '@radix-ui/react-slider';
 import { useRouter } from 'next/navigation';
 import { useWallet } from '../../src/contexts/WalletContext';
 import { supabaseDataService } from '../../src/services/supabaseDataService';
@@ -35,6 +36,7 @@ interface Formation {
 
 // Position rating calculation function
 function calculatePositionRating(player: MFLPlayer, position: string): number {
+  const positionKey = position.replace(/[0-9]+$/, '');
   const { pace, shooting, passing, dribbling, defense, physical, goalkeeping, overall } = player.metadata;
   const positions = player.metadata.positions;
   const primaryPosition = positions[0];
@@ -59,12 +61,12 @@ function calculatePositionRating(player: MFLPlayer, position: string): number {
   };
 
   // If it's the primary position, return the overall rating
-  if (primaryPosition === position) {
+  if (primaryPosition === positionKey) {
     return overall;
   }
 
   // Calculate rating based on position weights
-  const weights = positionWeights[position];
+  const weights = positionWeights[positionKey];
   if (!weights) return 0;
 
   let rating = 0;
@@ -148,20 +150,17 @@ function calculateSquadStats(squad: Squad, players: MFLPlayer[]) {
 // Validation function for player position compatibility
 function validatePlayerPosition(player: MFLPlayer, position: string) {
   const playerPositions = player.metadata.positions;
-  const positionRating = calculatePositionRating(player, position as any);
+  const basePosition = position.replace(/[0-9]+$/, '');
+  const positionRating = calculatePositionRating(player, basePosition as any);
   const overall = player.metadata.overall;
 
   const isGoalkeeper = playerPositions.includes('GK');
-  const isGoalkeeperPosition = position === 'GK';
+  const isGoalkeeperPosition = basePosition === 'GK';
   if (isGoalkeeper && !isGoalkeeperPosition) return { isValid: false, reason: 'Goalkeeper cannot play outfield' };
   if (!isGoalkeeper && isGoalkeeperPosition) return { isValid: false, reason: 'Outfield player cannot play goalkeeper' };
 
-  if (playerPositions.includes(position as any)) return { isValid: true, reason: 'Natural position' };
-
-  // Playable if within ±6 of overall
-  if (Math.abs(positionRating - overall) <= 6) return { isValid: true, reason: `Within ±6 OVR (${positionRating})` };
-
-  return { isValid: false, reason: `Position rating too far from overall (${positionRating} vs ${overall})` };
+  // Relaxed: allow any outfield position (spec: remove validation), keep GK restriction
+  return { isValid: true, reason: 'Allowed (validation relaxed)' };
 }
 
 // Validation removed per spec
@@ -313,9 +312,11 @@ const FORMATIONS: Formation[] = [
 // Draggable Player Card Component
 interface DraggablePlayerCardProps {
   player: MFLPlayer;
+  onAdd: (player: MFLPlayer) => void;
+  isInSquad?: boolean;
 }
 
-function DraggablePlayerCard({ player }: DraggablePlayerCardProps) {
+function DraggablePlayerCard({ player, onAdd, isInSquad = false }: DraggablePlayerCardProps) {
   const {
     attributes,
     listeners,
@@ -331,12 +332,14 @@ function DraggablePlayerCard({ player }: DraggablePlayerCardProps) {
     opacity: isDragging ? 0.5 : 1,
   };
 
-  // Helper function to get stat color based on value
-  const getStatColor = (value: number) => {
-    if (value >= 90) return 'text-green-600 dark:text-green-400';
-    if (value >= 80) return 'text-blue-600 dark:text-blue-400';
-    if (value >= 70) return 'text-yellow-600 dark:text-yellow-400';
-    return 'text-gray-600 dark:text-gray-400';
+  // Tiered text color for stats, matching card tiers
+  const getTierTextColor = (value: number): string => {
+    if (value >= 95) return '#87f6f8';        // Ultimate
+    if (value >= 85) return '#fa53ff';        // Legendary
+    if (value >= 75) return '#0047ff';        // Epic
+    if (value >= 65) return '#71ff30';        // Uncommon
+    if (value >= 55) return '#ecd17f';        // Limited
+    return '#9f9f9f';                          // Common
   };
 
   return (
@@ -345,97 +348,80 @@ function DraggablePlayerCard({ player }: DraggablePlayerCardProps) {
       style={style}
       {...attributes}
       {...listeners}
-      className="p-2 md:p-3 border border-gray-200 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 cursor-grab active:cursor-grabbing transition-colors"
+      onClick={() => { if (!isInSquad) onAdd(player); }}
+      className={`p-2 md:p-3 border rounded-lg cursor-pointer transition-colors ${
+        isInSquad
+          ? 'border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-800 opacity-80'
+          : 'border-gray-200 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 hover:border-blue-400 dark:hover:border-blue-500'
+      }`}
     >
-      {/* Player Header */}
-      <div className="flex items-center justify-between mb-2">
-        <div>
-          <h3 className="font-medium text-gray-900 dark:text-white text-sm">
+                    <div className="flex items-center justify-between mb-1 cursor-pointer">
+        <div className="min-w-0">
+          <h3 className="font-medium text-gray-900 dark:text-white text-sm md:text-base truncate flex items-center gap-2">
             {player.metadata.firstName} {player.metadata.lastName}
+            <a
+              href={`/players/${player.id}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              className="flex-shrink-0 inline-flex items-center justify-center w-4 h-4 text-[9px] border border-gray-400 dark:border-gray-500 rounded-md text-gray-500 dark:text-gray-400 hover:text-blue-500 hover:border-blue-400"
+              aria-label="Open player page"
+              title="Open player page"
+            >
+              ↗
+            </a>
           </h3>
-          <p className="text-xs text-gray-600 dark:text-gray-400">
-            {player.metadata.positions.join(', ')}
-          </p>
+          <div className="text-xs md:text-sm text-gray-600 dark:text-gray-400 truncate">
+            {player.metadata.positions.slice(0,3).map((position) => {
+              const rating = calculatePositionRating(player, position as any);
+              const color = (() => {
+                if (rating >= 95) return 'var(--tier-ultimate)';
+                if (rating >= 85) return 'var(--tier-legendary)';
+                if (rating >= 75) return 'var(--tier-epic)';
+                if (rating >= 65) return 'var(--tier-uncommon)';
+                if (rating >= 55) return 'var(--tier-limited)';
+                return 'var(--tier-common)';
+              })();
+              return (
+                <span key={position} className="mr-2">
+                  {position} <span className="font-semibold" style={{ color }}>{rating}</span>
+                </span>
+              );
+            })}
+            {player.metadata.positions.length > 3 && (
+              <span>+{player.metadata.positions.length - 3}</span>
+            )}
+          </div>
         </div>
-        <div className="text-right">
-          <div className="text-lg font-bold text-gray-900 dark:text-white">
+          <div className="text-right flex-shrink-0 pl-2 pointer-events-none">
+          <div
+            className="text-xl md:text-2xl font-bold leading-5"
+            style={{ color: (() => {
+              const o = player.metadata.overall;
+              if (o >= 95) return 'var(--tier-ultimate)';     // 95-99
+              if (o >= 85) return 'var(--tier-legendary)';    // 85-94
+              if (o >= 75) return 'var(--tier-epic)';         // 75-84
+              if (o >= 65) return 'var(--tier-uncommon)';     // 65-74
+              if (o >= 55) return 'var(--tier-limited)';      // 55-64
+              return 'var(--tier-common)';                    // <55
+            })() }}
+          >
             {player.metadata.overall}
           </div>
-          <div className="text-xs text-gray-500 dark:text-gray-500">OVR</div>
+          <div className="text-[10px] text-gray-500 dark:text-gray-500">OVR</div>
         </div>
+      </div>
+      <div className="flex items-center justify-between text-xs md:text-sm gap-2">
+        <span className="font-medium" style={{ color: getTierTextColor(player.metadata.pace) }}>{player.metadata.pace}</span>
+        <span className="font-medium" style={{ color: getTierTextColor(player.metadata.shooting) }}>{player.metadata.shooting}</span>
+        <span className="font-medium" style={{ color: getTierTextColor(player.metadata.passing) }}>{player.metadata.passing}</span>
+        <span className="font-medium" style={{ color: getTierTextColor(player.metadata.dribbling) }}>{player.metadata.dribbling}</span>
+        <span className="font-medium" style={{ color: getTierTextColor(player.metadata.defense) }}>{player.metadata.defense}</span>
+        <span className="font-medium" style={{ color: getTierTextColor(player.metadata.physical) }}>{player.metadata.physical}</span>
       </div>
 
-      {/* Player Stats */}
-      <div className="grid grid-cols-3 gap-1 text-xs mb-2">
-        <div className="text-center">
-          <div className={`font-medium ${getStatColor(player.metadata.pace)}`}>
-            {player.metadata.pace}
-          </div>
-          <div className="text-gray-500 dark:text-gray-500">PAC</div>
-        </div>
-        <div className="text-center">
-          <div className={`font-medium ${getStatColor(player.metadata.shooting)}`}>
-            {player.metadata.shooting}
-          </div>
-          <div className="text-gray-500 dark:text-gray-500">SHO</div>
-        </div>
-        <div className="text-center">
-          <div className={`font-medium ${getStatColor(player.metadata.passing)}`}>
-            {player.metadata.passing}
-          </div>
-          <div className="text-gray-500 dark:text-gray-500">PAS</div>
-        </div>
-        <div className="text-center">
-          <div className={`font-medium ${getStatColor(player.metadata.dribbling)}`}>
-            {player.metadata.dribbling}
-          </div>
-          <div className="text-gray-500 dark:text-gray-500">DRI</div>
-        </div>
-        <div className="text-center">
-          <div className={`font-medium ${getStatColor(player.metadata.defense)}`}>
-            {player.metadata.defense}
-          </div>
-          <div className="text-gray-500 dark:text-gray-500">DEF</div>
-        </div>
-        <div className="text-center">
-          <div className={`font-medium ${getStatColor(player.metadata.physical)}`}>
-            {player.metadata.physical}
-          </div>
-          <div className="text-gray-500 dark:text-gray-500">PHY</div>
-        </div>
-      </div>
-
-      {/* Position Ratings */}
-      <div className="border-t border-gray-200 dark:border-gray-600 pt-2">
-        <div className="text-xs text-gray-600 dark:text-gray-400 mb-1">Position Ratings:</div>
-        <div className="flex flex-wrap gap-1">
-          {player.metadata.positions.slice(0, 3).map((position) => {
-            const rating = calculatePositionRating(player, position as any);
-            return (
-              <div
-                key={position}
-                className={`px-2 py-1 rounded text-xs font-medium ${
-                  rating >= 80
-                    ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300'
-                    : rating >= 70
-                    ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
-                    : rating >= 60
-                    ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300'
-                    : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400'
-                }`}
-              >
-                {position} {rating}
-              </div>
-            );
-          })}
-          {player.metadata.positions.length > 3 && (
-            <div className="px-2 py-1 rounded text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400">
-              +{player.metadata.positions.length - 3}
-            </div>
-          )}
-        </div>
-        </div>
-      </div>
+      {/* Action buttons removed per spec; click card to add */}
+    </div>
   );
 }
 
@@ -469,6 +455,12 @@ function DroppablePositionSlot({ position, index, player, formation, activePlaye
   // Determine if the active player can be dropped here
   const canDrop = activePlayer ? validatePlayerPosition(activePlayer, position).isValid : true;
 
+  const handleClickAssign = () => {
+    if (activePlayer) return;
+    const clickEvent = new CustomEvent('sb:assignToPosition', { detail: { position } });
+    window.dispatchEvent(clickEvent);
+  };
+
   return (
     <div
       ref={setNodeRef}
@@ -489,6 +481,7 @@ function DroppablePositionSlot({ position, index, player, formation, activePlaye
       }`}
       {...attributes}
       {...listeners}
+      onClick={handleClickAssign}
     >
       {player ? (
         <div className="text-xs font-medium text-green-700 dark:text-green-300 text-center">
@@ -514,7 +507,7 @@ export default function SquadBuilderPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedFormation, setSelectedFormation] = useState<Formation>(FORMATIONS[0]);
   const [filterPosition, setFilterPosition] = useState<string>('all');
-  // Attribute slider filters (minimum values)
+  // Attribute slider filters (min/max)
   const [attrFilters, setAttrFilters] = useState({
     pace: 0,
     shooting: 0,
@@ -523,13 +516,45 @@ export default function SquadBuilderPage() {
     defense: 0,
     physical: 0,
   });
+  const [attrFiltersMax, setAttrFiltersMax] = useState({
+    pace: 100,
+    shooting: 100,
+    passing: 100,
+    dribbling: 100,
+    defense: 100,
+    physical: 100,
+  });
   const [overallMin, setOverallMin] = useState(0);
+  const [overallMax, setOverallMax] = useState(100);
   const [positionRatingMin, setPositionRatingMin] = useState(0);
+  const [positionRatingMax, setPositionRatingMax] = useState(100);
+  // Card type filters (common, limited, uncommon, epic, legendary, ultimate)
+  const [selectedCardTypes, setSelectedCardTypes] = useState<string[]>([]);
+  // Sidebar sort state
+  const [sidebarSortKey, setSidebarSortKey] = useState<'name'|'overall'|'pace'|'shooting'|'passing'|'dribbling'|'defense'|'physical'>('overall');
+  const [sidebarSortDir, setSidebarSortDir] = useState<'asc'|'desc'>('desc');
   // Debounced copies for performance
-  const [debouncedAttr, setDebouncedAttr] = useState(attrFilters);
+  const [debouncedAttr, setDebouncedAttr] = useState({
+    pace: 0,
+    shooting: 0,
+    passing: 0,
+    dribbling: 0,
+    defense: 0,
+    physical: 0,
+  });
+  const [debouncedAttrMax, setDebouncedAttrMax] = useState({
+    pace: 100,
+    shooting: 100,
+    passing: 100,
+    dribbling: 100,
+    defense: 100,
+    physical: 100,
+  });
   const [debouncedOverallMin, setDebouncedOverallMin] = useState(overallMin);
+  const [debouncedOverallMax, setDebouncedOverallMax] = useState(overallMax);
   const [debouncedPositionRatingMin, setDebouncedPositionRatingMin] = useState(positionRatingMin);
-  const [sortBy, setSortBy] = useState<string>('overall');
+  const [debouncedPositionRatingMax, setDebouncedPositionRatingMax] = useState(positionRatingMax);
+  // Sort removed per spec
   const [squad, setSquad] = useState<Squad>({
     name: '',
     formation: FORMATIONS[0],
@@ -563,6 +588,8 @@ export default function SquadBuilderPage() {
       physical: 0
     }
   });
+  const [showStats, setShowStats] = useState(false);
+  const statsRef = useRef<HTMLDivElement | null>(null);
   // Validation UI removed per spec
   const [squadValidation] = useState({ isValid: true, warnings: [] as string[], errors: [] as string[], recommendations: [] as string[] });
   const [squadHistory, setSquadHistory] = useState<Squad[]>([]);
@@ -570,22 +597,42 @@ export default function SquadBuilderPage() {
   const [isLoadingPlayers, setIsLoadingPlayers] = useState(false);
   const [playersError, setPlayersError] = useState<string | null>(null);
   const [isInitializing, setIsInitializing] = useState(true);
+  const [showSidebarFilters, setShowSidebarFilters] = useState(false);
+  const [sidebarPage, setSidebarPage] = useState(0);
+  const pageSize = 20;
 
-  // View mode: 'table' | 'field' (default to table, persist)
-  const [viewMode, setViewMode] = useState<'table' | 'field'>(() => {
-    if (typeof window === 'undefined') return 'table';
-    try {
-      const saved = window.localStorage.getItem('sb:viewMode');
-      return saved === 'field' ? 'field' : 'table';
-    } catch {
-      return 'table';
+  // Table/stat tier color helper (match sidebar/card tiers)
+  const getTierTextColorValue = (value: number): string => {
+    if (value >= 95) return '#87f6f8';      // Ultimate
+    if (value >= 85) return '#fa53ff';      // Legendary
+    if (value >= 75) return '#0047ff';      // Epic
+    if (value >= 65) return '#71ff30';      // Uncommon
+    if (value >= 55) return '#ecd17f';      // Limited
+    return '#9f9f9f';                        // Common
+  };
+  const [selectedDeleteId, setSelectedDeleteId] = useState<string | null>(null);
+
+  // Choose best available formation slot for a player (prefer valid within ±6 OVR, otherwise first empty)
+  const pickTargetPositionForPlayer = (player: MFLPlayer, formation: Formation, current: Squad): string | null => {
+    const emptyPositions = formation.positions.filter((pos) => !current.players[pos]);
+    if (emptyPositions.length === 0) return null;
+    // Find valid positions per validation
+    let bestPos: string | null = null;
+    let bestDelta = Number.POSITIVE_INFINITY;
+    for (const pos of emptyPositions) {
+      const check = validatePlayerPosition(player, pos);
+      const rating = calculatePositionRating(player, pos);
+      const delta = Math.abs(rating - player.metadata.overall);
+      if (check.isValid && delta < bestDelta) {
+        bestDelta = delta;
+        bestPos = pos;
+      }
     }
-  });
-  useEffect(() => {
-    try {
-      window.localStorage.setItem('sb:viewMode', viewMode);
-    } catch {}
-  }, [viewMode]);
+    // Fallback: first empty slot if none considered valid
+    return bestPos ?? emptyPositions[0] ?? null;
+  };
+
+  // Field view removed; table-only
 
   // Table sorting (independent of sidebar sort controls)
   const [tableSortKey, setTableSortKey] = useState<'name'|'overall'|'pace'|'shooting'|'passing'|'dribbling'|'defense'|'physical'>('overall');
@@ -600,20 +647,21 @@ export default function SquadBuilderPage() {
       return key;
     });
   };
-  const tableSortedPlayers = [...filteredPlayers].sort((a, b) => {
+  const tableSortedPlayers = [...selectedFormation.positions
+    .map(pos => squad.players[pos])
+    .filter(Boolean)
+    .map(sp => sp!.player)] as MFLPlayer[];
+  tableSortedPlayers.sort((a, b) => {
     const dir = tableSortDir === 'asc' ? 1 : -1;
+    const keyMap: any = { overall: 'overall', pace: 'pace', shooting: 'shooting', passing: 'passing', dribbling: 'dribbling', defense: 'defense', physical: 'physical' };
     if (tableSortKey === 'name') {
-      const nameA = `${a.metadata.firstName} ${a.metadata.lastName}`;
-      const nameB = `${b.metadata.firstName} ${b.metadata.lastName}`;
-      return nameA.localeCompare(nameB) * dir;
+      const an = `${a.metadata.firstName} ${a.metadata.lastName}`;
+      const bn = `${b.metadata.firstName} ${b.metadata.lastName}`;
+      return an.localeCompare(bn) * dir;
     }
-    const map: any = {
-      overall: 'overall', pace: 'pace', shooting: 'shooting', passing: 'passing',
-      dribbling: 'dribbling', defense: 'defense', physical: 'physical'
-    };
-    const ka = (a.metadata as any)[map[tableSortKey]] ?? 0;
-    const kb = (b.metadata as any)[map[tableSortKey]] ?? 0;
-    return (ka - kb) * dir;
+    const va = (a.metadata as any)[keyMap[tableSortKey]] ?? 0;
+    const vb = (b.metadata as any)[keyMap[tableSortKey]] ?? 0;
+    return (va - vb) * dir;
   });
 
 
@@ -678,22 +726,40 @@ export default function SquadBuilderPage() {
 
   // Debounce attribute/rating sliders
   useEffect(() => {
-    const t = setTimeout(() => setDebouncedAttr(attrFilters), 200);
-    return () => clearTimeout(t);
-  }, [attrFilters]);
-  useEffect(() => {
-    const t = setTimeout(() => setDebouncedOverallMin(overallMin), 200);
-    return () => clearTimeout(t);
-  }, [overallMin]);
-  useEffect(() => {
-    const t = setTimeout(() => setDebouncedPositionRatingMin(positionRatingMin), 200);
-    return () => clearTimeout(t);
-  }, [positionRatingMin]);
+    const handle = setTimeout(() => {
+      setDebouncedAttr({
+        pace: attrFilters?.pace ?? 0,
+        shooting: attrFilters?.shooting ?? 0,
+        passing: attrFilters?.passing ?? 0,
+        dribbling: attrFilters?.dribbling ?? 0,
+        defense: attrFilters?.defense ?? 0,
+        physical: attrFilters?.physical ?? 0,
+      });
+      setDebouncedAttrMax({
+        pace: attrFiltersMax?.pace ?? 100,
+        shooting: attrFiltersMax?.shooting ?? 100,
+        passing: attrFiltersMax?.passing ?? 100,
+        dribbling: attrFiltersMax?.dribbling ?? 100,
+        defense: attrFiltersMax?.defense ?? 100,
+        physical: attrFiltersMax?.physical ?? 100,
+      });
+      setDebouncedOverallMin(overallMin);
+      setDebouncedOverallMax(overallMax);
+      setDebouncedPositionRatingMin(positionRatingMin);
+      setDebouncedPositionRatingMax(positionRatingMax);
+    }, 200);
+    return () => clearTimeout(handle);
+  }, [attrFilters, attrFiltersMax, overallMin, overallMax, positionRatingMin, positionRatingMax]);
 
   // Load saved squads
   useEffect(() => {
     const loadSavedSquads = async () => {
       if (!account) return;
+      // Skip network calls in test environment
+      if (process.env.NODE_ENV === 'test') {
+        setSavedSquads([]);
+        return;
+      }
       
       setIsLoadingSquads(true);
       try {
@@ -713,6 +779,31 @@ export default function SquadBuilderPage() {
       loadSavedSquads();
     }
   }, [account]);
+
+  // Handle sidebar "Add to squad" custom event
+  useEffect(() => {
+    const onAddToSquad = (ev: Event) => {
+      const detail = (ev as CustomEvent).detail as { player?: MFLPlayer } | undefined;
+      const player = detail?.player;
+      if (!player) return;
+
+      // pick best available position
+      const targetPos = pickTargetPositionForPlayer(player, selectedFormation, squad);
+      if (!targetPos) return;
+
+      const newSquad: Squad = {
+        ...squad,
+        players: { ...squad.players, [targetPos]: { player, position: targetPos } },
+      };
+      addToHistory(newSquad);
+      setSquad(newSquad);
+    };
+
+    window.addEventListener('sb:addPlayer', onAddToSquad as EventListener);
+    return () => {
+      window.removeEventListener('sb:addPlayer', onAddToSquad as EventListener);
+    };
+  }, [squad, selectedFormation]);
 
   // Save squad functionality
   const handleSaveSquad = async () => {
@@ -738,11 +829,11 @@ export default function SquadBuilderPage() {
       const squads = await getSquads(account);
       setSavedSquads(squads);
       
-      success('Squad Saved!', `"${squadName.trim()}" has been saved successfully.`);
+      success('Squad Saved!', `"${squadName.trim()}" has been saved successfully.`, 2000);
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to save squad';
       setSaveError(errorMessage);
-      showError('Save Failed', errorMessage);
+      showError('Save Failed', errorMessage, 2000);
     } finally {
       setIsSaving(false);
     }
@@ -769,11 +860,11 @@ export default function SquadBuilderPage() {
       });
 
       setShowLoadModal(false);
-      success('Squad Loaded!', `"${savedSquad.squad_name}" has been loaded successfully.`);
+      success('Squad Loaded!', `"${savedSquad.squad_name}" has been loaded successfully.`, 2000);
       console.log(`✅ Loaded squad: ${savedSquad.squad_name}`);
     } catch (error) {
       console.error('Error loading squad:', error);
-      showError('Load Failed', 'Failed to load the squad. Please try again.');
+      showError('Load Failed', 'Failed to load the squad. Please try again.', 2000);
     }
   };
 
@@ -793,12 +884,12 @@ export default function SquadBuilderPage() {
       // Refresh the saved squads list
       const squads = await getSquads(account);
       setSavedSquads(squads);
-      success('Squad Deleted', `"${squadName}" has been deleted successfully.`);
+      success('Squad Deleted', `"${squadName}" has been deleted successfully.`, 2000);
       console.log(`✅ Deleted squad: ${squadName}`);
     } catch (error) {
       console.error('Error deleting squad:', error);
       const errorMessage = error instanceof Error ? error.message : 'Failed to delete the squad. Please try again.';
-      showError('Delete Failed', errorMessage);
+      showError('Delete Failed', errorMessage, 2000);
     } finally {
       setIsDeleting(null);
     }
@@ -817,7 +908,7 @@ export default function SquadBuilderPage() {
       const newIndex = historyIndex - 1;
       setHistoryIndex(newIndex);
       setSquad(squadHistory[newIndex]);
-      info('Undo', 'Previous squad state restored');
+      info('Undo', 'Previous squad state restored', 2000);
     }
   };
 
@@ -826,7 +917,7 @@ export default function SquadBuilderPage() {
       const newIndex = historyIndex + 1;
       setHistoryIndex(newIndex);
       setSquad(squadHistory[newIndex]);
-      info('Redo', 'Next squad state restored');
+      info('Redo', 'Next squad state restored', 2000);
     }
   };
 
@@ -843,6 +934,7 @@ export default function SquadBuilderPage() {
 
   // Filter and sort players
   useEffect(() => {
+    // Sidebar list should be highest overall first (and allow custom sorting)
     let filtered = [...players];
 
     // Search filter
@@ -863,45 +955,51 @@ export default function SquadBuilderPage() {
       );
     }
 
-    // Attribute slider minimum filters (debounced)
+    // Attribute slider min/max filters (debounced)
     filtered = filtered.filter(player => (
-      player.metadata.pace >= debouncedAttr.pace &&
-      player.metadata.shooting >= debouncedAttr.shooting &&
-      player.metadata.passing >= debouncedAttr.passing &&
-      player.metadata.dribbling >= debouncedAttr.dribbling &&
-      player.metadata.defense >= debouncedAttr.defense &&
-      player.metadata.physical >= debouncedAttr.physical
+      player.metadata.pace >= debouncedAttr.pace && player.metadata.pace <= debouncedAttrMax.pace &&
+      player.metadata.shooting >= debouncedAttr.shooting && player.metadata.shooting <= debouncedAttrMax.shooting &&
+      player.metadata.passing >= debouncedAttr.passing && player.metadata.passing <= debouncedAttrMax.passing &&
+      player.metadata.dribbling >= debouncedAttr.dribbling && player.metadata.dribbling <= debouncedAttrMax.dribbling &&
+      player.metadata.defense >= debouncedAttr.defense && player.metadata.defense <= debouncedAttrMax.defense &&
+      player.metadata.physical >= debouncedAttr.physical && player.metadata.physical <= debouncedAttrMax.physical
     ));
 
-    // Overall rating minimum (debounced)
-    filtered = filtered.filter(player => player.metadata.overall >= debouncedOverallMin);
+    // Overall rating min/max (debounced)
+    filtered = filtered.filter(player => player.metadata.overall >= debouncedOverallMin && player.metadata.overall <= debouncedOverallMax);
 
-    // Position rating minimum (debounced) – use a reasonable default position: best fit among player's positions
+    // Position rating min/max (debounced)
     filtered = filtered.filter(player => {
       const best = player.metadata.positions
         .map(pos => calculatePositionRating(player, pos as any))
         .reduce((a, b) => Math.max(a, b), 0);
-      return best >= debouncedPositionRatingMin;
+      return best >= debouncedPositionRatingMin && best <= debouncedPositionRatingMax;
     });
 
-    // Sort players
-    filtered.sort((a, b) => {
-      switch (sortBy) {
-        case 'overall':
-          return b.metadata.overall - a.metadata.overall;
-        case 'name':
-          const nameA = `${a.metadata.firstName} ${a.metadata.lastName}`;
-          const nameB = `${b.metadata.firstName} ${b.metadata.lastName}`;
-          return nameA.localeCompare(nameB);
-        case 'age':
-          return a.metadata.age - b.metadata.age;
-        default:
-          return 0;
-      }
-    });
+    // Card type filter (derived from overall)
+    const getCardTypeFromOverall = (overall: number): 'ultimate' | 'legendary' | 'epic' | 'uncommon' | 'limited' | 'common' => {
+      if (overall >= 95) return 'ultimate';
+      if (overall >= 85) return 'legendary';
+      if (overall >= 75) return 'epic';
+      if (overall >= 65) return 'uncommon';
+      if (overall >= 55) return 'limited';
+      return 'common';
+    };
 
+    if (selectedCardTypes.length > 0) {
+      filtered = filtered.filter(p => selectedCardTypes.includes(getCardTypeFromOverall(p.metadata.overall)));
+    }
+
+    const dir = sidebarSortDir === 'asc' ? 1 : -1;
+    if (sidebarSortKey === 'name') {
+      filtered.sort((a, b) => (`${a.metadata.firstName} ${a.metadata.lastName}`).localeCompare(`${b.metadata.firstName} ${b.metadata.lastName}`) * dir);
+    } else {
+      const map: any = { overall: 'overall', pace: 'pace', shooting: 'shooting', passing: 'passing', dribbling: 'dribbling', defense: 'defense', physical: 'physical' };
+      filtered.sort((a, b) => (((a.metadata as any)[map[sidebarSortKey]] ?? 0) - ((b.metadata as any)[map[sidebarSortKey]] ?? 0)) * dir);
+    }
     setFilteredPlayers(filtered);
-  }, [searchTerm, filterPosition, sortBy, players, debouncedAttr, debouncedOverallMin, debouncedPositionRatingMin]);
+    setSidebarPage(0);
+  }, [searchTerm, filterPosition, players, debouncedAttr, debouncedAttrMax, debouncedOverallMin, debouncedOverallMax, debouncedPositionRatingMin, debouncedPositionRatingMax, selectedCardTypes, sidebarSortKey, sidebarSortDir]);
 
   // Handle formation change
   const handleFormationChange = (formation: Formation) => {
@@ -920,6 +1018,19 @@ export default function SquadBuilderPage() {
     if (player) {
       setActivePlayer(player);
     }
+  };
+
+  const handleAddToSquad = (player: MFLPlayer) => {
+    const targetPos = selectedFormation.positions.find(pos => !squad.players[pos]);
+    if (!targetPos) return;
+    const canPlayPosition = validatePlayerPosition(player, targetPos);
+    if (!canPlayPosition.isValid) return;
+    const newSquad = {
+      ...squad,
+      players: { ...squad.players, [targetPos]: { player, position: targetPos } }
+    };
+    addToHistory(newSquad);
+    setSquad(newSquad);
   };
 
   const handleDragEnd = (event: DragEndEvent) => {
@@ -1018,21 +1129,65 @@ export default function SquadBuilderPage() {
       <div className="min-h-screen">
         <div className="mb-6 flex items-center justify-between gap-3 flex-wrap">
           <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Squad Builder</h1>
-          <div className="inline-flex items-center rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
-            <button
-              className={`px-3 py-1.5 text-sm ${viewMode === 'table' ? 'bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white' : 'text-gray-600 dark:text-gray-300'}`}
-              onClick={() => setViewMode('table')}
-              title="Table view"
-            >
-              Table
-            </button>
-            <button
-              className={`px-3 py-1.5 text-sm ${viewMode === 'field' ? 'bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white' : 'text-gray-600 dark:text-gray-300'}`}
-              onClick={() => setViewMode('field')}
-              title="Field view"
-            >
-              Field
-            </button>
+          <div className="flex items-center gap-2">
+            {tableSortedPlayers.length > 0 && (
+              <button
+                className="ml-2 px-3 py-1.5 text-sm rounded-lg border border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/20 cursor-pointer"
+                onClick={() => setShowStats(prev => !prev)}
+              >
+                {showStats ? 'Hide Squad Statistics' : 'Show Squad Statistics'}
+              </button>
+            )}
+
+            {/* Inline Squad Actions (moved above table) */}
+            <div className="flex items-center gap-2 md:gap-3 flex-wrap">
+              {/* Load Squad (button styled like Show Stats) */}
+              <button
+                className="px-3 py-1.5 text-sm rounded-lg border border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/20 cursor-pointer"
+                onClick={() => setShowLoadModal(true)}
+                title="Load Squad"
+              >
+                Load Squad
+              </button>
+
+              {/* Save Squad (only when there are players) */}
+              {Object.keys(squad.players).length > 0 && (
+                <button
+                  className="px-4 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors cursor-pointer text-sm"
+                  onClick={() => setShowSaveModal(true)}
+                >
+                  Save Squad
+                </button>
+              )}
+
+              {/* Clear Squad */}
+              {Object.keys(squad.players).length > 0 && (
+                <button
+                  className="px-4 py-1.5 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors cursor-pointer text-sm"
+                  onClick={() => {
+                    const newSquad = { ...squad, players: {} };
+                    addToHistory(newSquad);
+                    setSquad(newSquad);
+                    info('Squad Cleared', 'All players have been removed from the squad.');
+                  }}
+                >
+                  Clear Squad
+                </button>
+              )}
+
+              {/* Delete Squad (current loaded) */}
+              {(() => {
+                const current = savedSquads.find(s => s.squad_name === squad.name && s.formation_id === selectedFormation.id);
+                return current ? (
+                  <button
+                    className="px-4 py-1.5 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors cursor-pointer text-sm"
+                    onClick={() => handleDeleteSquad(current.id, current.squad_name)}
+                  >
+                    Delete Squad
+                  </button>
+                ) : null;
+              })()}
+            </div>
           </div>
         </div>
 
@@ -1046,13 +1201,10 @@ export default function SquadBuilderPage() {
           </div>
         )}
 
-        {!isInitializing && (
-          <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 lg:gap-6">        {/* Player Sidebar */}
-        <div className="lg:col-span-1">
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4">
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-              Your Players ({filteredPlayers.length})
-            </h2>
+        <div className={`grid grid-cols-1 lg:grid-cols-[calc(32%_-_50px)_calc(68%_+_50px)] gap-2 lg:gap-3 items-start ${isInitializing ? 'hidden' : ''}`}>        {/* Player Sidebar */}
+        <div className="min-w-0">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4 min-h-[830px] mb-4">
+            {/* Header removed per spec */}
             
             {isLoadingPlayers && (
               <div className="flex items-center justify-center py-8">
@@ -1113,234 +1265,212 @@ export default function SquadBuilderPage() {
             </div>
 
             {/* Filters */}
-            <div className="space-y-3 mb-4">
-              {/* Position Filter */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Position
-                </label>
-                <select
-                  value={filterPosition}
-                  onChange={(e) => setFilterPosition(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                >
-                  <option value="all">All Positions</option>
-                  <option value="GK">Goalkeeper</option>
-                  <option value="CB">Center Back</option>
-                  <option value="LB">Left Back</option>
-                  <option value="RB">Right Back</option>
-                  <option value="CDM">Defensive Midfielder</option>
-                  <option value="CM">Central Midfielder</option>
-                  <option value="CAM">Attacking Midfielder</option>
-                  <option value="LM">Left Midfielder</option>
-                  <option value="RM">Right Midfielder</option>
-                  <option value="LW">Left Winger</option>
-                  <option value="RW">Right Winger</option>
-                  <option value="ST">Striker</option>
-                  <option value="CF">Center Forward</option>
-                </select>
-              </div>
-
-              {/* Attribute Sliders */}
-              <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-3 mb-2">
+              {/* Rating Sliders (Overall first, Position rating second) */}
+              <button
+                className="w-full text-left px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white hover:bg-gray-50 dark:hover:bg-gray-600 cursor-pointer"
+                onClick={() => setShowSidebarFilters(v => !v)}
+              >
+                {showSidebarFilters ? 'Hide Filters' : 'Show Filters'}
+              </button>
+              <div className={`grid grid-cols-2 gap-3 ${showSidebarFilters ? '' : 'hidden'}`}>
+                {/* Card Type Filter */}
+                <div className="col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Card type</label>
+                  <div className="flex items-center gap-2 overflow-x-auto whitespace-nowrap py-1">
+                    {[
+                      { key: 'common', label: 'Common', bg: 'bg-[#9f9f9f]', text: 'text-white' },
+                      { key: 'limited', label: 'Limited', bg: 'bg-[#ecd17f]', text: 'text-black' },
+                      { key: 'uncommon', label: 'Uncommon', bg: 'bg-[#71ff30]', text: 'text-black' },
+                      { key: 'epic', label: 'Epic', bg: 'bg-[#0047ff]', text: 'text-white' },
+                      { key: 'legendary', label: 'Legendary', bg: 'bg-[#fa53ff]', text: 'text-white' },
+                      { key: 'ultimate', label: 'Ultimate', bg: 'bg-[#87f6f8]', text: 'text-black' },
+                    ].map(opt => {
+                      const isSelected = selectedCardTypes.includes(opt.key);
+                      return (
+                        <button
+                          key={opt.key}
+                          type="button"
+                          onClick={() => {
+                            setSelectedCardTypes(prev => {
+                              return isSelected ? prev.filter(k => k !== opt.key) : [...prev, opt.key];
+                            });
+                          }}
+                          className={`${opt.bg} ${opt.text} w-[30px] h-[35px] rounded-lg shadow-sm text-xs font-semibold cursor-pointer select-none flex items-center justify-center p-0 border ${isSelected ? 'border-2 border-white' : 'border-[var(--tier-common-foreground)]/15'}`}
+                          title={opt.label}
+                          aria-pressed={isSelected}
+                        >
+                          <span className="sr-only">{opt.label}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+                {/* Position Filter (moved inside collapsible) */}
+                <div className="col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Position
+                  </label>
+                  <select
+                    value={filterPosition}
+                    onChange={(e) => setFilterPosition(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  >
+                    <option value="all">All Positions</option>
+                    <option value="GK">GK - Goalkeeper</option>
+                    <option value="CB">CB - Center Back</option>
+                    <option value="LB">LB - Left Back</option>
+                    <option value="RB">RB - Right Back</option>
+                    <option value="LWB">LWB - Left Wing Back</option>
+                    <option value="RWB">RWB - Right Wing Back</option>
+                    <option value="CDM">CDM - Defensive Midfielder</option>
+                    <option value="CM">CM - Central Midfielder</option>
+                    <option value="CAM">CAM - Attacking Midfielder</option>
+                    <option value="LM">LM - Left Midfielder</option>
+                    <option value="RM">RM - Right Midfielder</option>
+                    <option value="LW">LW - Left Winger</option>
+                    <option value="RW">RW - Right Winger</option>
+                    <option value="ST">ST - Striker</option>
+                    <option value="CF">CF - Center Forward</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Overall {overallMin} - {overallMax}
+                  </label>
+                  <Slider.Root
+                    className="relative flex items-center select-none w-full h-5"
+                    min={0}
+                    max={100}
+                    step={1}
+                    value={[overallMin, overallMax]}
+                    onValueChange={([min, max]) => { setOverallMin(min); setOverallMax(max); }}
+                  >
+                    <Slider.Track className="bg-gray-200 dark:bg-gray-600 relative grow rounded h-1" />
+                    <Slider.Range className="absolute h-1 bg-blue-500 rounded" />
+                    <Slider.Thumb className="block w-2.5 h-5 bg-gray-600 border border-gray-400 rounded-sm" aria-label="Overall min" />
+                    <Slider.Thumb className="block w-2.5 h-5 bg-gray-600 border border-gray-400 rounded-sm" aria-label="Overall max" />
+                  </Slider.Root>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Position rating {positionRatingMin} - {positionRatingMax}
+                  </label>
+                  <Slider.Root
+                    className="relative flex items-center select-none w-full h-5"
+                    min={0}
+                    max={100}
+                    step={1}
+                    value={[positionRatingMin, positionRatingMax]}
+                    onValueChange={([min, max]) => { setPositionRatingMin(min); setPositionRatingMax(max); }}
+                  >
+                    <Slider.Track className="bg-gray-200 dark:bg-gray-600 relative grow rounded h-1" />
+                    <Slider.Range className="absolute h-1 bg-blue-500 rounded" />
+                    <Slider.Thumb className="block w-2.5 h-5 bg-gray-600 border border-gray-400 rounded-sm" aria-label="Position min" />
+                    <Slider.Thumb className="block w-2.5 h-5 bg-gray-600 border border-gray-400 rounded-sm" aria-label="Position max" />
+                  </Slider.Root>
+                </div>
                 {([
                   ['pace','PAC'],['shooting','SHO'],['passing','PAS'],['dribbling','DRI'],['defense','DEF'],['physical','PHY']
-                ] as Array<[keyof typeof attrFilters,string]>).map(([key,label]) => (
+                ] as Array<[keyof typeof debouncedAttr,string]>).map(([key,label]) => (
                   <div key={key} className="col-span-1">
                     <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
-                      {label} ≥ {attrFilters[key]}
+                      {label} {attrFilters[key]} - {attrFiltersMax[key]}
                     </label>
-                    <input
-                      type="range"
+                    <Slider.Root
+                      className="relative flex items-center select-none w-full h-5"
                       min={0}
-                      max={99}
+                      max={100}
                       step={1}
-                      value={attrFilters[key]}
-                      onChange={(e) => setAttrFilters(prev => ({ ...prev, [key]: Number(e.target.value) }))}
-                      className="w-full"
-                    />
+                      value={[attrFilters[key], attrFiltersMax[key]]}
+                      onValueChange={([min, max]) => {
+                        setAttrFilters(prev => ({ ...prev, [key]: min }));
+                        setAttrFiltersMax(prev => ({ ...prev, [key]: max }));
+                      }}
+                    >
+                      <Slider.Track className="bg-gray-200 dark:bg-gray-600 relative grow rounded h-1" />
+                      <Slider.Range className="absolute h-1 bg-blue-500 rounded" />
+                      <Slider.Thumb className="block w-2.5 h-5 bg-gray-600 border border-gray-400 rounded-sm" aria-label={`${label} min`} />
+                      <Slider.Thumb className="block w-2.5 h-5 bg-gray-600 border border-gray-400 rounded-sm" aria-label={`${label} max`} />
+                    </Slider.Root>
                   </div>
                 ))}
               </div>
 
-              {/* Rating Sliders */}
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Overall ≥ {overallMin}
-                  </label>
-                  <input
-                    type="range"
-                    min={0}
-                    max={99}
-                    step={1}
-                    value={overallMin}
-                    onChange={(e) => setOverallMin(Number(e.target.value))}
-                    className="w-full"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Position rating ≥ {positionRatingMin}
-                  </label>
-                  <input
-                    type="range"
-                    min={0}
-                    max={99}
-                    step={1}
-                    value={positionRatingMin}
-                    onChange={(e) => setPositionRatingMin(Number(e.target.value))}
-                    className="w-full"
-                  />
-                </div>
-              </div>
-
-              {/* Sort By */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Sort By
-                </label>
-                <select
-                  value={sortBy}
-                  onChange={(e) => setSortBy(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                >
-                  <option value="overall">Overall Rating</option>
-                  <option value="name">Name</option>
-                  <option value="age">Age</option>
-                </select>
-              </div>
+      
+              {/* Sort By removed per spec */}
             </div>
+
+            {/* Summary */}
+
+            {/* Pagination header (info) */}
+            {filteredPlayers.length > pageSize && (
+              <div className="flex items-center justify-end mb-3 text-xs text-gray-700 dark:text-gray-300">
+                <span>Showing {Math.min((sidebarPage + 1) * pageSize, filteredPlayers.length)} of {filteredPlayers.length} players</span>
+              </div>
+            )}
 
             {/* Player List */}
-            <div className="space-y-2 max-h-96 overflow-y-auto">
-              <SortableContext items={filteredPlayers.map(p => p.id.toString())} strategy={verticalListSortingStrategy}>
-                {filteredPlayers.map((player) => (
-                  <DraggablePlayerCard key={player.id} player={player} />
-                ))}
+            <div className="space-y-2 min-h-[600px] overflow-y-auto scrollbar-thin scrollbar-thumb-gray-400 dark:scrollbar-thumb-gray-600 scrollbar-track-transparent">
+              <SortableContext items={filteredPlayers.slice(sidebarPage*pageSize, sidebarPage*pageSize+pageSize).map(p => p.id.toString())} strategy={verticalListSortingStrategy}>
+                {filteredPlayers.slice(sidebarPage*pageSize, sidebarPage*pageSize+pageSize).map((player) => {
+                  const isInSquad = Object.values(squad.players).some(sp => sp.player.id === player.id);
+                  return (
+                  <div key={player.id} className="flex flex-col gap-1">
+                    <DraggablePlayerCard player={player} isInSquad={isInSquad} onAdd={(p) => {
+                      const targetPos = pickTargetPositionForPlayer(p, selectedFormation, squad);
+                      if (!targetPos) return;
+                      const newSquad: Squad = { ...squad, players: { ...squad.players, [targetPos]: { player: p, position: targetPos } } };
+                      addToHistory(newSquad);
+                      setSquad(newSquad);
+                    }} />
+                  </div>
+                )})}
               </SortableContext>
             </div>
+            {/* Pagination footer with numbers (split into two lines to avoid overflow) */}
+            {filteredPlayers.length > pageSize && (
+              <div className="mt-2 text-xs text-gray-700 dark:text-gray-300">
+                {(() => {
+                  const pageCount = Math.ceil(filteredPlayers.length / pageSize);
+                  const half = Math.ceil(pageCount / 2);
+                  const renderRange = (start: number, end: number) => (
+                    <div className="flex flex-wrap justify-center gap-1 mb-1">
+                      {Array.from({ length: end - start }).map((_, idx) => {
+                        const i = start + idx;
+                        return (
+                          <button
+                            key={i}
+                            className={`min-w-7 h-7 px-2 rounded border ${i===sidebarPage ? 'bg-blue-600 text-white border-blue-600' : 'bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700'} cursor-pointer`}
+                            onClick={() => setSidebarPage(i)}
+                          >
+                            {i + 1}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  );
+                  return (
+                    <>
+                      {renderRange(0, half)}
+                      {pageCount > 1 && renderRange(half, pageCount)}
+                    </>
+                  );
+                })()}
+              </div>
+            )}
           </div>
         </div>
 
         {/* Main Squad Builder Area */}
-        <div className="lg:col-span-3">
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+        <div className="min-w-0">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6 min-h-[830px]">
             {/* Formation Selector with Analysis (hidden in table view) */}
-            {viewMode === 'field' && (
-            <div className="mb-6">
-              <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-                Formation Analysis
-              </h2>
-              
-              {/* Current Formation */}
-              <div className="mb-4 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
-                <div className="flex items-center justify-between mb-3">
-                  <h3 className="text-md font-medium text-blue-900 dark:text-blue-200">
-                    Current: {selectedFormation.name}
-                  </h3>
-                  <div className="flex items-center gap-2">
-                    <div className={`px-2 py-1 rounded text-xs font-medium ${
-                      squadStats.formationEffectiveness >= 80 ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300' :
-                      squadStats.formationEffectiveness >= 60 ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300' :
-                      'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300'
-                    }`}>
-                      {squadStats.formationEffectiveness}% Effective
-                    </div>
-                  </div>
-                </div>
-                
-                {/* Formation Analysis */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-                  <div>
-                    <span className="text-blue-700 dark:text-blue-300 font-medium">Strengths:</span>
-                    <div className="text-blue-600 dark:text-blue-400 mt-1">
-                      {(() => {
-                        const strengths = [];
-                        if (squadStats.stats.defense >= 75) strengths.push('Strong Defense');
-                        if (squadStats.stats.passing >= 75) strengths.push('Good Passing');
-                        if (squadStats.stats.pace >= 75) strengths.push('High Pace');
-                        if (squadStats.stats.shooting >= 75) strengths.push('Clinical Finishing');
-                        return strengths.length > 0 ? strengths.join(', ') : 'Balanced approach';
-                      })()}
-                    </div>
-                  </div>
-                  <div>
-                    <span className="text-blue-700 dark:text-blue-300 font-medium">Weaknesses:</span>
-                    <div className="text-blue-600 dark:text-blue-400 mt-1">
-                      {(() => {
-                        const weaknesses = [];
-                        if (squadStats.stats.defense < 60) weaknesses.push('Weak Defense');
-                        if (squadStats.stats.passing < 60) weaknesses.push('Poor Passing');
-                        if (squadStats.stats.pace < 60) weaknesses.push('Slow Pace');
-                        if (squadStats.stats.shooting < 60) weaknesses.push('Low Finishing');
-                        return weaknesses.length > 0 ? weaknesses.join(', ') : 'No major weaknesses';
-                      })()}
-                    </div>
-                  </div>
-                  <div>
-                    <span className="text-blue-700 dark:text-blue-300 font-medium">Style:</span>
-                    <div className="text-blue-600 dark:text-blue-400 mt-1">
-                      {(() => {
-                        const { stats } = squadStats;
-                        if (stats.shooting > 70 && stats.pace > 70) return 'Attacking';
-                        if (stats.defense > 70 && stats.physical > 70) return 'Defensive';
-                        if (stats.passing > 70 && stats.dribbling > 70) return 'Possession';
-                        return 'Balanced';
-                      })()}
-                    </div>
-                  </div>
-                </div>
-              </div>
+            {/* Formation analysis and field view removed */}
 
-              {/* Formation Options */}
-              <div className="mb-4">
-                <h3 className="text-md font-medium text-gray-900 dark:text-white mb-3">Available Formations</h3>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                  {FORMATIONS.map((formation) => {
-                    // Calculate effectiveness for each formation
-                    const effectiveness = calculateFormationEffectiveness(squad, formation, players);
-                    return (
-                      <button
-                        key={formation.id}
-                        onClick={() => handleFormationChange(formation)}
-                        className={`p-3 rounded-lg border transition-all hover:scale-105 ${
-                          selectedFormation.id === formation.id
-                            ? 'bg-blue-600 text-white border-blue-600 shadow-lg'
-                            : 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-600'
-                        }`}
-                      >
-                        <div className="text-sm font-medium mb-1">{formation.name}</div>
-                        <div className={`text-xs ${
-                          selectedFormation.id === formation.id ? 'text-blue-100' : 'text-gray-500 dark:text-gray-400'
-                        }`}>
-                          {effectiveness}% effective
-                        </div>
-                        <div className="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-1 mt-2">
-                          <div 
-                            className={`h-1 rounded-full transition-all duration-300 ${
-                              selectedFormation.id === formation.id ? 'bg-blue-200' :
-                              effectiveness >= 80 ? 'bg-green-500' :
-                              effectiveness >= 60 ? 'bg-yellow-500' : 'bg-red-500'
-                            }`}
-                            style={{ width: `${effectiveness}%` }}
-                          ></div>
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* Recommendations removed per spec */}
-            </div>
-            )}
-
-            {/* Enhanced Squad Statistics (always shown) */}
-            <div className="mb-6 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-                Squad Statistics
-              </h3>
+            {/* Enhanced Squad Statistics (collapsible) */}
+            {showStats && (
+            <div ref={statsRef} className="mb-4 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
               
               {/* Primary Statistics with Progress Bars (chemistry hidden per spec) */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-4 mb-6">
@@ -1376,7 +1506,7 @@ export default function SquadBuilderPage() {
                   <div className="text-2xl font-bold text-orange-600 dark:text-orange-400 mb-1">
                     {squadStats.totalPlayers}
                   </div>
-                  <div className="text-sm text-gray-600 dark:text-gray-400 mb-2">Players (no max)</div>
+                  <div className="text-sm text-gray-600 dark:text-gray-400 mb-2">Players</div>
                 </div>
               </div>
 
@@ -1540,144 +1670,106 @@ export default function SquadBuilderPage() {
                 </div>
               </div>
             </div>
+            )}
 
             {/* Squad Validation removed per spec */}
 
-            {/* Formation Display (hidden in table view) */}
-            {viewMode === 'field' && (
-            <div className="mb-6">
-              <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-                {selectedFormation.name} Formation
-              </h2>
-              <div className="relative bg-green-100 dark:bg-green-900/20 rounded-lg p-8 min-h-96">
-                {/* Field lines */}
-                <div className="absolute inset-4 border-2 border-green-600 dark:border-green-400 rounded-lg"></div>
-                <div className="absolute top-1/2 left-4 right-4 h-0.5 bg-green-600 dark:bg-green-400"></div>
-                <div className="absolute top-1/4 left-4 right-4 h-0.5 bg-green-600 dark:bg-green-400"></div>
-                <div className="absolute bottom-1/4 left-4 right-4 h-0.5 bg-green-600 dark:bg-green-400"></div>
-                
-                {/* Position slots */}
-                <SortableContext items={selectedFormation.positions}>
-                  {selectedFormation.positions.map((position, index) => (
-                    <DroppablePositionSlot
-                      key={`${position}-${index}`}
-                      position={position}
-                      index={index}
-                      player={squad.players[position] || null}
-                      formation={selectedFormation}
-                      activePlayer={activePlayer}
-                      validatePlayerPosition={validatePlayerPosition}
-                    />
-                  ))}
-                </SortableContext>
-              </div>
-            </div>
-            )}
+            {/* Field display removed */}
 
-            {/* Table View: reuse club page styles */}
-            {viewMode === 'table' && (
-              <div className="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
+            {/* Table View: reuse club page styles. Show only players currently in squad */}
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
                 <div className="overflow-x-auto">
                   <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
                     <thead className="bg-gray-50 dark:bg-gray-700">
                       <tr>
-                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600 select-none" onClick={() => handleTableSort('name')}>Player</th>
-                        <th className="px-3 py-2 text-center text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600 select-none" onClick={() => handleTableSort('overall')}>Overall</th>
-                        <th className="px-3 py-2 text-center text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer" onClick={() => handleTableSort('pace')}>PAC</th>
-                        <th className="px-3 py-2 text-center text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer" onClick={() => handleTableSort('shooting')}>SHO</th>
-                        <th className="px-3 py-2 text-center text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer" onClick={() => handleTableSort('passing')}>PAS</th>
-                        <th className="px-3 py-2 text-center text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer" onClick={() => handleTableSort('dribbling')}>DRI</th>
-                        <th className="px-3 py-2 text-center text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer" onClick={() => handleTableSort('defense')}>DEF</th>
-                        <th className="px-3 py-2 text-center text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer" onClick={() => handleTableSort('physical')}>PHY</th>
+                        <th onClick={() => handleTableSort('name')} className="cursor-pointer px-4 py-3 text-left text-sm font-semibold text-gray-600 dark:text-white uppercase tracking-wider">Player</th>
+                        <th onClick={() => handleTableSort('overall')} className="cursor-pointer px-4 py-3 text-center text-sm font-semibold text-gray-600 dark:text-white uppercase tracking-wider">OVR {tableSortKey==='overall' ? (tableSortDir==='asc'?'↑':'↓') : ''}</th>
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-gray-600 dark:text-white uppercase tracking-wider">Positions</th>
+                        <th onClick={() => handleTableSort('pace')} className="cursor-pointer px-4 py-3 text-center text-sm font-semibold text-gray-600 dark:text-white uppercase tracking-wider">PAC {tableSortKey==='pace' ? (tableSortDir==='asc'?'↑':'↓') : ''}</th>
+                        <th onClick={() => handleTableSort('shooting')} className="cursor-pointer px-4 py-3 text-center text-sm font-semibold text-gray-600 dark:text-white uppercase tracking-wider">SHO {tableSortKey==='shooting' ? (tableSortDir==='asc'?'↑':'↓') : ''}</th>
+                        <th onClick={() => handleTableSort('passing')} className="cursor-pointer px-4 py-3 text-center text-sm font-semibold text-gray-600 dark:text-white uppercase tracking-wider">PAS {tableSortKey==='passing' ? (tableSortDir==='asc'?'↑':'↓') : ''}</th>
+                        <th onClick={() => handleTableSort('dribbling')} className="cursor-pointer px-4 py-3 text-center text-sm font-semibold text-gray-600 dark:text-white uppercase tracking-wider">DRI {tableSortKey==='dribbling' ? (tableSortDir==='asc'?'↑':'↓') : ''}</th>
+                        <th onClick={() => handleTableSort('defense')} className="cursor-pointer px-4 py-3 text-center text-sm font-semibold text-gray-600 dark:text-white uppercase tracking-wider">DEF {tableSortKey==='defense' ? (tableSortDir==='asc'?'↑':'↓') : ''}</th>
+                        <th onClick={() => handleTableSort('physical')} className="cursor-pointer px-4 py-3 text-center text-sm font-semibold text-gray-600 dark:text-white uppercase tracking-wider">PHY {tableSortKey==='physical' ? (tableSortDir==='asc'?'↑':'↓') : ''}</th>
+                        <th className="px-4 py-3 text-center text-sm font-semibold text-gray-600 dark:text-white uppercase tracking-wider">Actions</th>
                       </tr>
                     </thead>
                     <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                      {tableSortedPlayers.length === 0 ? (
+                        <tr>
+                          <td colSpan={10} className="px-4 py-8 text-center text-base text-gray-600 dark:text-gray-400">
+                            To add players to your squad click or drag them from the left sidebar
+                          </td>
+                        </tr>
+                      ) : null}
                       {tableSortedPlayers.map((p) => (
                         <tr key={p.id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
-                          <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-900 dark:text-white">
+                          <td className="px-4 py-3 whitespace-nowrap text-base text-gray-900 dark:text-white">
                             {p.metadata.firstName} {p.metadata.lastName}
                           </td>
-                          <td className="px-3 py-2 whitespace-nowrap text-sm text-center text-gray-900 dark:text-white">{p.metadata.overall}</td>
-                          <td className="px-3 py-2 whitespace-nowrap text-sm text-center text-gray-700 dark:text-gray-300">{p.metadata.pace}</td>
-                          <td className="px-3 py-2 whitespace-nowrap text-sm text-center text-gray-700 dark:text-gray-300">{p.metadata.shooting}</td>
-                          <td className="px-3 py-2 whitespace-nowrap text-sm text-center text-gray-700 dark:text-gray-300">{p.metadata.passing}</td>
-                          <td className="px-3 py-2 whitespace-nowrap text-sm text-center text-gray-700 dark:text-gray-300">{p.metadata.dribbling}</td>
-                          <td className="px-3 py-2 whitespace-nowrap text-sm text-center text-gray-700 dark:text-gray-300">{p.metadata.defense}</td>
-                          <td className="px-3 py-2 whitespace-nowrap text-sm text-center text-gray-700 dark:text-gray-300">{p.metadata.physical}</td>
+                          <td className="px-4 py-3 whitespace-nowrap text-base text-center">
+                            <span className="font-semibold" style={{ color: getTierTextColorValue(p.metadata.overall) }}>{p.metadata.overall}</span>
+                          </td>
+                          <td className="px-4 py-3 whitespace-nowrap text-base text-gray-900 dark:text-white">
+                            {p.metadata.positions.slice(0,3).map(pos => {
+                              const rating = calculatePositionRating(p, pos as any);
+                              return (
+                                <span key={pos} className="mr-2">
+                                  {pos} <span style={{ color: getTierTextColorValue(rating) }}>{rating}</span>
+                                </span>
+                              );
+                            })}
+                            {p.metadata.positions.length > 3 && (
+                              <span>+{p.metadata.positions.length - 3}</span>
+                            )}
+                          </td>
+                          <td className="px-4 py-3 whitespace-nowrap text-base text-center">
+                            <span className="font-semibold" style={{ color: getTierTextColorValue(p.metadata.pace) }}>{p.metadata.pace}</span>
+                          </td>
+                          <td className="px-4 py-3 whitespace-nowrap text-base text-center">
+                            <span className="font-semibold" style={{ color: getTierTextColorValue(p.metadata.shooting) }}>{p.metadata.shooting}</span>
+                          </td>
+                          <td className="px-4 py-3 whitespace-nowrap text-base text-center">
+                            <span className="font-semibold" style={{ color: getTierTextColorValue(p.metadata.passing) }}>{p.metadata.passing}</span>
+                          </td>
+                          <td className="px-4 py-3 whitespace-nowrap text-base text-center">
+                            <span className="font-semibold" style={{ color: getTierTextColorValue(p.metadata.dribbling) }}>{p.metadata.dribbling}</span>
+                          </td>
+                          <td className="px-4 py-3 whitespace-nowrap text-base text-center">
+                            <span className="font-semibold" style={{ color: getTierTextColorValue(p.metadata.defense) }}>{p.metadata.defense}</span>
+                          </td>
+                          <td className="px-4 py-3 whitespace-nowrap text-base text-center">
+                            <span className="font-semibold" style={{ color: getTierTextColorValue(p.metadata.physical) }}>{p.metadata.physical}</span>
+                          </td>
+                          <td className="px-4 py-3 whitespace-nowrap text-base text-center">
+                            <button
+                              onClick={() => {
+                                const newSquad = { ...squad } as Squad;
+                                // remove by player id across positions
+                                const entries = Object.entries(newSquad.players).filter(([_, v]) => v.player.id !== p.id);
+                                newSquad.players = Object.fromEntries(entries);
+                                addToHistory(newSquad);
+                                setSquad(newSquad);
+                              }}
+                              className="ml-2 px-1.5 py-0.5 text-[10px] rounded border border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/20 cursor-pointer"
+                              aria-label="Remove from squad"
+                            >
+                              ✕
+                            </button>
+                          </td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
                 </div>
               </div>
-            )}
 
-            {/* Squad Actions */}
-            <div className="flex flex-wrap gap-2 md:gap-4">
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={undo}
-                  disabled={!canUndo}
-                  className="px-3 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  title="Undo last action"
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
-                  </svg>
-                </button>
-                <button
-                  onClick={redo}
-                  disabled={!canRedo}
-                  className="px-3 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  title="Redo last action"
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 10H11a8 8 0 00-8 8v2m18-10l-6 6m6-6l-6-6" />
-                  </svg>
-                </button>
-              </div>
-              <button
-                className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-                onClick={() => setShowSaveModal(true)}
-              >
-                Save Squad
-              </button>
-              <div className="relative">
-                <select
-                  onChange={async (e) => {
-                    const id = e.target.value;
-                    if (!id) return;
-                    const ss = savedSquads.find(s => s.id === id);
-                    if (ss) await handleLoadSquad(ss);
-                    e.currentTarget.selectedIndex = 0;
-                  }}
-                  className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
-                  defaultValue=""
-                >
-                  <option value="" disabled>Load Squad...</option>
-                  {savedSquads.map(s => (
-                    <option key={s.id} value={s.id}>{s.squad_name}</option>
-                  ))}
-                </select>
-              </div>
-              <button
-                className="px-6 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
-                onClick={() => {
-                  const newSquad = { ...squad, players: {} };
-                  addToHistory(newSquad);
-                  setSquad(newSquad);
-                  info('Squad Cleared', 'All players have been removed from the squad.');
-                }}
-              >
-                Clear Squad
-              </button>
-            </div>
+            {/* Controls moved to header */}
           </div>
         </div>
         </div>
-        )}
 
-      {/* Drag Overlay */}
+        {/* Drag Overlay */}
       <DragOverlay>
         {activePlayer ? (
           <div className="p-3 border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 shadow-lg">
@@ -1815,7 +1907,7 @@ export default function SquadBuilderPage() {
                   setSquadName('');
                   setSaveError(null);
                 }}
-                className="flex-1 px-4 py-2 bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-400 dark:hover:bg-gray-500 transition-colors"
+                className="flex-1 px-4 py-2 bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-black rounded-lg hover:bg-gray-400 dark:hover:bg-gray-500 transition-colors cursor-pointer"
               >
                 Cancel
               </button>
