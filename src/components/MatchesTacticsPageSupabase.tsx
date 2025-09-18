@@ -17,6 +17,7 @@ const MatchesTacticsPageSupabase: React.FC = () => {
   const [opponentFormations, setOpponentFormations] = useState<{[key: string]: string[]}>({});
   const [opponentMatchResults, setOpponentMatchResults] = useState<{[key: string]: MFLMatch[]}>({});
   const [loadingOpponents, setLoadingOpponents] = useState({ current: 0, total: 0 });
+  const [syncStatus, setSyncStatus] = useState<{ message: string; progress?: number } | null>(null);
   const router = useRouter();
 
   // Add a state to track if we've given enough time for wallet initialization
@@ -43,6 +44,7 @@ const MatchesTacticsPageSupabase: React.FC = () => {
     
     setIsLoading(true);
     setError(null);
+    setSyncStatus({ message: 'Loading clubs…' });
     
     try {
       console.log('🔍 SUPABASE: Fetching clubs for wallet:', account);
@@ -59,6 +61,7 @@ const MatchesTacticsPageSupabase: React.FC = () => {
       setError('Failed to load clubs');
     } finally {
       setIsLoading(false);
+      // Keep status until next step sets it
     }
   };
 
@@ -67,6 +70,7 @@ const MatchesTacticsPageSupabase: React.FC = () => {
     
     setIsLoading(true);
     setError(null);
+    setSyncStatus({ message: 'Loading upcoming matches…' });
     
     try {
       console.log('🔍 SUPABASE: Fetching upcoming matches for club:', clubId);
@@ -99,6 +103,8 @@ const MatchesTacticsPageSupabase: React.FC = () => {
       setError('Failed to load upcoming matches');
     } finally {
       setIsLoading(false);
+      // fetchOpponentFormations manages status while running; clear when everything is done
+      setSyncStatus(null);
     }
   };
 
@@ -123,6 +129,7 @@ const MatchesTacticsPageSupabase: React.FC = () => {
     const totalMatchesToLoad = totalOpponents * 5; // 5 matches per opponent
 
     setLoadingOpponents({ current: 0, total: totalMatchesToLoad });
+    setSyncStatus({ message: `Loading opponents matches (0/${Math.max(totalMatchesToLoad, 1)})…`, progress: totalMatchesToLoad ? 0 : undefined });
     
     console.log('🔍 SUPABASE: Starting to fetch opponent data for', matches.length, 'matches');
     console.log('🔍 SUPABASE: Found', totalOpponents, 'unique opponents');
@@ -159,6 +166,12 @@ const MatchesTacticsPageSupabase: React.FC = () => {
             
             currentMatchesLoaded++;
             setLoadingOpponents({ current: currentMatchesLoaded, total: totalMatchesToLoad });
+        if (totalMatchesToLoad > 0) {
+          setSyncStatus({
+            message: `Loading opponents matches (${currentMatchesLoaded}/${totalMatchesToLoad})…`,
+            progress: currentMatchesLoaded / totalMatchesToLoad
+          });
+        }
           }
           
           formations[opponentName] = opponentFormations;
@@ -177,6 +190,7 @@ const MatchesTacticsPageSupabase: React.FC = () => {
     setOpponentFormations(formations);
     setOpponentMatchResults(matchResults);
     setLoadingOpponents({ current: 0, total: 0 });
+    setSyncStatus(null);
   };
 
   useEffect(() => {
@@ -249,6 +263,24 @@ const MatchesTacticsPageSupabase: React.FC = () => {
 
   return (
     <div className="space-y-6">
+      {syncStatus && (
+        <div className="rounded-lg border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20 text-blue-800 dark:text-blue-200 p-3">
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-medium">{syncStatus.message}</span>
+            {typeof syncStatus.progress === 'number' && (
+              <span className="text-xs">{Math.round(syncStatus.progress * 100)}%</span>
+            )}
+          </div>
+          {typeof syncStatus.progress === 'number' && (
+            <div className="w-full bg-blue-200 dark:bg-blue-800 rounded-full h-2 mt-2">
+              <div
+                className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                style={{ width: `${Math.round(syncStatus.progress * 100)}%` }}
+              />
+            </div>
+          )}
+        </div>
+      )}
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Match Tactics</h1>
         <div className="text-sm text-gray-500 dark:text-gray-400">

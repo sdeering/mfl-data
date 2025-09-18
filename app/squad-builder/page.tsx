@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { useWallet } from '../../src/contexts/WalletContext';
 import { supabaseDataService } from '../../src/services/supabaseDataService';
 import { MFLPlayer } from '../../src/types/mflApi';
-import { getSquads, saveSquad, deleteSquad, loadSquad, SavedSquad } from '../../src/services/squadService';
+import { getSquads, saveSquad, updateSquad, deleteSquad, loadSquad, SavedSquad } from '../../src/services/squadService';
 import { useToast, ToastContainer } from '../../src/components/Toast';
 import {
   DndContext,
@@ -565,10 +565,7 @@ export default function SquadBuilderPage() {
   const [hasCheckedWallet, setHasCheckedWallet] = useState(false);
   const [activePlayer, setActivePlayer] = useState<MFLPlayer | null>(null);
   const [savedSquads, setSavedSquads] = useState<SavedSquad[]>([]);
-  const [showSaveModal, setShowSaveModal] = useState(false);
-  const [squadName, setSquadName] = useState('');
-  const [isSaving, setIsSaving] = useState(false);
-  const [saveError, setSaveError] = useState<string | null>(null);
+  // Simplified save flow: use inline squad.name and save directly
   const [showLoadModal, setShowLoadModal] = useState(false);
   const [isDeleting, setIsDeleting] = useState<string | null>(null);
   const [isLoadingSquads, setIsLoadingSquads] = useState(false);
@@ -807,35 +804,27 @@ export default function SquadBuilderPage() {
 
   // Save squad functionality
   const handleSaveSquad = async () => {
-    if (!account || !squadName.trim()) {
-      setSaveError('Please enter a squad name');
+    if (!account) return;
+    const name = (squad.name || '').trim();
+    if (!name) {
+      showError('Missing name', 'Please enter a squad name before saving.', 2000);
       return;
     }
-
-    setIsSaving(true);
-    setSaveError(null);
-
     try {
-      await saveSquad(
-        account,
-        squadName.trim(),
-        selectedFormation.id,
-        squad.players
-      );
-      
-      setShowSaveModal(false);
-      setSquadName('');
-      // Refresh the saved squads list
+      // If a squad with the same name exists, overwrite it
+      const existing = savedSquads.find(s => s.squad_name.toLowerCase() === name.toLowerCase());
+      if (existing) {
+        await updateSquad(existing.id, account, name, selectedFormation.id, squad.players);
+      } else {
+        await saveSquad(account, name, selectedFormation.id, squad.players);
+      }
+      // Refresh saved squads
       const squads = await getSquads(account);
       setSavedSquads(squads);
-      
-      success('Squad Saved!', `"${squadName.trim()}" has been saved successfully.`, 2000);
+      success('Squad Saved!', `"${name}" has been saved successfully.`, 2000);
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to save squad';
-      setSaveError(errorMessage);
       showError('Save Failed', errorMessage, 2000);
-    } finally {
-      setIsSaving(false);
     }
   };
 
@@ -1127,7 +1116,7 @@ export default function SquadBuilderPage() {
       onDragEnd={handleDragEnd}
     >
       <div className="min-h-screen">
-        <div className="mb-6 flex items-center justify-between gap-3 flex-wrap">
+          <div className="mb-6 flex items-center justify-between gap-3 flex-wrap">
           <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Squad Builder</h1>
           <div className="flex items-center gap-2">
             {tableSortedPlayers.length > 0 && (
@@ -1154,7 +1143,7 @@ export default function SquadBuilderPage() {
               {Object.keys(squad.players).length > 0 && (
                 <button
                   className="px-4 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors cursor-pointer text-sm"
-                  onClick={() => setShowSaveModal(true)}
+                  onClick={handleSaveSquad}
                 >
                   Save Squad
                 </button>
@@ -1486,22 +1475,7 @@ export default function SquadBuilderPage() {
                     ></div>
                   </div>
                 </div>
-                {/* Formation Fit retained */}
-                <div className="text-center">
-                  <div className="text-2xl font-bold text-purple-600 dark:text-purple-400 mb-1">
-                    {squadStats.formationEffectiveness}%
-                  </div>
-                  <div className="text-sm text-gray-600 dark:text-gray-400 mb-2">Formation Fit</div>
-                  <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
-                    <div 
-                      className={`h-2 rounded-full transition-all duration-300 ${
-                        squadStats.formationEffectiveness >= 80 ? 'bg-purple-600' :
-                        squadStats.formationEffectiveness >= 60 ? 'bg-yellow-500' : 'bg-red-500'
-                      }`}
-                      style={{ width: `${squadStats.formationEffectiveness}%` }}
-                    ></div>
-                  </div>
-                </div>
+                {/* Formation Fit removed */}
                 <div className="text-center">
                   <div className="text-2xl font-bold text-orange-600 dark:text-orange-400 mb-1">
                     {squadStats.totalPlayers}
@@ -1677,6 +1651,16 @@ export default function SquadBuilderPage() {
             {/* Field display removed */}
 
             {/* Table View: reuse club page styles. Show only players currently in squad */}
+            {/* Squad Name inline editor */}
+            <div className="mb-3">
+              <input
+                type="text"
+                value={squad.name}
+                onChange={(e) => setSquad(prev => ({ ...prev, name: e.target.value }))}
+                placeholder="Squad name..."
+                className="w-full max-w-md px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
             <div className="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
                 <div className="overflow-x-auto">
                   <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
@@ -1865,56 +1849,7 @@ export default function SquadBuilderPage() {
         ) : null}
       </DragOverlay>
 
-      {/* Save Squad Modal */}
-      {showSaveModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-gray-800 rounded-lg p-4 md:p-6 w-full max-w-md">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-              Save Squad
-            </h3>
-            
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Squad Name
-              </label>
-              <input
-                type="text"
-                value={squadName}
-                onChange={(e) => setSquadName(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                placeholder="Enter squad name..."
-                maxLength={50}
-              />
-            </div>
-
-            {saveError && (
-              <div className="mb-4 p-3 bg-red-100 dark:bg-red-900/30 border border-red-300 dark:border-red-700 rounded-lg">
-                <p className="text-sm text-red-700 dark:text-red-300">{saveError}</p>
-              </div>
-            )}
-
-            <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
-              <button
-                onClick={handleSaveSquad}
-                disabled={isSaving || !squadName.trim()}
-                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
-              >
-                {isSaving ? 'Saving...' : 'Save Squad'}
-              </button>
-              <button
-                onClick={() => {
-                  setShowSaveModal(false);
-                  setSquadName('');
-                  setSaveError(null);
-                }}
-                className="flex-1 px-4 py-2 bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-black rounded-lg hover:bg-gray-400 dark:hover:bg-gray-500 transition-colors cursor-pointer"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Save Squad Modal removed (inline name + direct save) */}
 
       {/* Load Squad Modal */}
       {showLoadModal && (
@@ -1948,11 +1883,8 @@ export default function SquadBuilderPage() {
                         {savedSquad.squad_name}
                       </h4>
                       <div className="flex items-center space-x-4 text-sm text-gray-500 dark:text-gray-400 mt-1">
-                        <span>Formation: {savedSquad.formation_id}</span>
                         <span>Players: {Object.keys(savedSquad.players).length}</span>
-                        <span>
-                          Updated: {new Date(savedSquad.updated_at).toLocaleDateString()}
-                        </span>
+                        <span>Updated: {new Date(savedSquad.updated_at).toLocaleDateString()}</span>
                       </div>
                     </div>
                     
@@ -1979,7 +1911,7 @@ export default function SquadBuilderPage() {
             <div className="flex justify-end mt-6">
               <button
                 onClick={() => setShowLoadModal(false)}
-                className="px-4 py-2 bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-400 dark:hover:bg-gray-500 transition-colors"
+                className="px-4 py-2 bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-black rounded-lg hover:bg-gray-400 dark:hover:bg-gray-500 transition-colors"
               >
                 Close
               </button>

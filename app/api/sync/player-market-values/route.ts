@@ -230,7 +230,7 @@ async function processMarketValueSync(
       const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
       const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
       if (supabaseUrl && supabaseAnonKey) {
-        const supabase = createClient(supabaseUrl, supabaseAnonKey)
+        const supabase = createClient(supabaseUrl, supabaseAnonKey, { auth: { persistSession: false } })
         const dataType = `agency_player_market_values:${walletAddress}`
         await supabase
           .from('sync_status')
