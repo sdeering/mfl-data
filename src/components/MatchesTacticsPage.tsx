@@ -785,7 +785,7 @@ const MatchesTacticsPage: React.FC = () => {
         {!isLoading && !error && filteredMatches.length > 0 && (
           <div className="mt-6 text-center">
             <a 
-              href="https://mfldata.com/formation-meta" 
+              href="https://mfl-coach.com/formation-meta" 
               target="_blank" 
               rel="noopener noreferrer"
               className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 underline text-sm"

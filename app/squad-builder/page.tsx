@@ -331,7 +331,7 @@ function DraggablePlayerCard({ player, onAdd, onRemove, isInSquad = false }: Dra
     transform: CSS.Transform.toString(transform),
     transition,
     opacity: isDragging ? 0.5 : 1,
-    ...(isInSquad ? { backgroundColor: '#1e1e1e' } : {})
+    // background handled via class for light/dark
   };
 
   // Tiered text color for stats, matching card tiers
@@ -353,7 +353,7 @@ function DraggablePlayerCard({ player, onAdd, onRemove, isInSquad = false }: Dra
       onClick={() => { if (isInSquad) { onRemove?.(player); } else { onAdd(player); } }}
       className={`p-2 md:p-3 border rounded-lg cursor-pointer transition-colors ${
         isInSquad
-          ? 'border-gray-300 dark:border-gray-600 opacity-80'
+          ? 'sb-selected bg-gray-100 dark:bg-[#1e1e1e] border-gray-300 dark:border-gray-600 opacity-80'
           : 'border-gray-200 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 hover:border-blue-400 dark:hover:border-blue-500'
       }`}
     >
@@ -664,26 +664,52 @@ export default function SquadBuilderPage() {
   // Field view removed; table-only
 
   // Table sorting (independent of sidebar sort controls)
-  const [tableSortKey, setTableSortKey] = useState<'name'|'overall'|'pace'|'shooting'|'passing'|'dribbling'|'defense'|'physical'>('overall');
+  const [tableSortKey, setTableSortKey] = useState<'name'|'overall'|'age'|'positions'|'pace'|'shooting'|'passing'|'dribbling'|'defense'|'physical'>('overall');
   const [tableSortDir, setTableSortDir] = useState<'asc'|'desc'>('desc');
-  const handleTableSort = (key: typeof tableSortKey) => {
-    setTableSortKey(prev => {
-      if (prev === key) {
-        setTableSortDir(d => (d === 'asc' ? 'desc' : 'asc'));
-        return prev;
-      }
-      setTableSortDir('desc');
-      return key;
-    });
+  const [tableGroupFilter, setTableGroupFilter] = useState<'all'|'gk'|'defense'|'midfield'|'attack'>('all');
+  const [showCoverageModal, setShowCoverageModal] = useState(false);
+
+  const normalizeSlotBase = (pos: string) => {
+    const base = (pos || '').replace(/[0-9]+$/, '');
+    if (base === 'CF') return 'ST';
+    if (base === 'RWB') return 'RB';
+    if (base === 'LWB') return 'LB';
+    return base;
   };
-  const tableSortedPlayers = Object.values(squad.players).map(sp => sp.player) as MFLPlayer[];
+  const handleTableSort = (key: typeof tableSortKey) => {
+    if (tableSortKey === key) {
+      setTableSortDir(d => (d === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setTableSortKey(key);
+      setTableSortDir('desc');
+      return;
+    }
+    // ensure re-render even if key unchanged
+    setTableSortKey(key);
+  };
+  const tablePlayersEntries = Object.entries(squad.players).filter(([slot, sp]) => {
+    if (tableGroupFilter === 'all') return true;
+    let base = normalizeSlotBase(slot);
+    if (base === 'EXTRA') base = normalizeSlotBase(sp.player.metadata.positions[0] || '');
+    if (tableGroupFilter === 'gk') return base === 'GK';
+    if (tableGroupFilter === 'defense') return ['CB','LB','RB'].includes(base);
+    if (tableGroupFilter === 'midfield') return ['CAM','CM','CDM','LM','RM'].includes(base);
+    if (tableGroupFilter === 'attack') return ['ST','LW','RW'].includes(base);
+    return true;
+  });
+  const tableSortedPlayers = tablePlayersEntries.map(([_, sp]) => sp.player) as MFLPlayer[];
   tableSortedPlayers.sort((a, b) => {
     const dir = tableSortDir === 'asc' ? 1 : -1;
-    const keyMap: any = { overall: 'overall', pace: 'pace', shooting: 'shooting', passing: 'passing', dribbling: 'dribbling', defense: 'defense', physical: 'physical' };
+    const keyMap: any = { overall: 'overall', age: 'age', pace: 'pace', shooting: 'shooting', passing: 'passing', dribbling: 'dribbling', defense: 'defense', physical: 'physical' };
     if (tableSortKey === 'name') {
       const an = `${a.metadata.firstName} ${a.metadata.lastName}`;
       const bn = `${b.metadata.firstName} ${b.metadata.lastName}`;
       return an.localeCompare(bn) * dir;
+    }
+    if (tableSortKey === 'positions') {
+      const bestA = (a.metadata.positions || []).map((pos: any) => calculatePositionRating(a, pos)).reduce((m, v) => Math.max(m, v), 0);
+      const bestB = (b.metadata.positions || []).map((pos: any) => calculatePositionRating(b, pos)).reduce((m, v) => Math.max(m, v), 0);
+      return (bestA - bestB) * dir;
     }
     const va = (a.metadata as any)[keyMap[tableSortKey]] ?? 0;
     const vb = (b.metadata as any)[keyMap[tableSortKey]] ?? 0;
@@ -967,11 +993,22 @@ export default function SquadBuilderPage() {
       });
     }
 
-    // Position filter
+    // Position filter (supports group selections)
     if (filterPosition !== 'all') {
-      filtered = filtered.filter(player => 
-        player.metadata.positions.includes(filterPosition as any)
-      );
+      const resolvePositions = (val: string): string[] => {
+        switch (val) {
+          case '__GROUP_DEFENDERS':
+            return ['CB','LB','RB','LWB','RWB'];
+          case '__GROUP_MIDFIELDERS':
+            return ['CM','CDM','LM','RM'];
+          case '__GROUP_FORWARDS':
+            return ['ST','CF','RW','LW','CAM'];
+          default:
+            return [val];
+        }
+      };
+      const wanted = resolvePositions(filterPosition);
+      filtered = filtered.filter(player => player.metadata.positions.some(p => wanted.includes(p as any)));
     }
 
     // Attribute slider min/max filters (debounced)
@@ -1174,6 +1211,9 @@ export default function SquadBuilderPage() {
         .dark .sb-main-squad-table tbody {
           background-color: #1e1e1e !important;
         }
+        /* Enforce dark backgrounds */
+        .dark .sb-selected { background-color: #1e1e1e !important; }
+        .dark .sb-main-container { background-color: #1e1e1e !important; }
       `}</style>
       <div className="min-h-screen">
           <div className="mb-6 flex items-center justify-between gap-3 flex-wrap">
@@ -1381,6 +1421,7 @@ export default function SquadBuilderPage() {
                     className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   >
                     <option value="all">All Positions</option>
+                    <option disabled>────────────</option>
                     <option value="GK">GK - Goalkeeper</option>
                     <option value="CB">CB - Center Back</option>
                     <option value="LB">LB - Left Back</option>
@@ -1396,6 +1437,10 @@ export default function SquadBuilderPage() {
                     <option value="RW">RW - Right Winger</option>
                     <option value="ST">ST - Striker</option>
                     <option value="CF">CF - Center Forward</option>
+                    <option disabled>────────────</option>
+                    <option value="__GROUP_DEFENDERS">Defenders (CB, LB, RB, LWB, RWB)</option>
+                    <option value="__GROUP_MIDFIELDERS">Midfielders (CM, CDM, LM, RM)</option>
+                    <option value="__GROUP_FORWARDS">Forwards (ST, CF, RW, LW, CAM)</option>
                   </select>
                 </div>
                 <div>
@@ -1534,7 +1579,7 @@ export default function SquadBuilderPage() {
 
         {/* Main Squad Builder Area */}
         <div className="min-w-0">
-          <div className="bg-[#1e1e1e] rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6 min-h-[830px]">
+          <div className="sb-main-container bg-gray-100 dark:bg-[#1e1e1e] rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6 min-h-[830px]">
             {/* Formation Selector with Analysis (hidden in table view) */}
             {/* Formation analysis and field view removed */}
 
@@ -1565,7 +1610,7 @@ export default function SquadBuilderPage() {
                   <div className="text-lg font-semibold text-gray-900 dark:text-white mb-1">
                     {squadStats.stats.pace}
                   </div>
-                  <div className="text-xs text-gray-600 dark:text-gray-400 mb-2">PAC</div>
+                  <div className="text-xs text-gray-600 dark:text-gray-400 mb-2">AVG PAC</div>
                   <div className="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-1">
                     <div 
                       className="bg-yellow-500 h-1 rounded-full transition-all duration-300"
@@ -1577,7 +1622,7 @@ export default function SquadBuilderPage() {
                   <div className="text-lg font-semibold text-gray-900 dark:text-white mb-1">
                     {squadStats.stats.shooting}
                   </div>
-                  <div className="text-xs text-gray-600 dark:text-gray-400 mb-2">SHO</div>
+                  <div className="text-xs text-gray-600 dark:text-gray-400 mb-2">AVG SHO</div>
                   <div className="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-1">
                     <div 
                       className="bg-red-500 h-1 rounded-full transition-all duration-300"
@@ -1589,7 +1634,7 @@ export default function SquadBuilderPage() {
                   <div className="text-lg font-semibold text-gray-900 dark:text-white mb-1">
                     {squadStats.stats.passing}
                   </div>
-                  <div className="text-xs text-gray-600 dark:text-gray-400 mb-2">PAS</div>
+                  <div className="text-xs text-gray-600 dark:text-gray-400 mb-2">AVG PAS</div>
                   <div className="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-1">
                     <div 
                       className="bg-blue-500 h-1 rounded-full transition-all duration-300"
@@ -1601,7 +1646,7 @@ export default function SquadBuilderPage() {
                   <div className="text-lg font-semibold text-gray-900 dark:text-white mb-1">
                     {squadStats.stats.dribbling}
                   </div>
-                  <div className="text-xs text-gray-600 dark:text-gray-400 mb-2">DRI</div>
+                  <div className="text-xs text-gray-600 dark:text-gray-400 mb-2">AVG DRI</div>
                   <div className="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-1">
                     <div 
                       className="bg-green-500 h-1 rounded-full transition-all duration-300"
@@ -1613,7 +1658,7 @@ export default function SquadBuilderPage() {
                   <div className="text-lg font-semibold text-gray-900 dark:text-white mb-1">
                     {squadStats.stats.defense}
                   </div>
-                  <div className="text-xs text-gray-600 dark:text-gray-400 mb-2">DEF</div>
+                  <div className="text-xs text-gray-600 dark:text-gray-400 mb-2">AVG DEF</div>
                   <div className="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-1">
                     <div 
                       className="bg-indigo-500 h-1 rounded-full transition-all duration-300"
@@ -1625,7 +1670,7 @@ export default function SquadBuilderPage() {
                   <div className="text-lg font-semibold text-gray-900 dark:text-white mb-1">
                     {squadStats.stats.physical}
                   </div>
-                  <div className="text-xs text-gray-600 dark:text-gray-400 mb-2">PHY</div>
+                  <div className="text-xs text-gray-600 dark:text-gray-400 mb-2">AVG PHY</div>
                   <div className="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-1">
                     <div 
                       className="bg-orange-500 h-1 rounded-full transition-all duration-300"
@@ -1638,7 +1683,19 @@ export default function SquadBuilderPage() {
               {/* Advanced Statistics */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="bg-white dark:bg-gray-700 rounded-lg p-3">
-                  <h4 className="text-sm font-medium text-gray-900 dark:text-white mb-2">Squad Balance</h4>
+                  <div className="flex items-center justify-between mb-2">
+                    <h4 className="text-sm font-medium text-gray-900 dark:text-white">Squad Balance</h4>
+                    {tableGroupFilter !== 'all' && (
+                      <button
+                        type="button"
+                        className="text-xs px-2 py-1 rounded border border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/20 cursor-pointer"
+                        onClick={() => setTableGroupFilter('all')}
+                        title="Reset group filter"
+                      >
+                        Reset
+                      </button>
+                    )}
+                  </div>
                   <div className="space-y-2">
                     {(() => {
                       const normalize = (pos: string) => {
@@ -1661,22 +1718,38 @@ export default function SquadBuilderPage() {
                       });
                       return (
                         <>
-                          <div className="flex justify-between items-center">
+                          <button
+                            type="button"
+                            className={`w-full flex justify-between items-center text-left px-2 py-1 rounded cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-900/20 ${tableGroupFilter==='gk' ? 'bg-blue-50 dark:bg-blue-900/20' : ''}`}
+                            onClick={() => setTableGroupFilter('gk')}
+                          >
                             <span className="text-xs text-gray-600 dark:text-gray-400">Goalkeepers</span>
                             <span className="text-xs font-medium text-gray-900 dark:text-white">{counts.gk}</span>
-                          </div>
-                          <div className="flex justify-between items-center">
+                          </button>
+                          <button
+                            type="button"
+                            className={`w-full flex justify-between items-center text-left px-2 py-1 rounded cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-900/20 ${tableGroupFilter==='defense' ? 'bg-blue-50 dark:bg-blue-900/20' : ''}`}
+                            onClick={() => setTableGroupFilter('defense')}
+                          >
                             <span className="text-xs text-gray-600 dark:text-gray-400">Defense</span>
                             <span className="text-xs font-medium text-gray-900 dark:text-white">{counts.defense}</span>
-                          </div>
-                          <div className="flex justify-between items-center">
+                          </button>
+                          <button
+                            type="button"
+                            className={`w-full flex justify-between items-center text-left px-2 py-1 rounded cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-900/20 ${tableGroupFilter==='midfield' ? 'bg-blue-50 dark:bg-blue-900/20' : ''}`}
+                            onClick={() => setTableGroupFilter('midfield')}
+                          >
                             <span className="text-xs text-gray-600 dark:text-gray-400">Midfield</span>
                             <span className="text-xs font-medium text-gray-900 dark:text-white">{counts.midfield}</span>
-                          </div>
-                          <div className="flex justify-between items-center">
+                          </button>
+                          <button
+                            type="button"
+                            className={`w-full flex justify-between items-center text-left px-2 py-1 rounded cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-900/20 ${tableGroupFilter==='attack' ? 'bg-blue-50 dark:bg-blue-900/20' : ''}`}
+                            onClick={() => setTableGroupFilter('attack')}
+                          >
                             <span className="text-xs text-gray-600 dark:text-gray-400">Attack</span>
                             <span className="text-xs font-medium text-gray-900 dark:text-white">{counts.attack}</span>
-                          </div>
+                          </button>
                         </>
                       );
                     })()}
@@ -1712,7 +1785,9 @@ export default function SquadBuilderPage() {
                 </div>
 
                 <div className="bg-white dark:bg-gray-700 rounded-lg p-3">
-                  <h4 className="text-sm font-medium text-gray-900 dark:text-white mb-2">Position Coverage</h4>
+                  <div className="flex items-center justify-between mb-2">
+                    <h4 className="text-sm font-medium text-gray-900 dark:text-white">Position Coverage</h4>
+                  </div>
                   <div className="space-y-2">
                     {(() => {
                       // Required unique positions for full coverage
@@ -1750,7 +1825,7 @@ export default function SquadBuilderPage() {
                       return (
                         <>
                           <div className="flex justify-between items-center">
-                            <span className="text-xs text-gray-600 dark:text-gray-400">Coverage</span>
+                            <span className="text-xs text-gray-600 dark:text-gray-400">Main Coverage</span>
                             <span className="text-xs font-medium text-gray-900 dark:text-white">{coveragePercent}%</span>
                           </div>
                           <div className="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-2">
@@ -1769,6 +1844,16 @@ export default function SquadBuilderPage() {
                               className="bg-green-500 h-2 rounded-full transition-all duration-300"
                               style={{ width: `${backupPercent}%` }}
                             ></div>
+                          </div>
+                          <div className="mt-3 flex justify-end">
+                            <button
+                              type="button"
+                              className="text-xs px-2 py-1 rounded border border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/20 cursor-pointer"
+                              onClick={() => setShowCoverageModal(true)}
+                              title="Show all positions coverage"
+                            >
+                              Show all positions coverage
+                            </button>
                           </div>
                         </>
                       );
@@ -1801,7 +1886,12 @@ export default function SquadBuilderPage() {
                         <th onClick={() => handleTableSort('overall')} className="cursor-pointer p-[5px] text-center text-sm font-semibold text-gray-600 dark:text-white uppercase tracking-wider">
                           <span className="inline-flex items-center gap-1 justify-center">OVR {tableSortKey==='overall' ? (tableSortDir==='asc'?'↑':'↓') : ''}</span>
                         </th>
-                        <th className="p-[5px] text-left text-sm font-semibold text-gray-600 dark:text-white uppercase tracking-wider">Positions</th>
+                        <th onClick={() => handleTableSort('age')} className="cursor-pointer p-[5px] text-center text-sm font-semibold text-gray-600 dark:text-white uppercase tracking-wider">
+                          <span className="inline-flex items-center gap-1 justify-center">Age {tableSortKey==='age' ? (tableSortDir==='asc'?'↑':'↓') : ''}</span>
+                        </th>
+                        <th onClick={() => handleTableSort('positions')} className="cursor-pointer p-[5px] text-left text-sm font-semibold text-gray-600 dark:text-white uppercase tracking-wider">
+                          <span className="inline-flex items-center gap-1">Positions {tableSortKey==='positions' ? (tableSortDir==='asc'?'↑':'↓') : ''}</span>
+                        </th>
                         <th onClick={() => handleTableSort('pace')} className="cursor-pointer p-[5px] text-center text-sm font-semibold text-gray-600 dark:text-white uppercase tracking-wider">
                           <span className="inline-flex items-center gap-1 justify-center">PAC {tableSortKey==='pace' ? (tableSortDir==='asc'?'↑':'↓') : ''}</span>
                         </th>
@@ -1826,7 +1916,7 @@ export default function SquadBuilderPage() {
                     <tbody className="bg-white dark:bg-gray-800">
                       {tableSortedPlayers.length === 0 ? (
                         <tr>
-                          <td colSpan={10} className="p-[15px] text-center text-base text-gray-600 dark:text-gray-400">
+                          <td colSpan={11} className="p-[15px] text-center text-base text-gray-600 dark:text-gray-400">
                             To add players to your squad click or drag them from the left sidebar
                           </td>
                         </tr>
@@ -1838,6 +1928,9 @@ export default function SquadBuilderPage() {
                           </td>
                           <td className="p-[5px] whitespace-nowrap text-base text-center">
                             <span className="font-semibold" style={{ color: getTierTextColorValue(p.metadata.overall) }}>{p.metadata.overall}</span>
+                          </td>
+                          <td className="p-[5px] whitespace-nowrap text-base text-center text-[#9f9f9f]">
+                            {p.metadata.age}
                           </td>
                           <td className="p-[5px] whitespace-nowrap text-base text-gray-900 dark:text-white">
                             {p.metadata.positions.slice(0,3).map(pos => {
@@ -2061,6 +2154,67 @@ export default function SquadBuilderPage() {
                 Close
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Positions Coverage Modal */}
+      {showCoverageModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-4 md:p-6 w-full max-w-4xl max-h-[80vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">All Positions Coverage</h3>
+              <button
+                type="button"
+                className="px-3 py-1 text-sm rounded border border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/20 cursor-pointer"
+                onClick={() => setShowCoverageModal(false)}
+              >
+                Close
+              </button>
+            </div>
+            {(() => {
+              const order = ['GK','CB','LB','RB','LWB','RWB','CDM','CM','CAM','LM','RM','LW','RW','CF','ST'];
+              const grouped: Record<string, MFLPlayer[]> = {};
+              order.forEach(p => { grouped[p] = []; });
+              Object.values(squad.players).forEach(sp => {
+                const p = sp.player;
+                (p.metadata.positions || []).forEach(pos => {
+                  const base = (pos || '').replace(/[0-9]+$/, '');
+                  if (!grouped[base]) grouped[base] = [];
+                  grouped[base].push(p);
+                });
+              });
+              return (
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                  {order.map(pos => (
+                    <div key={pos} className="bg-gray-50 dark:bg-gray-700 rounded-lg p-3 border border-gray-200 dark:border-gray-600">
+                      <div className="mb-2">
+                        <h4 className="text-sm font-medium text-gray-900 dark:text-white">{pos}</h4>
+                      </div>
+                      <div className="space-y-1 max-h-64 overflow-y-auto">
+                        {(grouped[pos] || []).length === 0 ? (
+                          <div className="text-xs text-gray-500 dark:text-gray-400">No players</div>
+                        ) : (
+                          [...(grouped[pos] || [])]
+                            .sort((a, b) => calculatePositionRating(b, pos as any) - calculatePositionRating(a, pos as any))
+                            .map(pl => {
+                              const pr = calculatePositionRating(pl, pos as any);
+                              return (
+                                <div key={`${pos}-${pl.id}`} className="text-xs flex items-center justify-between">
+                                  <span className="text-gray-900 dark:text-white truncate">
+                                    {pl.metadata.firstName} {pl.metadata.lastName}
+                                  </span>
+                                  <span className="ml-2 text-gray-600 dark:text-gray-300">{pr}</span>
+                                </div>
+                              );
+                            })
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              );
+            })()}
           </div>
         </div>
       )}

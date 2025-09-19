@@ -17,6 +17,11 @@ const MatchesTacticsPageSupabase: React.FC = () => {
   const [opponentFormations, setOpponentFormations] = useState<{[key: string]: string[]}>({});
   const [opponentMatchResults, setOpponentMatchResults] = useState<{[key: string]: MFLMatch[]}>({});
   const [loadingOpponents, setLoadingOpponents] = useState({ current: 0, total: 0 });
+  // Per-club state for parallel loading across all clubs
+  const [clubFilteredMatches, setClubFilteredMatches] = useState<{[clubId: string]: MFLMatch[]}>({});
+  const [clubOpponentFormations, setClubOpponentFormations] = useState<{[clubId: string]: {[key: string]: string[]}}>({});
+  const [clubOpponentMatchResults, setClubOpponentMatchResults] = useState<{[clubId: string]: {[key: string]: MFLMatch[]}}>({});
+  const [clubLoadingOpponents, setClubLoadingOpponents] = useState<{[clubId: string]: { current: number, total: number }}>({});
   const [syncStatus, setSyncStatus] = useState<{ message: string; progress?: number } | null>(null);
   const router = useRouter();
 
@@ -54,7 +59,8 @@ const MatchesTacticsPageSupabase: React.FC = () => {
       setClubs(clubsData);
       
       if (clubsData.length > 0) {
-        setSelectedClub(clubsData[0].club.id.toString());
+        // Also kick off per-club opponent syncs in parallel
+        startAllClubsFetch(clubsData);
       }
     } catch (err) {
       console.error('Error fetching clubs:', err);
@@ -65,133 +71,82 @@ const MatchesTacticsPageSupabase: React.FC = () => {
     }
   };
 
-  const fetchUpcomingMatches = async (clubId: string) => {
-    if (!clubId) return;
-    
-    setIsLoading(true);
-    setError(null);
-    setSyncStatus({ message: 'Loading upcoming matches…' });
-    
+  // Trigger fetch for upcoming matches and opponents for a single club
+  const fetchForClub = async (clubId: string, clubName: string) => {
     try {
-      console.log('🔍 SUPABASE: Fetching upcoming matches for club:', clubId);
+      // Load upcoming matches (same source; filter for this club and next 48h)
       const matches = await supabaseDataService.getUpcomingMatches(account!);
-      console.log('🔍 SUPABASE: Retrieved upcoming matches:', matches);
-      
-      // Filter matches for next 48 hours
       const now = new Date();
       const twoDaysFromNow = new Date(now.getTime() + 48 * 60 * 60 * 1000);
-      
-      const filteredMatches = matches.filter(match => {
-        if (!match.startDate) return false;
-        const matchDate = new Date(match.startDate);
-        return matchDate >= now && matchDate <= twoDaysFromNow;
+      const filtered = matches.filter(m => {
+        if (!m.startDate) return false;
+        const matchDate = new Date(m.startDate);
+        const involvesClub = m.homeTeamName === clubName || m.awayTeamName === clubName;
+        return involvesClub && matchDate >= now && matchDate <= twoDaysFromNow;
+      }).sort((a, b) => new Date(a.startDate!).getTime() - new Date(b.startDate!).getTime());
+
+      setClubFilteredMatches(prev => ({ ...prev, [clubId]: filtered }));
+
+      // Now fetch opponent formations/results for this club's filtered matches
+      if (filtered.length === 0) return;
+
+      const formations: { [key: string]: string[] } = {};
+      const matchResults: { [key: string]: MFLMatch[] } = {};
+
+      const uniqueOpponents = new Set<string>();
+      const opponentSquadIds = new Map<string, number>();
+      filtered.forEach(match => {
+        const opponentName = match.homeTeamName === clubName ? match.awayTeamName : match.homeTeamName;
+        const opponentSquadId = match.homeTeamName === clubName ? match.awaySquad.id : match.homeSquad.id;
+        uniqueOpponents.add(opponentName);
+        opponentSquadIds.set(opponentName, opponentSquadId);
       });
-      
-      // Sort by date
-      filteredMatches.sort((a, b) => {
-        if (!a.startDate || !b.startDate) return 0;
-        return new Date(a.startDate).getTime() - new Date(b.startDate).getTime();
-      });
-      
-      setAllUpcomingMatches(matches);
-      setFilteredMatches(filteredMatches);
-      
-      // Fetch opponent formations for filtered matches
-      await fetchOpponentFormations(filteredMatches);
-    } catch (err) {
-      console.error('Error fetching upcoming matches:', err);
-      setError('Failed to load upcoming matches');
-    } finally {
-      setIsLoading(false);
-      // fetchOpponentFormations manages status while running; clear when everything is done
-      setSyncStatus(null);
-    }
-  };
 
-  const fetchOpponentFormations = async (matches: MFLMatch[]) => {
-    if (matches.length === 0) return;
+      const totalOpponents = uniqueOpponents.size;
+      const totalMatchesToLoad = totalOpponents * 5;
+      setClubLoadingOpponents(prev => ({ ...prev, [clubId]: { current: 0, total: totalMatchesToLoad } }));
 
-    const formations: { [key: string]: string[] } = {};
-    const matchResults: { [key: string]: MFLMatch[] } = {};
-    
-    // Get unique opponents
-    const uniqueOpponents = new Set<string>();
-    const opponentSquadIds = new Map<string, number>();
-    
-    matches.forEach(match => {
-      const opponentName = match.homeTeamName === match.clubName ? match.awayTeamName : match.homeTeamName;
-      const opponentSquadId = match.homeTeamName === match.clubName ? match.awaySquad.id : match.homeSquad.id;
-      uniqueOpponents.add(opponentName);
-      opponentSquadIds.set(opponentName, opponentSquadId);
-    });
-
-    const totalOpponents = uniqueOpponents.size;
-    const totalMatchesToLoad = totalOpponents * 5; // 5 matches per opponent
-
-    setLoadingOpponents({ current: 0, total: totalMatchesToLoad });
-    setSyncStatus({ message: `Loading opponents matches (0/${Math.max(totalMatchesToLoad, 1)})…`, progress: totalMatchesToLoad ? 0 : undefined });
-    
-    console.log('🔍 SUPABASE: Starting to fetch opponent data for', matches.length, 'matches');
-    console.log('🔍 SUPABASE: Found', totalOpponents, 'unique opponents');
-    
-    let currentMatchesLoaded = 0;
-    
-    for (const match of matches) {
-      const opponentName = match.homeTeamName === match.clubName ? match.awayTeamName : match.homeTeamName;
-      const opponentSquadId = match.homeTeamName === match.clubName ? match.awaySquad.id : match.homeSquad.id;
-      
-      console.log(`🔍 SUPABASE: Processing opponent "${opponentName}" with squad ID ${opponentSquadId}`);
-      
-      if (!formations[opponentName]) {
-        
+      let currentMatchesLoaded = 0;
+      for (const opponentName of uniqueOpponents) {
+        const squadId = opponentSquadIds.get(opponentName)!;
         try {
-          // Fetch opponent's last 5 matches using Supabase
-          console.log(`🔍 SUPABASE: Fetching past matches for squad ${opponentSquadId}...`);
-          const opponentMatches = await supabaseDataService.getMatchesData(opponentSquadId.toString(), 'previous');
+          const opponentMatches = await supabaseDataService.getMatchesData(squadId.toString(), 'previous');
           const last5Matches = opponentMatches.slice(0, 5);
-          
-          console.log(`🔍 SUPABASE: Found ${last5Matches.length} past matches for ${opponentName}:`, last5Matches);
           matchResults[opponentName] = last5Matches;
-          
-          const opponentFormations: string[] = [];
-          for (const opponentMatch of last5Matches) {
-            console.log(`🔍 SUPABASE: Fetching formation for match ${opponentMatch.id}...`);
-            const formation = await supabaseDataService.getMatchFormation(opponentMatch.id.toString());
-            if (formation) {
-              console.log(`🔍 SUPABASE: Found formation "${formation}" for match ${opponentMatch.id}`);
-              opponentFormations.push(formation);
-            } else {
-              console.log(`🔍 SUPABASE: No formation found for match ${opponentMatch.id}`);
-            }
-            
+          const oppForms: string[] = [];
+          for (const om of last5Matches) {
+            const formation = await supabaseDataService.getMatchFormation(om.id.toString());
+            if (formation) oppForms.push(formation);
             currentMatchesLoaded++;
-            setLoadingOpponents({ current: currentMatchesLoaded, total: totalMatchesToLoad });
-        if (totalMatchesToLoad > 0) {
-          setSyncStatus({
-            message: `Loading opponents matches (${currentMatchesLoaded}/${totalMatchesToLoad})…`,
-            progress: currentMatchesLoaded / totalMatchesToLoad
-          });
-        }
+            setClubLoadingOpponents(prev => ({ ...prev, [clubId]: { current: currentMatchesLoaded, total: totalMatchesToLoad } }));
           }
-          
-          formations[opponentName] = opponentFormations;
-          console.log(`🔍 SUPABASE: Final formations for ${opponentName}:`, opponentFormations);
-        } catch (error) {
-          console.error(`Error fetching data for ${opponentName}:`, error);
+          formations[opponentName] = oppForms;
+        } catch (e) {
           formations[opponentName] = [];
           matchResults[opponentName] = [];
         }
       }
+
+      setClubOpponentFormations(prev => ({ ...prev, [clubId]: formations }));
+      setClubOpponentMatchResults(prev => ({ ...prev, [clubId]: matchResults }));
+      setClubLoadingOpponents(prev => ({ ...prev, [clubId]: { current: 0, total: 0 } }));
+    } catch (e) {
+      // ignore per-club errors
     }
-    
-    console.log('🔍 SUPABASE: Final formations data:', formations);
-    console.log('🔍 SUPABASE: Final match results data:', matchResults);
-    
-    setOpponentFormations(formations);
-    setOpponentMatchResults(matchResults);
-    setLoadingOpponents({ current: 0, total: 0 });
-    setSyncStatus(null);
   };
+
+  const startAllClubsFetch = (clubsData: any[]) => {
+    // Fire and forget per-club to allow progressive rendering
+    for (const c of clubsData) {
+      const id = c.club.id.toString();
+      const name = c.club.name as string;
+      fetchForClub(id, name);
+    }
+  };
+
+  const fetchUpcomingMatches = async (_clubId: string) => {};
+
+  const fetchOpponentFormations = async (_matches: MFLMatch[]) => {};
 
   useEffect(() => {
     if (isConnected && account) {
@@ -199,11 +154,7 @@ const MatchesTacticsPageSupabase: React.FC = () => {
     }
   }, [isConnected, account]);
 
-  useEffect(() => {
-    if (selectedClub) {
-      fetchUpcomingMatches(selectedClub);
-    }
-  }, [selectedClub]);
+  // Keep existing selectedClub logic if needed, but not required for per-club rendering
 
   if (!hasCheckedWallet) {
     return (
@@ -283,8 +234,17 @@ const MatchesTacticsPageSupabase: React.FC = () => {
       )}
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Match Tactics</h1>
-        <div className="text-sm text-gray-500 dark:text-gray-400">
-          Powered by Database
+        <div className="text-sm text-gray-500 dark:text-gray-400 flex items-center gap-3">
+          <a
+            href="https://mfl-coach.com/formation-meta"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="underline hover:text-blue-600 dark:hover:text-blue-300"
+            title="Formation meta"
+          >
+            Formation meta
+          </a>
+          <span>Powered by Database</span>
         </div>
       </div>
 
@@ -313,29 +273,30 @@ const MatchesTacticsPageSupabase: React.FC = () => {
         </div>
       )}
 
-      {/* Upcoming Matches */}
-      {selectedClub && (
+      {/* Upcoming Matches for all clubs (progressive rendering) */}
+      {clubs.length > 0 && (
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
           <div className="flex items-center gap-2 mb-4">
             <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Upcoming Matches (Next 48 Hours)</h2>
           </div>
-          
-          {isLoading ? (
-            <div className="flex items-center justify-center py-8">
-              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mr-3"></div>
-              <span className="text-gray-600 dark:text-gray-400">Loading matches...</span>
-            </div>
-          ) : filteredMatches.length === 0 ? (
-            <p className="text-gray-600 dark:text-gray-400 text-center py-8">No upcoming matches in the next 48 hours.</p>
-          ) : (
-            <div className="space-y-4">
-              {filteredMatches.map((match, index) => {
-                const clubName = clubs.find(c => c.club.id.toString() === selectedClub)?.club.name || 'Unknown Club';
-                const opponentName = match.homeTeamName === clubName ? match.awayTeamName : match.homeTeamName;
-                const opponentSquadId = match.homeTeamName === clubName ? match.awaySquad.id : match.homeSquad.id;
-                
-                return (
-                  <div key={index} className="border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+          {clubs.map((clubData) => {
+            const clubId = clubData.club.id.toString();
+            const thisClubName = clubData.club.name as string;
+            const list = clubFilteredMatches[clubId] || [];
+            return (
+              <div key={clubId} className="mb-6">
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">{thisClubName}</h3>
+                {list.length === 0 ? (
+                  <p className="text-gray-600 dark:text-gray-400">No upcoming matches in the next 48 hours.</p>
+                ) : (
+                  <div className="space-y-4">
+                    {list.map((match, index) => {
+                      const clubName = thisClubName;
+                      const opponentName = match.homeTeamName === clubName ? match.awayTeamName : match.homeTeamName;
+                      const opponentSquadId = match.homeTeamName === clubName ? match.awaySquad.id : match.homeSquad.id;
+                      
+                      return (
+                        <div key={index} className="border border-gray-200 dark:border-gray-700 rounded-lg p-4">
                     <div className="flex items-center justify-between mb-4">
                       <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
                         <span className={match.homeTeamName === clubName ? 'font-bold' : ''} style={{ fontSize: match.homeTeamName === clubName ? '100%' : '90%' }}>
@@ -397,34 +358,34 @@ const MatchesTacticsPageSupabase: React.FC = () => {
                     </div>
 
                     {/* Opponent Performance Section */}
-                    {loadingOpponents.total > 0 && (
+                    {clubLoadingOpponents[clubId] && clubLoadingOpponents[clubId].total > 0 && (
                       <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
                         <div className="flex items-center justify-between mb-2">
                           <span className="text-sm font-medium text-blue-800 dark:text-blue-200">
-                            Loading opponents matches ({loadingOpponents.current}/{loadingOpponents.total})...
+                            Loading opponents matches ({clubLoadingOpponents[clubId].current}/{clubLoadingOpponents[clubId].total})...
                           </span>
                           <span className="text-xs text-blue-600 dark:text-blue-300">
-                            {Math.round((loadingOpponents.current / loadingOpponents.total) * 100)}%
+                            {Math.round((clubLoadingOpponents[clubId].current / clubLoadingOpponents[clubId].total) * 100)}%
                           </span>
                         </div>
                         <div className="w-full bg-blue-200 dark:bg-blue-800 rounded-full h-2">
                           <div 
                             className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-                            style={{ width: `${(loadingOpponents.current / loadingOpponents.total) * 100}%` }}
+                            style={{ width: `${(clubLoadingOpponents[clubId].current / clubLoadingOpponents[clubId].total) * 100}%` }}
                           />
                         </div>
                       </div>
                     )}
 
                     {/* Opponent Recent Performance */}
-                    {opponentFormations[opponentName] && opponentMatchResults[opponentName] && (
+                    {clubOpponentFormations[clubId] && clubOpponentFormations[clubId][opponentName] && clubOpponentMatchResults[clubId] && clubOpponentMatchResults[clubId][opponentName] && (
                       <div className="mt-4">
                         <h4 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">
                           {opponentName} (Last 5 matches):
                         </h4>
                         <div className="flex flex-wrap gap-2">
-                          {opponentFormations[opponentName].map((formation, formationIndex) => {
-                            const opponentMatch = opponentMatchResults[opponentName][formationIndex];
+                          {clubOpponentFormations[clubId][opponentName].map((formation, formationIndex) => {
+                            const opponentMatch = clubOpponentMatchResults[clubId][opponentName][formationIndex];
                             if (!opponentMatch) return null;
 
                             // Calculate match result
@@ -489,10 +450,10 @@ const MatchesTacticsPageSupabase: React.FC = () => {
                       </div>
                     )}
                   </div>
-                );
-              })}
-            </div>
-          )}
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
     </div>

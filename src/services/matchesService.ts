@@ -63,6 +63,38 @@ class MatchesService {
   private readonly CACHE_DURATION = 60 * 60 * 1000; // 1 hour
   private readonly OPPONENT_CACHE_DURATION = 12 * 60 * 60 * 1000; // 12 hours for opponent matches
 
+  // Local storage helpers (client-side persistence across refreshes)
+  private isLocalStorageAvailable(): boolean {
+    try {
+      return typeof window !== 'undefined' && !!window.localStorage;
+    } catch {
+      return false;
+    }
+  }
+
+  private readLocalCache<T = any>(key: string): { data: T; timestamp: number } | null {
+    if (!this.isLocalStorageAvailable()) return null;
+    try {
+      const raw = window.localStorage.getItem(key);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed.timestamp === 'number') return parsed;
+      return null;
+    } catch {
+      return null;
+    }
+  }
+
+  private writeLocalCache<T = any>(key: string, data: T): void {
+    if (!this.isLocalStorageAvailable()) return;
+    try {
+      const payload = JSON.stringify({ data, timestamp: Date.now() });
+      window.localStorage.setItem(key, payload);
+    } catch {
+      // ignore
+    }
+  }
+
   private getCacheKey(clubId: string, type: 'past' | 'upcoming'): string {
     return `matches_${clubId}_${type}`;
   }
@@ -339,6 +371,15 @@ class MatchesService {
       return cached.data;
     }
 
+    // Try persistent cache (survives refresh) before network
+    const persisted = this.readLocalCache<MFLMatch[]>(cacheKey);
+    if (persisted && this.isOpponentCacheValid(persisted.timestamp)) {
+      console.log(`🎯 PERSISTENT CACHE HIT: Using localStorage data for ${cacheKey}`);
+      // Hydrate in-memory cache for faster subsequent access during this session
+      this.cache.set(cacheKey, { data: persisted.data, timestamp: persisted.timestamp });
+      return persisted.data;
+    }
+
     try {
       console.log(`🚀 CACHE MISS: Fetching from API for ${cacheKey}`);
       // Fetch past matches using the opponent's squad ID
@@ -358,6 +399,8 @@ class MatchesService {
       console.log(`Found ${response.data.length} past matches for squad ${opponentSquadId}`);
 
       this.cache.set(cacheKey, { data: response.data, timestamp: Date.now() });
+      // Persist to localStorage to avoid re-fetch on refresh for 12 hours
+      this.writeLocalCache(cacheKey, response.data);
       console.log(`🔍 CACHE: Set ${cacheKey} with timestamp ${Date.now()}`);
       return response.data;
     } catch (error) {
