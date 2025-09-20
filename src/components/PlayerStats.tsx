@@ -136,7 +136,27 @@ export default function PlayerStats({ player, marketValueEstimate, progressionDa
     }
     
     // Single owner tag (check if player has no sales history)
-    if (marketValueEstimate?.details?.recentSales?.length === 0) {
+    // Suppress if Newly minted is present (implied)
+    const willAddNewlyMinted = (() => {
+      if (!(progressionData && matchCount !== undefined && matchCount < 10)) return false;
+      const hasProgression = progressionData.some((entry: any, index: number) => {
+        if (index === 0) return false;
+        const currentEntry = entry;
+        const previousEntry = progressionData[index - 1];
+        return (
+          currentEntry.pace > previousEntry.pace ||
+          currentEntry.shooting > previousEntry.shooting ||
+          currentEntry.passing > previousEntry.passing ||
+          currentEntry.dribbling > previousEntry.dribbling ||
+          currentEntry.defending > previousEntry.defending ||
+          currentEntry.physical > previousEntry.physical ||
+          currentEntry.overall > previousEntry.overall
+        );
+      });
+      return !hasProgression;
+    })();
+
+    if (marketValueEstimate?.details?.recentSales?.length === 0 && !willAddNewlyMinted) {
       tags.push({
         text: 'Single owner',
         type: 'singleOwner'

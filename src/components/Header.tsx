@@ -17,6 +17,11 @@ export const Header: React.FC = () => {
   const [isHydrated, setIsHydrated] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
+  // Determine when to show the player search input
+  const onPlayerPage = pathname.includes('/players/');
+  const onAgencyPage = pathname === '/agency';
+  const showSearchBar = onPlayerPage || (isConnected && onAgencyPage);
+
   // Extract player ID from current path
   const getCurrentPlayerId = () => {
     const match = pathname.match(/\/players\/(\d+)/);
@@ -144,16 +149,18 @@ export const Header: React.FC = () => {
             
 
             
-            {/* Search Bar and Compare Link - Only show on player pages */}
-            {pathname.includes('/players/') && (
+            {/* Search Bar (players page always; agency page when logged in) */}
+            {showSearchBar && (
               <div className="hidden lg:flex items-center space-x-4">
                 <SearchBar isLoading={isLoading} />
-                <button 
-                  onClick={handleCompareClick}
-                  className="px-3 py-2 text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors cursor-pointer"
-                >
-                  Compare vs Player
-                </button>
+                {onPlayerPage && (
+                  <button 
+                    onClick={handleCompareClick}
+                    className="px-3 py-2 text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors cursor-pointer"
+                  >
+                    Compare vs Player
+                  </button>
+                )}
               </div>
             )}
           </div>
@@ -189,19 +196,21 @@ export const Header: React.FC = () => {
           </div>
         </div>
         
-        {/* Mobile Search and Compare - Only show on player pages */}
-        {pathname.includes('/players/') && (
+        {/* Mobile Search (players page always; agency page when logged in) */}
+        {showSearchBar && (
           <div className="mt-4 lg:hidden">
             <div className="flex items-center space-x-4 mb-4">
               <div className="flex-1">
                 <SearchBar isLoading={isLoading} />
               </div>
-              <button 
-                onClick={handleCompareClick}
-                className="px-3 py-2 text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors cursor-pointer text-sm"
-              >
-                Compare vs Player
-              </button>
+              {onPlayerPage && (
+                <button 
+                  onClick={handleCompareClick}
+                  className="px-3 py-2 text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors cursor-pointer text-sm"
+                >
+                  Compare vs Player
+                </button>
+              )}
             </div>
           </div>
         )}

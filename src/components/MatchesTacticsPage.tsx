@@ -148,12 +148,12 @@ const MatchesTacticsPage: React.FC = () => {
       
       allMatches.push(...matchesWithClub);
       
-      // Filter matches to only include those in the next 24 hours (for tactics planning)
+      // Filter matches to only include those in the next 48 hours (for tactics planning)
       const now = new Date();
-      const twentyFourHoursFromNow = new Date(now.getTime() + (24 * 60 * 60 * 1000));
+      const fortyEightHoursFromNow = new Date(now.getTime() + (48 * 60 * 60 * 1000));
       
       console.log('Total matches fetched:', allMatches.length);
-      console.log('Filtering from:', now.toISOString(), 'to:', twentyFourHoursFromNow.toISOString());
+      console.log('Filtering from:', now.toISOString(), 'to:', fortyEightHoursFromNow.toISOString());
       
       const filteredMatches = allMatches.filter(match => {
         if (!match.startDate) {
@@ -161,7 +161,7 @@ const MatchesTacticsPage: React.FC = () => {
           return false;
         }
         const matchDate = new Date(match.startDate);
-        const isInRange = matchDate >= now && matchDate <= twentyFourHoursFromNow;
+        const isInRange = matchDate >= now && matchDate <= fortyEightHoursFromNow;
         console.log(`Match ${match.homeTeamName} vs ${match.awayTeamName} on ${matchDate.toISOString()} - in range: ${isInRange}`);
         return isInRange;
       });
@@ -499,7 +499,7 @@ const MatchesTacticsPage: React.FC = () => {
             </h1>
           </div>
           <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-            All upcoming matches for your clubs in next 24 hours.
+            All upcoming matches for your clubs in next 48 hours.
           </p>
           
           {/* Club Filter Pills */}
@@ -574,9 +574,9 @@ const MatchesTacticsPage: React.FC = () => {
             <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
               No Upcoming Matches
             </h3>
-            <p className="text-gray-600 dark:text-gray-400">
-              No upcoming matches found for your clubs in the next 24 hours. Check back later or try a different club.
-            </p>
+              <p className="text-gray-600 dark:text-gray-400">
+                No upcoming matches found for your clubs in the next 48 hours. Check back later or try a different club.
+              </p>
           </div>
         )}
 
