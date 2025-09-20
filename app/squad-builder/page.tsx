@@ -571,6 +571,8 @@ export default function SquadBuilderPage() {
   const [savedSquads, setSavedSquads] = useState<SavedSquad[]>([]);
   // Simplified save flow: use inline squad.name and save directly
   const [showLoadModal, setShowLoadModal] = useState(false);
+  const [showSaveModal, setShowSaveModal] = useState(false);
+  const [pendingSaveName, setPendingSaveName] = useState('');
   const [isDeleting, setIsDeleting] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isLoadingSquads, setIsLoadingSquads] = useState(false);
@@ -866,7 +868,8 @@ export default function SquadBuilderPage() {
     if (!account) return;
     const name = (squad.name || '').trim();
     if (!name) {
-      showError('Missing name', 'Please enter a squad name before saving.', 2000);
+      setPendingSaveName('');
+      setShowSaveModal(true);
       return;
     }
     try {
@@ -879,6 +882,35 @@ export default function SquadBuilderPage() {
         await saveSquad(account, name, selectedFormation.id, squad.players);
       }
       // Refresh saved squads
+      const squads = await getSquads(account);
+      setSavedSquads(squads);
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to save squad';
+      showError('Save Failed', errorMessage, 2000);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // Confirm save from modal
+  const handleConfirmSaveName = async () => {
+    const finalName = (pendingSaveName || '').trim();
+    if (!finalName) {
+      return;
+    }
+    // set into squad state then call save
+    setSquad((prev) => ({ ...prev, name: finalName }));
+    setShowSaveModal(false);
+    // After state update, proceed to save using the name
+    try {
+      if (!account) return;
+      setIsSaving(true);
+      const existing = savedSquads.find(s => s.squad_name.toLowerCase() === finalName.toLowerCase());
+      if (existing) {
+        await updateSquad(existing.id, account, finalName, selectedFormation.id, squad.players);
+      } else {
+        await saveSquad(account, finalName, selectedFormation.id, squad.players);
+      }
       const squads = await getSquads(account);
       setSavedSquads(squads);
     } catch (error) {
@@ -2142,7 +2174,39 @@ export default function SquadBuilderPage() {
         ) : null}
       </DragOverlay>
 
-      {/* Save Squad Modal removed (inline name + direct save) */}
+      {/* Save Squad Modal */}
+      {showSaveModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-4 md:p-6 w-full max-w-md">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">
+              Name Your Squad
+            </h3>
+            <p className="text-sm text-gray-600 dark:text-gray-300 mb-3">Enter a name for your new squad.</p>
+            <input
+              type="text"
+              value={pendingSaveName}
+              onChange={(e) => setPendingSaveName(e.target.value)}
+              placeholder="e.g. 4-3-3 First XI"
+              className="w-full px-3 py-2 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white mb-4 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            <div className="flex justify-end gap-2">
+              <button
+                className="px-4 py-2 rounded bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
+                onClick={() => setShowSaveModal(false)}
+              >
+                Cancel
+              </button>
+              <button
+                className="px-4 py-2 rounded bg-blue-600 text-white hover:bg-blue-700 transition-colors disabled:opacity-70"
+                onClick={handleConfirmSaveName}
+                disabled={isSaving || !pendingSaveName.trim()}
+              >
+                {isSaving ? 'Saving…' : 'Save'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Load Squad Modal */}
       {showLoadModal && (
