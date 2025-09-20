@@ -20,6 +20,7 @@ export const Header: React.FC = () => {
   // Determine when to show the player search input
   const onPlayerPage = pathname.includes('/players/');
   const onAgencyPage = pathname === '/agency';
+  const onHomePage = pathname === '/';
   const showSearchBar = onPlayerPage || (isConnected && onAgencyPage);
 
   // Extract player ID from current path
@@ -173,6 +174,24 @@ export const Header: React.FC = () => {
               className="text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400"
               aria-label="Toggle dark mode"
             />
+            {onHomePage && (
+              <a
+                href="https://app.playmfl.com/?referrer=F64076"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-green-600 text-white hover:bg-green-700 transition-colors cursor-pointer"
+                title="Play MFL"
+              >
+                <img
+                  src="https://www.svgrepo.com/show/490538/ball-football.svg"
+                  alt="Football"
+                  width={16}
+                  height={16}
+                  className="invert brightness-0"
+                />
+                <span>Play MFL</span>
+              </a>
+            )}
             <WalletConnect 
               variant="default"
               size="md"
@@ -188,6 +207,24 @@ export const Header: React.FC = () => {
               className="text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400"
               aria-label="Toggle dark mode"
             />
+            {onHomePage && (
+              <a
+                href="https://app.playmfl.com/?referrer=F64076"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 px-2.5 py-1.5 rounded-md bg-green-600 text-white hover:bg-green-700 transition-colors cursor-pointer text-sm"
+                title="Play MFL"
+              >
+                <img
+                  src="https://www.svgrepo.com/show/490538/ball-football.svg"
+                  alt="Football"
+                  width={14}
+                  height={14}
+                  className="invert brightness-0"
+                />
+                <span>Play MFL</span>
+              </a>
+            )}
             <WalletConnect 
               variant="default"
               size="sm"
