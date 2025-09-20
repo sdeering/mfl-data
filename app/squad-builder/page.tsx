@@ -3,6 +3,8 @@
 import { useState, useEffect, useRef } from 'react';
 import * as Slider from '@radix-ui/react-slider';
 import { useRouter } from 'next/navigation';
+import type { MFLPosition } from '../../src/types/positionOvr';
+import { calculateAllPositionOVRs as rbCalculateAllPositionOVRs, calculatePositionOVR as rbCalculatePositionOVR } from '../../src/utils/ruleBasedPositionCalculator';
 import { useWallet } from '../../src/contexts/WalletContext';
 import { supabaseDataService } from '../../src/services/supabaseDataService';
 import { MFLPlayer } from '../../src/types/mflApi';
@@ -668,6 +670,8 @@ export default function SquadBuilderPage() {
   const [tableSortDir, setTableSortDir] = useState<'asc'|'desc'>('desc');
   const [tableGroupFilter, setTableGroupFilter] = useState<'all'|'gk'|'defense'|'midfield'|'attack'>('all');
   const [showCoverageModal, setShowCoverageModal] = useState(false);
+  const [coverageRatings, setCoverageRatings] = useState<Record<string, Record<string, number>> | null>(null);
+  const [isCoverageLoading, setIsCoverageLoading] = useState(false);
 
   const normalizeSlotBase = (pos: string) => {
     const base = (pos || '').replace(/[0-9]+$/, '');
@@ -1543,7 +1547,7 @@ export default function SquadBuilderPage() {
                 )})}
               </SortableContext>
             </div>
-            {/* Pagination footer with numbers (split into two lines to avoid overflow) */}
+            {/* Pagination footer with numbers: 1 line up to 5 pages, 2 lines when >5 */}
             {filteredPlayers.length > pageSize && (
               <div className="mt-2 text-xs text-gray-700 dark:text-gray-300">
                 {(() => {
@@ -1567,8 +1571,14 @@ export default function SquadBuilderPage() {
                   );
                   return (
                     <>
-                      {renderRange(0, half)}
-                      {pageCount > 1 && renderRange(half, pageCount)}
+                      {pageCount <= 5 ? (
+                        renderRange(0, pageCount)
+                      ) : (
+                        <>
+                          {renderRange(0, half)}
+                          {renderRange(half, pageCount)}
+                        </>
+                      )}
                     </>
                   );
                 })()}
@@ -1790,36 +1800,45 @@ export default function SquadBuilderPage() {
                   </div>
                   <div className="space-y-2">
                     {(() => {
-                      // Required unique positions for full coverage
+                      // Required positions for coverage metrics
                       const requiredPositions = ['GK', 'CB', 'LB', 'RB', 'CDM', 'CM', 'CAM', 'LM', 'RM', 'LW', 'RW', 'ST'];
-                      const normalize = (pos: string) => {
-                        const base = pos.replace(/[0-9]+$/, '');
-                        if (base === 'CF') return 'ST';
-                        if (base === 'RWB') return 'RB';
-                        if (base === 'LWB') return 'LB';
-                        return base;
-                      };
 
-                      // Use assigned squad slots (keys) to determine coverage, not all player capable positions
-                      const assignedBases = new Set<string>();
-                      Object.keys(squad.players).forEach(slot => {
-                        const b = normalize(slot);
-                        if (b !== 'EXTRA') assignedBases.add(b);
+                      // Build playable map per position using threshold (within 5 of overall)
+                      const playable: Record<string, Set<string>> = {};
+                      requiredPositions.forEach(pos => { playable[pos] = new Set(); });
+
+                      Object.values(squad.players).forEach(sp => {
+                        const p = sp.player;
+                        const overall = p.metadata.overall || 0;
+                        const threshold = Math.max(0, overall - 5);
+                        requiredPositions.forEach(pos => {
+                          const rating = calculatePositionRating(p, pos as any);
+                          if (rating >= threshold) {
+                            playable[pos].add(String(p.id));
+                          }
+                        });
                       });
 
-                      // Count only intersections with required positions
-                      const coveredCount = requiredPositions.filter(r => assignedBases.has(r)).length;
                       const total = requiredPositions.length;
-                      const coveragePercent = Math.max(0, Math.min(100, Math.round((coveredCount / total) * 100)));
+                      const coveredCount = requiredPositions.filter(pos => (playable[pos]?.size || 0) >= 1).length;
 
-                      // Backup coverage: count positions that have 2 or more assigned players
-                      const counts: Record<string, number> = {};
-                      Object.keys(squad.players).forEach(slot => {
-                        const b = normalize(slot);
-                        if (b === 'EXTRA') return;
-                        counts[b] = (counts[b] || 0) + 1;
-                      });
-                      const backupCount = requiredPositions.filter(r => (counts[r] || 0) >= 2).length;
+                      // Backup coverage: need 2 players per position without reusing the same player in another position
+                      const usedGlobally = new Set<string>();
+                      let backupCount = 0;
+                      for (const pos of requiredPositions) {
+                        const options = Array.from(playable[pos] || []);
+                        let picked = 0;
+                        for (const pid of options) {
+                          if (!usedGlobally.has(pid)) {
+                            usedGlobally.add(pid);
+                            picked++;
+                            if (picked === 2) break;
+                          }
+                        }
+                        if (picked === 2) backupCount++;
+                      }
+
+                      const coveragePercent = Math.max(0, Math.min(100, Math.round((coveredCount / total) * 100)));
                       const backupPercent = Math.max(0, Math.min(100, Math.round((backupCount / total) * 100)));
 
                       return (
@@ -1846,12 +1865,48 @@ export default function SquadBuilderPage() {
                             ></div>
                           </div>
                           <div className="mt-3 flex justify-end">
-                            <button
-                              type="button"
-                              className="text-xs px-2 py-1 rounded border border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/20 cursor-pointer"
-                              onClick={() => setShowCoverageModal(true)}
-                              title="Show all positions coverage"
-                            >
+              <button
+                type="button"
+                className="text-xs px-2 py-1 rounded border border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/20 cursor-pointer"
+                onClick={async () => {
+                  setIsCoverageLoading(true);
+                  try {
+                    const playersList = Object.values(squad.players).map(sp => sp.player);
+                    const ratingsMap: Record<string, Record<string, number>> = {};
+                    for (const p of playersList) {
+                      const playerForOVR = {
+                        id: p.id,
+                        name: `${p.metadata.firstName} ${p.metadata.lastName}`,
+                        attributes: {
+                          PAC: p.metadata.pace,
+                          SHO: p.metadata.shooting,
+                          PAS: p.metadata.passing,
+                          DRI: p.metadata.dribbling,
+                          DEF: p.metadata.defense,
+                          PHY: p.metadata.physical,
+                          GK: p.metadata.goalkeeping || 0
+                        },
+                        positions: (p.metadata.positions || []) as MFLPosition[],
+                        overall: p.metadata.overall
+                      };
+                      const res = rbCalculateAllPositionOVRs(playerForOVR);
+                      const map: Record<string, number> = {};
+                      if (res.success && res.results) {
+                        for (const key of Object.keys(res.results)) {
+                          const r = (res.results as any)[key];
+                          map[key] = r?.ovr ?? 0;
+                        }
+                      }
+                      ratingsMap[p.id.toString()] = map;
+                    }
+                    setCoverageRatings(ratingsMap);
+                  } finally {
+                    setIsCoverageLoading(false);
+                    setShowCoverageModal(true);
+                  }
+                }}
+                title="Show all positions coverage"
+              >
                               Show all positions coverage
                             </button>
                           </div>
@@ -2176,14 +2231,28 @@ export default function SquadBuilderPage() {
               const order = ['GK','CB','LB','RB','LWB','RWB','CDM','CM','CAM','LM','RM','LW','RW','CF','ST'];
               const grouped: Record<string, MFLPlayer[]> = {};
               order.forEach(p => { grouped[p] = []; });
-              Object.values(squad.players).forEach(sp => {
-                const p = sp.player;
-                (p.metadata.positions || []).forEach(pos => {
-                  const base = (pos || '').replace(/[0-9]+$/, '');
-                  if (!grouped[base]) grouped[base] = [];
-                  grouped[base].push(p);
-                });
+
+              const playersList = Object.values(squad.players).map(sp => sp.player);
+              const getRating = (pid: string, pos: string, player: MFLPlayer) => {
+                const viaCanonical = coverageRatings?.[pid]?.[pos];
+                if (typeof viaCanonical === 'number') return viaCanonical;
+                // Fallback to local calculator if canonical not precomputed
+                return calculatePositionRating(player, pos as any);
+              };
+
+              playersList.forEach(p => {
+                const pid = p.id.toString();
+                const overall = p.metadata.overall || 0;
+                const threshold = Math.max(0, overall - 5);
+                for (const pos of order) {
+                  const rating = getRating(pid, pos, p);
+                  if (rating >= threshold) {
+                    if (!grouped[pos]) grouped[pos] = [];
+                    if (!grouped[pos].some(existing => existing.id === p.id)) grouped[pos].push(p);
+                  }
+                }
               });
+
               return (
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
                   {order.map(pos => (
@@ -2196,9 +2265,11 @@ export default function SquadBuilderPage() {
                           <div className="text-xs text-gray-500 dark:text-gray-400">No players</div>
                         ) : (
                           [...(grouped[pos] || [])]
-                            .sort((a, b) => calculatePositionRating(b, pos as any) - calculatePositionRating(a, pos as any))
+                            .sort((a, b) => (
+                              getRating(b.id.toString(), pos, b) - getRating(a.id.toString(), pos, a)
+                            ))
                             .map(pl => {
-                              const pr = calculatePositionRating(pl, pos as any);
+                              const pr = getRating(pl.id.toString(), pos, pl);
                               return (
                                 <div key={`${pos}-${pl.id}`} className="text-xs flex items-center justify-between">
                                   <span className="text-gray-900 dark:text-white truncate">

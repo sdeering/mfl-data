@@ -63,19 +63,35 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Check if squad name already exists for this wallet
+    // Check if squad name already exists for this wallet (overwrite on duplicate)
     const { data: existingSquad } = await supabase
       .from('squads')
       .select('id')
       .eq('wallet_address', walletAddress)
       .eq('squad_name', squadName)
-      .single();
+      .maybeSingle();
 
-    if (existingSquad) {
-      return NextResponse.json(
-        { error: 'Squad name already exists' },
-        { status: 409 }
-      );
+    if (existingSquad?.id) {
+      const { data: updated, error: updateError } = await supabase
+        .from('squads')
+        .update({
+          squad_name: squadName,
+          formation_id: formationId,
+          players: players
+        })
+        .eq('id', existingSquad.id)
+        .select()
+        .single();
+
+      if (updateError) {
+        console.error('Error overwriting existing squad:', updateError);
+        return NextResponse.json(
+          { error: 'Failed to overwrite existing squad' },
+          { status: 500 }
+        );
+      }
+
+      return NextResponse.json({ squad: updated }, { status: 200 });
     }
 
     // Create new squad
