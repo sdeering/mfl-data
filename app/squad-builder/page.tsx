@@ -604,6 +604,7 @@ export default function SquadBuilderPage() {
   const [showSidebarFilters, setShowSidebarFilters] = useState(false);
   const [sidebarPage, setSidebarPage] = useState(0);
   const pageSize = 20;
+  const autoSaveTimer = useRef<number | null>(null);
 
   // Detect if any sidebar filters are active (non-default)
   const isFiltersActive =
@@ -626,6 +627,43 @@ export default function SquadBuilderPage() {
     setAttrFiltersMax({ pace: 100, shooting: 100, passing: 100, dribbling: 100, defense: 100, physical: 100 });
     setSidebarPage(0);
   };
+
+  // Debounced auto-save when players change (add/remove)
+  useEffect(() => {
+    if (!account) return;
+    // Debounce saves to avoid spamming while user is arranging players
+    if (autoSaveTimer.current) {
+      window.clearTimeout(autoSaveTimer.current);
+    }
+    autoSaveTimer.current = window.setTimeout(async () => {
+      const hasPlayers = Object.keys(squad.players).length > 0;
+      if (!hasPlayers) return;
+      const name = (squad.name || '').trim();
+      if (!name) return; // only auto-save if already named
+      try {
+        setIsSaving(true);
+        const existing = savedSquads.find(s => s.squad_name.toLowerCase() === name.toLowerCase());
+        if (existing) {
+          await updateSquad(existing.id, account, name, selectedFormation.id, squad.players);
+        } else {
+          await saveSquad(account, name, selectedFormation.id, squad.players);
+        }
+        const squads = await getSquads(account);
+        setSavedSquads(squads);
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Failed to auto-save squad';
+        showError('Auto-Save Failed', errorMessage, 2000);
+      } finally {
+        setIsSaving(false);
+      }
+    }, 800);
+
+    return () => {
+      if (autoSaveTimer.current) {
+        window.clearTimeout(autoSaveTimer.current);
+      }
+    };
+  }, [account, squad.players, selectedFormation.id]);
 
   // Table/stat tier color helper (match sidebar/card tiers)
   const getTierTextColorValue = (value: number): string => {
@@ -967,6 +1005,17 @@ export default function SquadBuilderPage() {
       setSavedSquads(squads);
       success('Squad Deleted', `"${squadName}" has been deleted successfully.`, 2000);
       console.log(`✅ Deleted squad: ${squadName}`);
+
+      // If the deleted squad is currently loaded, clear the builder
+      if ((squad.name || '') === squadName) {
+        setSquad({
+          name: '',
+          formation: selectedFormation,
+          players: {}
+        });
+        setSquadHistory([]);
+        setHistoryIndex(-1);
+      }
     } catch (error) {
       console.error('Error deleting squad:', error);
       const errorMessage = error instanceof Error ? error.message : 'Failed to delete the squad. Please try again.';
