@@ -720,6 +720,29 @@ export default function SquadBuilderPage() {
     if (base === 'LWB') return 'LB';
     return base;
   };
+
+  // Determine a player's best position group based on highest position rating
+  const getPlayerBestGroup = (player: MFLPlayer): 'gk'|'defense'|'midfield'|'attack' => {
+    // Map each position to a group
+    const positionToGroup: Record<string, 'gk'|'defense'|'midfield'|'attack'> = {
+      GK: 'gk',
+      CB: 'defense', LB: 'defense', RB: 'defense', LWB: 'defense', RWB: 'defense',
+      CDM: 'midfield', CM: 'midfield', CAM: 'midfield', LM: 'midfield', RM: 'midfield',
+      LW: 'attack', RW: 'attack', ST: 'attack', CF: 'attack'
+    };
+    const positions: string[] = (player.metadata.positions || []).map((p) => (p === 'CF' ? 'ST' : p));
+    if (positions.length === 0) return 'midfield';
+    let bestPos = positions[0];
+    let bestRating = -Infinity;
+    for (const pos of positions) {
+      const rating = calculatePositionRating(player, pos as any);
+      if (rating > bestRating) {
+        bestRating = rating;
+        bestPos = pos;
+      }
+    }
+    return positionToGroup[bestPos] ?? 'midfield';
+  };
   const handleTableSort = (key: typeof tableSortKey) => {
     if (tableSortKey === key) {
       setTableSortDir(d => (d === 'asc' ? 'desc' : 'asc'));
@@ -733,13 +756,13 @@ export default function SquadBuilderPage() {
   };
   const tablePlayersEntries = Object.entries(squad.players).filter(([slot, sp]) => {
     if (tableGroupFilter === 'all') return true;
-    let base = normalizeSlotBase(slot);
-    if (base === 'EXTRA') base = normalizeSlotBase(sp.player.metadata.positions[0] || '');
-    if (tableGroupFilter === 'gk') return base === 'GK';
-    if (tableGroupFilter === 'defense') return ['CB','LB','RB'].includes(base);
-    if (tableGroupFilter === 'midfield') return ['CAM','CM','CDM','LM','RM'].includes(base);
-    if (tableGroupFilter === 'attack') return ['ST','LW','RW'].includes(base);
-    return true;
+    const group = getPlayerBestGroup(sp.player);
+    return (
+      (tableGroupFilter === 'gk' && group === 'gk') ||
+      (tableGroupFilter === 'defense' && group === 'defense') ||
+      (tableGroupFilter === 'midfield' && group === 'midfield') ||
+      (tableGroupFilter === 'attack' && group === 'attack')
+    );
   });
   const tableSortedPlayers = tablePlayersEntries.map(([_, sp]) => sp.player) as MFLPlayer[];
   tableSortedPlayers.sort((a, b) => {
@@ -1343,9 +1366,16 @@ export default function SquadBuilderPage() {
                 <button
                   className="px-4 py-1.5 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors cursor-pointer text-sm"
                   onClick={() => {
-                    const newSquad = { ...squad, players: {} };
-                    addToHistory(newSquad);
-                    setSquad(newSquad);
+                    // Start a brand new squad
+                    const defaultFormation = FORMATIONS[0];
+                    setSelectedFormation(defaultFormation);
+                    setSquad({
+                      name: '',
+                      formation: defaultFormation,
+                      players: {}
+                    });
+                    setSquadHistory([]);
+                    setHistoryIndex(-1);
                   }}
                 >
                   Clear Squad
@@ -2060,7 +2090,10 @@ export default function SquadBuilderPage() {
                       {tableSortedPlayers.map((p) => (
                         <tr key={p.id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
                           <td className="p-[5px] whitespace-nowrap text-base text-gray-900 dark:text-white">
-                            {p.metadata.firstName} {p.metadata.lastName}
+                            <div className="leading-tight">
+                              <div>{p.metadata.firstName} {p.metadata.lastName}</div>
+                              <div className="text-[10px] text-gray-500 dark:text-gray-400">ID: {p.id}</div>
+                            </div>
                           </td>
                           <td className="p-[5px] whitespace-nowrap text-base text-center">
                             <span className="font-semibold" style={{ color: getTierTextColorValue(p.metadata.overall) }}>{p.metadata.overall}</span>
