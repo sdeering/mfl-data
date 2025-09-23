@@ -745,6 +745,86 @@ export default function SquadBuilderPage() {
     }
     return positionToGroup[bestPos] ?? 'midfield';
   };
+
+  // Export current squad players to Excel-compatible CSV
+  const handleExportSquadToExcel = () => {
+    try {
+      const entries = Object.entries(squad.players);
+      if (entries.length === 0) {
+        warning('No Players', 'Add players to your squad before exporting.');
+        return;
+      }
+
+      const order = ['GK','CB','LB','RB','LWB','RWB','CDM','CM','CAM','LM','RM','LW','RW','CF','ST'];
+      const headers = [
+        'Slot', 'Player ID', 'First Name', 'Last Name', 'Full Name', 'Overall', 'Age', 'Positions', 'Preferred Foot', 'Nationalities', 'Height',
+        'PAC', 'SHO', 'PAS', 'DRI', 'DEF', 'PHY', 'GK'
+      , ...order.map(pos => `Rating ${pos}`)];
+
+      const csvEscape = (val: any) => {
+        const s = String(val ?? '');
+        if (/[",\n]/.test(s)) return '"' + s.replace(/"/g, '""') + '"';
+        return s;
+      };
+
+      const rows: string[] = [];
+      rows.push(headers.map(csvEscape).join(','));
+
+      // Stable sort by formation slot for readability
+      const sorted = entries.sort(([a],[b]) => a.localeCompare(b));
+      sorted.forEach(([slot, sp]) => {
+        const p = sp.player;
+        const m = p.metadata as any;
+        const positionsArray = (m.positions || []) as string[];
+        const positionsStr = positionsArray.join(' ');
+        const natsStr = (m.nationalities || []).join(' ');
+
+        const baseCols = [
+          slot,
+          p.id,
+          m.firstName,
+          m.lastName,
+          `${m.firstName} ${m.lastName}`.trim(),
+          m.overall ?? '',
+          m.age ?? '',
+          positionsStr,
+          m.preferredFoot ?? '',
+          natsStr,
+          m.height ?? '',
+          m.pace ?? '',
+          m.shooting ?? '',
+          m.passing ?? '',
+          m.dribbling ?? '',
+          m.defense ?? '',
+          m.physical ?? '',
+          m.goalkeeping ?? ''
+        ];
+
+        const ratingCols = order.map(pos => {
+          try { return calculatePositionRating(p as MFLPlayer, pos as any); } catch { return ''; }
+        });
+
+        const line = [...baseCols, ...ratingCols].map(csvEscape).join(',');
+        rows.push(line);
+      });
+
+      const csvContent = '\uFEFF' + rows.join('\n'); // BOM for Excel UTF-8
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      const safeName = (squad.name && squad.name.trim().length > 0) ? squad.name.trim().replace(/[^a-z0-9_\-]+/gi, '_') : 'squad';
+      a.href = url;
+      a.download = `${safeName}_export.csv`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      success('Export ready', 'Downloaded Excel-compatible CSV for your squad.', 2000);
+    } catch (e) {
+      console.error('Export failed:', e);
+      showError('Export Failed', 'Could not export squad. Please try again.');
+    }
+  };
   const handleTableSort = (key: typeof tableSortKey) => {
     if (tableSortKey === key) {
       setTableSortDir(d => (d === 'asc' ? 'desc' : 'asc'));
@@ -1627,25 +1707,26 @@ export default function SquadBuilderPage() {
                     </Slider.Root>
                   </div>
                 ))}
+                {/* Hide selected players toggle (inside filters area) */}
+                <div className="col-span-2 flex items-center gap-2">
+                  <input
+                    id="hide-selected"
+                    type="checkbox"
+                    checked={hideSelectedInSidebar}
+                    onChange={(e) => setHideSelectedInSidebar(e.target.checked)}
+                    className="w-4 h-4 rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
+                  />
+                  <label htmlFor="hide-selected" className="text-sm text-gray-700 dark:text-gray-300 select-none">
+                    Hide selected players
+                  </label>
+                </div>
               </div>
 
       
               {/* Sort By removed per spec */}
             </div>
 
-            {/* Hide selected players toggle (after stat sliders) */}
-            <div className="mb-3 flex items-center gap-2">
-              <input
-                id="hide-selected"
-                type="checkbox"
-                checked={hideSelectedInSidebar}
-                onChange={(e) => setHideSelectedInSidebar(e.target.checked)}
-                className="w-4 h-4 rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
-              />
-              <label htmlFor="hide-selected" className="text-sm text-gray-700 dark:text-gray-300 select-none">
-                Hide selected players
-              </label>
-            </div>
+            
 
             {/* Summary */}
 
@@ -2175,6 +2256,17 @@ export default function SquadBuilderPage() {
                     </tbody>
                   </table>
                 </div>
+                {Object.keys(squad.players).length > 0 && (
+                  <div className="p-2 border-t border-gray-200 dark:border-gray-700 flex justify-end">
+                    <button
+                      type="button"
+                      onClick={handleExportSquadToExcel}
+                      className="inline-flex px-3 py-1.5 text-sm rounded border border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/20 cursor-pointer"
+                    >
+                      Export squad to Excel (CSV)
+                    </button>
+                  </div>
+                )}
               </div>
 
             {/* Controls moved to header */}
@@ -2277,6 +2369,8 @@ export default function SquadBuilderPage() {
           </div>
         ) : null}
       </DragOverlay>
+
+      {/* moved export button inside the squad table container footer */}
 
       {/* Save Squad Modal */}
       {showSaveModal && (
