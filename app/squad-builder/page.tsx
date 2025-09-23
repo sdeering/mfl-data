@@ -605,6 +605,7 @@ export default function SquadBuilderPage() {
   const [sidebarPage, setSidebarPage] = useState(0);
   const pageSize = 20;
   const autoSaveTimer = useRef<number | null>(null);
+  const [hideSelectedInSidebar, setHideSelectedInSidebar] = useState(false);
 
   // Detect if any sidebar filters are active (non-default)
   const isFiltersActive =
@@ -613,7 +614,8 @@ export default function SquadBuilderPage() {
     overallMin !== 0 || overallMax !== 100 ||
     positionRatingMin !== 0 || positionRatingMax !== 100 ||
     Object.values(attrFilters).some(v => v !== 0) ||
-    Object.values(attrFiltersMax).some(v => v !== 100);
+    Object.values(attrFiltersMax).some(v => v !== 100) ||
+    hideSelectedInSidebar;
 
   // Reset all sidebar filters to defaults
   const resetFilters = () => {
@@ -1154,6 +1156,12 @@ export default function SquadBuilderPage() {
       filtered = filtered.filter(p => selectedCardTypes.includes(getCardTypeFromOverall(p.metadata.overall)));
     }
 
+    // Hide players already selected in the squad (any slot)
+    if (hideSelectedInSidebar) {
+      const selectedIds = new Set(Object.values(squad.players).map(sp => sp.player.id));
+      filtered = filtered.filter(p => !selectedIds.has(p.id));
+    }
+
     const dir = sidebarSortDir === 'asc' ? 1 : -1;
     if (sidebarSortKey === 'name') {
       filtered.sort((a, b) => (`${a.metadata.firstName} ${a.metadata.lastName}`).localeCompare(`${b.metadata.firstName} ${b.metadata.lastName}`) * dir);
@@ -1163,7 +1171,7 @@ export default function SquadBuilderPage() {
     }
     setFilteredPlayers(filtered);
     setSidebarPage(0);
-  }, [searchTerm, filterPosition, players, debouncedAttr, debouncedAttrMax, debouncedOverallMin, debouncedOverallMax, debouncedPositionRatingMin, debouncedPositionRatingMax, selectedCardTypes, sidebarSortKey, sidebarSortDir]);
+  }, [searchTerm, filterPosition, players, debouncedAttr, debouncedAttrMax, debouncedOverallMin, debouncedOverallMax, debouncedPositionRatingMin, debouncedPositionRatingMax, selectedCardTypes, sidebarSortKey, sidebarSortDir, hideSelectedInSidebar, squad.players]);
 
   // Handle formation change
   const handleFormationChange = (formation: Formation) => {
@@ -1623,6 +1631,20 @@ export default function SquadBuilderPage() {
 
       
               {/* Sort By removed per spec */}
+            </div>
+
+            {/* Hide selected players toggle (after stat sliders) */}
+            <div className="mb-3 flex items-center gap-2">
+              <input
+                id="hide-selected"
+                type="checkbox"
+                checked={hideSelectedInSidebar}
+                onChange={(e) => setHideSelectedInSidebar(e.target.checked)}
+                className="w-4 h-4 rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
+              />
+              <label htmlFor="hide-selected" className="text-sm text-gray-700 dark:text-gray-300 select-none">
+                Hide selected players
+              </label>
             </div>
 
             {/* Summary */}
