@@ -272,6 +272,10 @@ class HTTPClient {
         headers: {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
+          // Prevent any intermediate caching
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0',
           ...headers,
         },
         body: body ? JSON.stringify(body) : undefined,

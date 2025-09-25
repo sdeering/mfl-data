@@ -1490,6 +1490,19 @@ class SupabaseSyncService {
     
     try {
       this.updateProgress(dataType, SYNC_STATUS.IN_PROGRESS, 0, 'Fetching agency players...')
+      // If forceRefresh is requested, clear existing agency players for this wallet
+      if (options.forceRefresh) {
+        console.log('🧹 Force refresh enabled: clearing existing agency players for wallet', walletAddress)
+        const { error: clearError } = await supabase
+          .from(TABLES.AGENCY_PLAYERS)
+          .delete()
+          .eq('wallet_address', walletAddress)
+        if (clearError) {
+          console.warn('⚠️ Failed to clear existing agency players before sync:', clearError)
+        } else {
+          console.log('✅ Cleared existing agency players for wallet before reimport')
+        }
+      }
       
       // Check if we need to sync
       const { data: existingData, error: checkError } = await supabase
@@ -1516,6 +1529,8 @@ class SupabaseSyncService {
       // Fetch agency players from MFL API
       this.updateProgress(dataType, SYNC_STATUS.IN_PROGRESS, 30, 'Fetching players from MFL API...')
       console.log(`🔄 Fetching agency players for wallet: ${walletAddress}`)
+      // Ensure no stale cache is used when syncing agency players
+      try { mflApi.clearCache() } catch {}
       const ownerPlayersResponse = await mflApi.getOwnerPlayers(walletAddress, 1200)
       
       console.log(`📊 MFL API response:`, {
