@@ -6,6 +6,51 @@ import { useRouter } from 'next/navigation';
 import { matchesService, MFLMatch } from '../services/matchesService';
 import { clubsService } from '../services/clubsService';
 
+// Lightweight child component to fetch and render formations for a given match
+const MatchFormations: React.FC<{ matchId: string }> = ({ matchId }) => {
+  const [home, setHome] = useState<string | null>(null);
+  const [away, setAway] = useState<string | null>(null);
+  const [loading, setLoading] = useState<boolean>(false);
+  const [loaded, setLoaded] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (loaded) return;
+    let cancelled = false;
+    const run = async () => {
+      setLoading(true);
+      try {
+        const formations = await matchesService.fetchMatchFormations(matchId);
+        if (!cancelled) {
+          setHome(formations.home || null);
+          setAway(formations.away || null);
+          setLoaded(true);
+        }
+      } catch {
+        if (!cancelled) setLoaded(true);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+    run();
+    return () => { cancelled = true; };
+  }, [matchId, loaded]);
+
+  if (loading && !loaded) {
+    return <span>Loading formations…</span>;
+  }
+
+  if (!home && !away) {
+    return <span>No formation data</span>;
+  }
+
+  return (
+    <div className="mt-1 space-x-2">
+      {home && <span className="inline-block px-2 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200">Home: {home}</span>}
+      {away && <span className="inline-block px-2 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200">Away: {away}</span>}
+    </div>
+  );
+};
+
 const MatchesPage: React.FC = () => {
   const { isConnected, account } = useWallet();
   const [clubs, setClubs] = useState<any[]>([]);
@@ -398,6 +443,14 @@ const MatchesPage: React.FC = () => {
                                     </div>
                                     <div className="text-sm text-gray-500 dark:text-gray-400">
                                       {matchesService.formatMatchDate(match.startDate)}
+                                    </div>
+                                    {/* Formations row */}
+                                    <div className="mt-1 text-xs text-gray-600 dark:text-gray-300">
+                                      {/* We fetch formation details lazily using the details/summary to avoid N requests at once */}
+                                      <details>
+                                        <summary className="cursor-pointer select-none">Show formations</summary>
+                                        <MatchFormations matchId={match.id.toString()} />
+                                      </details>
                                     </div>
                                   </div>
                                   <div className="text-center min-w-[150px]">

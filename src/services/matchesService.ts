@@ -456,6 +456,24 @@ class MatchesService {
     }
   }
 
+  // Fetch both home and away formations for a match
+  async fetchMatchFormations(matchId: string): Promise<{ home?: string | null; away?: string | null }> {
+    try {
+      const url = `https://z519wdyajg.execute-api.us-east-1.amazonaws.com/prod/matches/${matchId}?withFormations=true`;
+      const response = await axios.get(url);
+      try { await incrementUsage('mfl', '/matches/:id'); } catch {}
+      const matchData = response.data;
+
+      return {
+        home: matchData?.homeFormation?.type ?? null,
+        away: matchData?.awayFormation?.type ?? null
+      };
+    } catch (error) {
+      console.error('Error fetching match formations:', error);
+      return { home: null, away: null };
+    }
+  }
+
   /**
    * Database-aware method to fetch matches for a wallet address
    * This method checks the database first before falling back to API
