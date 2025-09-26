@@ -45,8 +45,8 @@ const MatchFormations: React.FC<{ matchId: string }> = ({ matchId }) => {
 
   return (
     <div className="mt-1 space-x-2">
-      {home && <span className="inline-block px-2 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200">Home: {home}</span>}
-      {away && <span className="inline-block px-2 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200">Away: {away}</span>}
+      {home && <span className="inline-block px-2 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white">Home: {home}</span>}
+      {away && <span className="inline-block px-2 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white">Away: {away}</span>}
     </div>
   );
 };
@@ -444,13 +444,9 @@ const MatchesPage: React.FC = () => {
                                     <div className="text-sm text-gray-500 dark:text-gray-400">
                                       {matchesService.formatMatchDate(match.startDate)}
                                     </div>
-                                    {/* Formations row */}
-                                    <div className="mt-1 text-xs text-gray-600 dark:text-gray-300">
-                                      {/* We fetch formation details lazily using the details/summary to avoid N requests at once */}
-                                      <details>
-                                        <summary className="cursor-pointer select-none">Show formations</summary>
-                                        <MatchFormations matchId={match.id.toString()} />
-                                      </details>
+                                    {/* Formations row (always shown) */}
+                                    <div className="mt-1 text-xs text-gray-600 dark:text-white">
+                                      <MatchFormations matchId={match.id.toString()} />
                                     </div>
                                   </div>
                                   <div className="text-center min-w-[150px]">
