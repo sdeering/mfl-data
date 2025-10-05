@@ -116,16 +116,41 @@ function calculateSquadStats(squad: Squad, players: MFLPlayer[]) {
   const totalOverall = squadPlayers.reduce((sum, squadPlayer) => {
     return sum + (squadPlayer?.player.metadata.overall || 0);
   }, 0);
-  const averageOverall = Math.round(totalOverall / totalPlayers);
+  const averageOverall = totalOverall / totalPlayers;
 
-  // Calculate average stats (chemistry removed per spec)
-  const stats = {
-    pace: Math.round(squadPlayers.reduce((sum, p) => sum + (p?.player.metadata.pace || 0), 0) / totalPlayers),
-    shooting: Math.round(squadPlayers.reduce((sum, p) => sum + (p?.player.metadata.shooting || 0), 0) / totalPlayers),
-    passing: Math.round(squadPlayers.reduce((sum, p) => sum + (p?.player.metadata.passing || 0), 0) / totalPlayers),
-    dribbling: Math.round(squadPlayers.reduce((sum, p) => sum + (p?.player.metadata.dribbling || 0), 0) / totalPlayers),
-    defense: Math.round(squadPlayers.reduce((sum, p) => sum + (p?.player.metadata.defense || 0), 0) / totalPlayers),
-    physical: Math.round(squadPlayers.reduce((sum, p) => sum + (p?.player.metadata.physical || 0), 0) / totalPlayers)
+  // Calculate top 11 players average
+  const sortedPlayers = squadPlayers
+    .map(sp => sp?.player.metadata.overall || 0)
+    .sort((a, b) => b - a); // Sort descending
+  const top11Players = sortedPlayers.slice(0, 11);
+  const top11Average = top11Players.length > 0 
+    ? top11Players.reduce((sum, rating) => sum + rating, 0) / top11Players.length
+    : 0;
+
+  // Calculate top 16 players average
+  const top16Players = sortedPlayers.slice(0, 16);
+  const top16Average = top16Players.length > 0 
+    ? top16Players.reduce((sum, rating) => sum + rating, 0) / top16Players.length
+    : 0;
+
+  // Calculate average stats (chemistry removed per spec) - exclude goalkeepers
+  const outfieldPlayers = squadPlayers.filter(p => !p?.player.metadata.positions?.includes('GK'));
+  const outfieldPlayerCount = outfieldPlayers.length;
+  
+  const stats = outfieldPlayerCount > 0 ? {
+    pace: Math.round(outfieldPlayers.reduce((sum, p) => sum + (p?.player.metadata.pace || 0), 0) / outfieldPlayerCount),
+    shooting: Math.round(outfieldPlayers.reduce((sum, p) => sum + (p?.player.metadata.shooting || 0), 0) / outfieldPlayerCount),
+    passing: Math.round(outfieldPlayers.reduce((sum, p) => sum + (p?.player.metadata.passing || 0), 0) / outfieldPlayerCount),
+    dribbling: Math.round(outfieldPlayers.reduce((sum, p) => sum + (p?.player.metadata.dribbling || 0), 0) / outfieldPlayerCount),
+    defense: Math.round(outfieldPlayers.reduce((sum, p) => sum + (p?.player.metadata.defense || 0), 0) / outfieldPlayerCount),
+    physical: Math.round(outfieldPlayers.reduce((sum, p) => sum + (p?.player.metadata.physical || 0), 0) / outfieldPlayerCount)
+  } : {
+    pace: 0,
+    shooting: 0,
+    passing: 0,
+    dribbling: 0,
+    defense: 0,
+    physical: 0
   };
 
   // Chemistry removed
@@ -142,6 +167,8 @@ function calculateSquadStats(squad: Squad, players: MFLPlayer[]) {
   return {
     averageOverall,
     totalPlayers,
+    top11Average,
+    top16Average,
     chemistry,
     formationEffectiveness,
     positionCoverage,
@@ -362,13 +389,16 @@ function DraggablePlayerCard({ player, onAdd, onRemove, isInSquad = false }: Dra
                     <div className="flex items-center justify-between mb-1 cursor-pointer">
         <div className="min-w-0">
           <h3 className="font-medium text-gray-900 dark:text-white text-sm md:text-base truncate flex items-center gap-2">
-            {player.metadata.firstName} {player.metadata.lastName}
+            <span className="flex items-center gap-1">
+              {player.metadata.firstName} {player.metadata.lastName}
+              <span className="text-[10px] text-gray-500 dark:text-gray-400">({player.id})</span>
+            </span>
             <a
               href={`/players/${player.id}`}
               target="_blank"
               rel="noopener noreferrer"
               onClick={(e) => e.stopPropagation()}
-              className="flex-shrink-0 inline-flex items-center justify-center w-4 h-4 text-[9px] border border-gray-400 dark:border-gray-500 rounded-md text-gray-500 dark:text-gray-400 hover:text-blue-500 hover:border-blue-400"
+              className="flex-shrink-0 inline-flex items-center justify-center w-4 h-4 text-[9px] border border-gray-400 dark:border-gray-500 rounded-md text-gray-500 dark:text-gray-400 hover:text-blue-500 hover:border-blue-500 hover:ring-1 hover:ring-blue-500"
               aria-label="Open player page"
               title="Open player page"
             >
@@ -580,6 +610,8 @@ export default function SquadBuilderPage() {
   const [squadStats, setSquadStats] = useState({
     averageOverall: 0,
     totalPlayers: 0,
+    top11Average: 0,
+    top16Average: 0,
     chemistry: 0,
     formationEffectiveness: 0,
     positionCoverage: 0,
@@ -723,6 +755,23 @@ export default function SquadBuilderPage() {
     return base;
   };
 
+  // Get all position groups a player can play in
+  const getPlayerAllGroups = (player: MFLPlayer): ('gk'|'defense'|'midfield'|'attack')[] => {
+    // Map each position to a group
+    const positionToGroup: Record<string, 'gk'|'defense'|'midfield'|'attack'> = {
+      GK: 'gk',
+      CB: 'defense', LB: 'defense', RB: 'defense', LWB: 'defense', RWB: 'defense',
+      CDM: 'midfield', CM: 'midfield', CAM: 'midfield', LM: 'midfield', RM: 'midfield',
+      LW: 'attack', RW: 'attack', ST: 'attack', CF: 'attack'
+    };
+    const positions: string[] = (player.metadata.positions || []).map((p) => (p === 'CF' ? 'ST' : p));
+    if (positions.length === 0) return ['midfield'];
+    
+    // Get all unique groups the player can play in
+    const groups = positions.map(pos => positionToGroup[pos]).filter((group, index, arr) => arr.indexOf(group) === index);
+    return groups.length > 0 ? groups : ['midfield'];
+  };
+
   // Determine a player's best position group based on highest position rating
   const getPlayerBestGroup = (player: MFLPlayer): 'gk'|'defense'|'midfield'|'attack' => {
     // Map each position to a group
@@ -838,13 +887,8 @@ export default function SquadBuilderPage() {
   };
   const tablePlayersEntries = Object.entries(squad.players).filter(([slot, sp]) => {
     if (tableGroupFilter === 'all') return true;
-    const group = getPlayerBestGroup(sp.player);
-    return (
-      (tableGroupFilter === 'gk' && group === 'gk') ||
-      (tableGroupFilter === 'defense' && group === 'defense') ||
-      (tableGroupFilter === 'midfield' && group === 'midfield') ||
-      (tableGroupFilter === 'attack' && group === 'attack')
-    );
+    const groups = getPlayerAllGroups(sp.player);
+    return groups.includes(tableGroupFilter as 'gk'|'defense'|'midfield'|'attack');
   });
   const tableSortedPlayers = tablePlayersEntries.map(([_, sp]) => sp.player) as MFLPlayer[];
   tableSortedPlayers.sort((a, b) => {
@@ -1815,11 +1859,22 @@ export default function SquadBuilderPage() {
               <div className="grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-4 mb-6">
                 <div className="text-center">
                   <div className="text-2xl font-bold text-blue-600 dark:text-blue-400 mb-1">
-                    {squadStats.averageOverall}
+                    {squadStats.averageOverall.toFixed(2)}
                   </div>
                   <div className="text-sm text-gray-600 dark:text-gray-400 mb-2">Avg Overall</div>
                 </div>
-                {/* Formation Fit removed */}
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-green-600 dark:text-green-400 mb-1">
+                    {squadStats.top11Average.toFixed(2)}
+                  </div>
+                  <div className="text-sm text-gray-600 dark:text-gray-400 mb-2">AVG (TOP11)</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-purple-600 dark:text-purple-400 mb-1">
+                    {squadStats.top16Average.toFixed(2)}
+                  </div>
+                  <div className="text-sm text-gray-600 dark:text-gray-400 mb-2">AVG (TOP16)</div>
+                </div>
                 <div className="text-center">
                   <div className="text-2xl font-bold text-orange-600 dark:text-orange-400 mb-1">
                     {squadStats.totalPlayers}
@@ -1931,14 +1986,14 @@ export default function SquadBuilderPage() {
                       };
                       const counts = { attack: 0, midfield: 0, defense: 0, gk: 0 };
                       Object.entries(squad.players).forEach(([slot, sp]) => {
-                        let base = normalize(slot);
-                        if (base === 'EXTRA') {
-                          base = normalize(sp.player.metadata.positions[0] || '');
-                        }
-                        if (base === 'GK') counts.gk++;
-                        else if (['ST','LW','RW'].includes(base)) counts.attack++;
-                        else if (['CAM','CM','CDM','LM','RM'].includes(base)) counts.midfield++;
-                        else if (['CB','LB','RB'].includes(base)) counts.defense++;
+                        // Use getPlayerAllGroups to count players in all groups they can play
+                        const playerGroups = getPlayerAllGroups(sp.player);
+                        playerGroups.forEach(group => {
+                          if (group === 'gk') counts.gk++;
+                          else if (group === 'attack') counts.attack++;
+                          else if (group === 'midfield') counts.midfield++;
+                          else if (group === 'defense') counts.defense++;
+                        });
                       });
                       return (
                         <>
@@ -2194,7 +2249,18 @@ export default function SquadBuilderPage() {
                         <tr key={p.id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
                           <td className="p-[5px] whitespace-nowrap text-base text-gray-900 dark:text-white">
                             <div className="leading-tight">
-                              <div>{p.metadata.firstName} {p.metadata.lastName}</div>
+                              <div className="flex items-center gap-2">
+                                <span>{p.metadata.firstName} {p.metadata.lastName}</span>
+                                <a 
+                                  href={`/players/${p.id}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="flex-shrink-0 inline-flex items-center justify-center w-4 h-4 text-[9px] border border-gray-400 dark:border-gray-500 rounded-md text-gray-500 dark:text-gray-400 hover:text-blue-500 hover:border-blue-500 hover:ring-1 hover:ring-blue-500"
+                                  title="View player details"
+                                >
+                                  ↗
+                                </a>
+                              </div>
                               <div className="text-[10px] text-gray-500 dark:text-gray-400">ID: {p.id}</div>
                             </div>
                           </td>
