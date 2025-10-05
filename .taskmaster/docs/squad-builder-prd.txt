@@ -1,0 +1,118 @@
+# Squad Builder Feature - Product Requirements Document
+
+## Overview
+Create a comprehensive squad builder page that allows users to drag and drop players from their agency into tactical formations, save squads, and manage team compositions.
+
+## Core Features
+
+### 1. Squad Builder Page (/squad-builder)
+- Main page accessible via navigation
+- Requires wallet connection/login
+- Responsive design for desktop and mobile
+- Clean, intuitive interface with drag-and-drop functionality
+
+### 2. Player Management Sidebar
+- Left sidebar showing all agency players
+- Filter and search functionality for players
+- Display player information:
+  - Name and overall rating
+  - Playable positions with position ratings
+  - 6 main stats: PAC (Pace), SHO (Shooting), PAS (Passing), DRI (Dribbling), DEF (Defense), PHY (Physical)
+  - Player image/avatar
+- Sort options (overall rating, position, name, etc.)
+- Pagination for large player lists
+
+### 3. Formation System
+- Multiple formation options (4-3-3, 4-4-2, 3-5-2, 5-3-2, etc.)
+- Visual formation selector with formation names
+- Position slots that update when formation changes
+- Clear visual indicators for each position
+- Formation-specific position requirements
+
+### 4. Drag and Drop Functionality
+- Drag players from sidebar to formation positions
+- Visual feedback during drag operations
+- Drop validation (position compatibility)
+- Replace existing players in positions
+- Remove players from formation (drag back to sidebar or delete)
+- Undo/redo functionality
+
+### 5. Squad Management
+- Save squad functionality with custom names
+- Load existing saved squads
+- Delete saved squads
+- Squad validation (minimum players, formation requirements)
+- Squad statistics (overall rating, chemistry, etc.)
+
+### 6. Database Integration
+- Store saved squads in Supabase
+- Link squads to wallet addresses
+- Include formation, player positions, and metadata
+- Timestamp and version tracking
+- Data validation and error handling
+
+### 7. User Experience Features
+- Real-time squad statistics
+- Position compatibility warnings
+- Player chemistry indicators
+- Formation effectiveness metrics
+- Responsive design for all screen sizes
+- Loading states and error handling
+- Success/error notifications
+
+## Technical Requirements
+
+### Frontend
+- React components with TypeScript
+- Drag and drop library (react-beautiful-dnd or similar)
+- State management for squad data
+- Form handling for squad names
+- Responsive CSS with Tailwind
+- Dark/light theme support
+
+### Backend
+- Supabase integration for squad storage
+- API endpoints for CRUD operations
+- Data validation and sanitization
+- Error handling and logging
+- Authentication with wallet addresses
+
+### Data Models
+- Squad entity with formation, players, metadata
+- Player position mapping
+- Formation definitions and position requirements
+- User preferences and settings
+
+## User Stories
+
+1. As a user, I want to see all my agency players in a searchable sidebar so I can easily find players for my squad.
+
+2. As a user, I want to drag players from the sidebar to formation positions so I can build my ideal squad.
+
+3. As a user, I want to change formations and see position slots update automatically so I can experiment with different tactical setups.
+
+4. As a user, I want to save my squad with a custom name so I can reuse it later.
+
+5. As a user, I want to see player stats and position ratings so I can make informed decisions about squad composition.
+
+6. As a user, I want to filter and search players so I can quickly find specific players or positions.
+
+7. As a user, I want to see squad statistics and chemistry so I can optimize my team composition.
+
+## Success Criteria
+- Users can successfully build and save squads
+- Drag and drop functionality works smoothly across all devices
+- All formation types are supported and functional
+- Squad data persists correctly in the database
+- Search and filter functionality is fast and accurate
+- Page loads quickly with good performance
+- Responsive design works on mobile and desktop
+- Error handling provides clear feedback to users
+
+## Future Enhancements
+- Squad sharing between users
+- Squad templates and presets
+- Advanced statistics and analytics
+- Formation recommendations based on player strengths
+- Squad comparison tools
+- Export squad data functionality

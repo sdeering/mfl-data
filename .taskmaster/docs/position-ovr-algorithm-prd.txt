@@ -1,0 +1,101 @@
+# MFL Position OVR Calculation Algorithm - Product Requirements Document
+
+## Overview
+Create a comprehensive algorithm to calculate a player's Overall Rating (OVR) for every position in Metaverse Football League (MFL), taking into account position familiarity penalties and position-specific attribute weights. This system will enhance the player detail page by showing adjusted overall ratings for all 15 positions.
+
+## Core Requirements
+
+### 1. Position OVR Calculation Algorithm
+- **Input**: Player attributes (PAC, SHO, PAS, DRI, DEF, PHY) and position data
+- **Output**: OVR rating for each of the 15 positions (GK, RB, RWB, LB, LWB, CB, CDM, CM, CAM, LM, LW, RM, RW, CF, ST)
+- **Algorithm**: Weighted average calculation with position familiarity penalties
+
+### 2. Position Familiarity System
+- **Primary position**: No penalty (0)
+- **Secondary positions**: -1 to every attribute
+- **Fairly Familiar**: -5 to every attribute
+- **Somewhat Familiar**: -8 to every attribute
+- **Unfamiliar**: -20 to every attribute
+
+### 3. Position Categories for Familiarity
+- **Goalkeeper**: GK (isolated)
+- **Defense**: CB, LB, RB, LWB, RWB
+- **Defensive Midfield**: CDM
+- **Central Midfield**: CM, CAM
+- **Wide Midfield**: LM, RM, LW, RW
+- **Attack**: CF, ST
+
+### 4. Position Weight Matrix
+Create logical weight distributions for each position:
+- **Defenders**: Higher DEF, PHY weights
+- **Midfielders**: Higher PAS, DRI weights
+- **Attackers**: Higher SHO, PAC weights
+- **Goalkeepers**: Unique weighting system
+
+### 5. UI Integration
+- Add all 15 positions to the player detail page
+- Display adjusted overall rating for each position
+- Use correct color coding for rating ranges
+- Organize positions by category (GK, Defense, Midfield, Attack)
+
+### 6. Documentation
+- Document the algorithm in the project README
+- Include examples and test cases
+- Explain the mathematical approach
+
+## Technical Specifications
+
+### Data Structure
+```javascript
+const player = {
+  attributes: {
+    PAC: 50,  // Pace (0-99)
+    SHO: 44,  // Shooting (0-99)
+    PAS: 69,  // Passing (0-99)
+    DRI: 68,  // Dribbling (0-99)
+    DEF: 45,  // Defense (0-99)
+    PHY: 69   // Physical (0-99)
+  },
+  positions: {
+    primary: "CAM",
+    secondary: ["CM"]
+  }
+}
+```
+
+### Required Functions
+1. `getPositionFamiliarity(playerPositions, targetPosition)` - Determine familiarity level
+2. `calculatePositionOVR(player, targetPosition)` - Calculate OVR for specific position
+3. `calculateAllPositionOVRs(player)` - Calculate OVR for all 15 positions
+4. `getPositionCategory(position)` - Get position category for UI grouping
+
+### Color Scheme Integration
+Use existing rating color system:
+- 85+ rating: rgb(250, 83, 255) (purple/magenta)
+- 75+ rating: rgb(22, 159, 237) (blue)
+- 65+ rating: rgb(58, 242, 75) (green)
+- 55+ rating: rgb(255, 204, 0) (yellow/gold)
+- Under 55: rgb(159, 159, 159) (gray)
+
+## Success Criteria
+1. Algorithm produces realistic OVR values for all positions
+2. Familiarity penalties are correctly applied
+3. Position weights sum to 1.0 for each position
+4. UI displays all 15 positions with correct colors
+5. Documentation is comprehensive and clear
+6. All edge cases are handled (GK/outfield restrictions)
+7. Test cases validate the algorithm accuracy
+
+## Testing Requirements
+- Unit tests for all calculation functions
+- Integration tests with real player data
+- Edge case testing (GK restrictions, invalid positions)
+- Validation against known examples
+- Performance testing for bulk calculations
+
+## Deliverables
+1. Position OVR calculation utility module
+2. Updated player detail page with all position ratings
+3. Comprehensive test suite
+4. Algorithm documentation in README
+5. Type definitions for all new data structures

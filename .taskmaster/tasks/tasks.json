@@ -1,0 +1,20 @@
+{
+  "master": {
+    "tasks": [],
+    "metadata": {
+      "created": "2025-01-22T12:00:00.000Z",
+      "lastModified": "2025-01-22T12:00:00.000Z",
+      "version": "1.0.0",
+      "tags": {
+        "master": {
+          "name": "master",
+          "description": "Main development tasks",
+          "created": "2025-01-22T12:00:00.000Z",
+          "lastModified": "2025-01-22T12:00:00.000Z"
+        }
+      },
+      "description": "Tasks for master context",
+      "updated": "2025-09-16T03:16:52.714Z"
+    }
+  }
+}

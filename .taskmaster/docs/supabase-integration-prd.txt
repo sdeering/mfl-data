@@ -1,0 +1,188 @@
+# Supabase Database Integration for MFL Player Search
+
+## Project Overview
+Replace the current in-memory caching system with a comprehensive Supabase database solution to store and manage all MFL data with proper caching strategies and sync management.
+
+## Technical Requirements
+
+### Database Schema Design
+- **Users Table**: Store user information with 7-day cache duration
+- **Players Table**: Store player data with 7-day cache duration  
+- **Agency Players Table**: Store players in manager's agency with 7-day cache duration
+- **Clubs Table**: Store club information with 7-day cache duration
+- **Previous Matches Table**: Store match history with 30-day cache duration
+- **Upcoming Matches Table**: Store future matches with 12-hour cache duration
+- **Player Sale History Table**: Store transaction history with 7-day cache duration
+- **Player Progression Table**: Store player stats progression with 4-hour cache duration
+- **Squad IDs Table**: Store club squad mappings with 7-day cache duration
+- **Sync Status Table**: Track data sync status and timestamps
+
+### Cache Duration Strategy
+- User information: 7 days
+- Player information: 7 days
+- Players in manager's agency: 7 days
+- Clubs: 7 days
+- Previous matches: 30 days (new matches need adding)
+- Upcoming matches: 12 hours
+- Player sale history: 7 days
+- Player progression: 4 hours
+- SquadID for clubs: 7 days
+
+### Additional Data to Store
+- **Match Formations**: Store tactical formations for each match
+- **Competition Data**: Store competition details and metadata
+- **Team Statistics**: Store team performance metrics
+- **Player Ratings**: Store ML-generated player ratings
+- **Market Values**: Store calculated market values
+- **Transfer History**: Store all transfer transactions
+- **Season Data**: Store season-specific information
+- **League Standings**: Store current league positions
+
+### Supabase Configuration
+- **Project URL**: https://zafwdjrvzqpqqlcowlf.supabase.co
+- **Anon Key**: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InphZndkanJ2enFwcXFsY293bHVmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTc4MjQ0ODcsImV4cCI6MjA3MzQwMDQ4N30.7D5sFwc5qinRY5RaNfSLnGpaF_LqwQqLNoWYrgQPBIg
+- **Service Role Key**: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InphZndkanJ2enFwcXFsY293bHVmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTc4MjQ0ODcsImV4cCI6MjA3MzQwMDQ4N30.7D5sFwc5qinRY5RaNfSLnGpaF_LqwQqLNoWYrgQPBIg
+
+## Features to Implement
+
+### 1. Database Setup
+- Install Supabase client library
+- Configure database connection
+- Create database schema with all required tables
+- Set up Row Level Security (RLS) policies
+- Create database indexes for performance
+
+### 2. Data Sync Service
+- Create comprehensive sync service to fetch data from MFL APIs
+- Implement cache duration logic for each data type
+- Handle incremental updates (new matches, player progression)
+- Implement retry logic for failed API calls
+- Add data validation and error handling
+
+### 3. Global Progress Indicator
+- Create popup component for sync progress
+- Display at bottom of screen during data import
+- Show progress bar with percentage completion
+- Display current operation being performed
+- Allow user to cancel sync if needed
+- Show sync status (in progress, completed, failed)
+
+### 4. Data Management
+- Implement upsert operations for all data types
+- Handle data conflicts and duplicates
+- Implement soft deletes for data integrity
+- Add data cleanup for expired cache entries
+- Implement batch operations for performance
+
+### 5. API Integration
+- Replace all current API calls with database queries
+- Implement fallback to API if database is unavailable
+- Add real-time subscriptions for live data updates
+- Implement optimistic updates for better UX
+- Add offline support with local storage fallback
+
+### 6. Performance Optimization
+- Implement database connection pooling
+- Add query optimization and caching
+- Implement pagination for large datasets
+- Add data compression for storage efficiency
+- Implement background sync processes
+
+### 7. Error Handling & Monitoring
+- Add comprehensive error logging
+- Implement retry mechanisms for failed operations
+- Add data integrity checks
+- Implement health checks for database connection
+- Add performance monitoring and metrics
+
+### 8. User Experience
+- Seamless transition from current system
+- Maintain current UI/UX patterns
+- Add loading states for database operations
+- Implement progressive loading for large datasets
+- Add data refresh indicators
+
+## Technical Implementation
+
+### Database Schema
+```sql
+-- Users table
+CREATE TABLE users (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  wallet_address TEXT UNIQUE NOT NULL,
+  data JSONB,
+  last_synced TIMESTAMP WITH TIME ZONE,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Players table
+CREATE TABLE players (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  mfl_player_id INTEGER UNIQUE NOT NULL,
+  data JSONB,
+  last_synced TIMESTAMP WITH TIME ZONE,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Matches table
+CREATE TABLE matches (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  mfl_match_id INTEGER UNIQUE NOT NULL,
+  match_type TEXT CHECK (match_type IN ('previous', 'upcoming')),
+  data JSONB,
+  last_synced TIMESTAMP WITH TIME ZONE,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Sync status table
+CREATE TABLE sync_status (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  data_type TEXT NOT NULL,
+  status TEXT CHECK (status IN ('pending', 'in_progress', 'completed', 'failed')),
+  progress_percentage INTEGER DEFAULT 0,
+  last_synced TIMESTAMP WITH TIME ZONE,
+  error_message TEXT,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+```
+
+### Environment Configuration
+- Add Supabase environment variables
+- Configure database connection settings
+- Set up API keys and authentication
+- Configure cache duration settings
+- Set up monitoring and logging
+
+## Success Criteria
+- All current functionality maintained
+- Database queries replace API calls
+- Global progress indicator works smoothly
+- Data sync completes within reasonable time
+- No data loss during migration
+- Performance equal or better than current system
+- Comprehensive error handling
+- User experience remains seamless
+
+## Migration Strategy
+1. Set up Supabase database and schema
+2. Implement data sync service
+3. Create progress indicator component
+4. Migrate one data type at a time
+5. Test thoroughly before full deployment
+6. Implement fallback mechanisms
+7. Monitor performance and user feedback
+8. Optimize based on real-world usage
+
+## Future Enhancements
+- Real-time data updates via Supabase subscriptions
+- Advanced analytics and reporting
+- Data export functionality
+- Backup and recovery systems
+- Multi-user collaboration features
+- Advanced caching strategies
+- Performance analytics dashboard
+

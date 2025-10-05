@@ -1,0 +1,5 @@
+# Disable API usage logging during pre-commit tests
+export NEXT_PUBLIC_DISABLE_API_USAGE=1
+export DISABLE_API_USAGE=1
+
+npm test

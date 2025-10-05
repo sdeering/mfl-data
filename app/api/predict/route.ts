@@ -1,0 +1,96 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { calculatePositionOVR } from '../../../src/utils/ruleBasedPositionCalculator';
+import { MFLPosition } from '../../../src/types/positionOvr';
+
+export async function POST(request: NextRequest) {
+  try {
+    // Parse request body once
+    const body = await request.json();
+    const { attributes, positions, overall } = body;
+    
+    if (!attributes || !positions) {
+      return NextResponse.json(
+        { error: 'Missing required fields: attributes and positions' },
+        { status: 400 }
+      );
+    }
+    
+    // Calculate predictions for requested positions using our rule-based algorithm
+    const predictions: any = {};
+    
+    // Create a mock player object for our algorithm
+    const mockPlayer = {
+      id: 0,
+      name: 'API Request',
+      attributes: {
+        PAC: attributes.PAC,
+        SHO: attributes.SHO,
+        PAS: attributes.PAS,
+        DRI: attributes.DRI,
+        DEF: attributes.DEF,
+        PHY: attributes.PHY,
+        GK: attributes.GK || 0 // Add GK attribute, default to 0 if not provided
+      },
+      positions: positions as MFLPosition[]
+    };
+    
+    for (const position of positions) {
+      try {
+        const result = calculatePositionOVR(mockPlayer, position as MFLPosition);
+        
+        if (result.success) {
+          predictions[position] = {
+            position,
+            predicted_rating: result.ovr,
+            confidence: 0.85, // Rule-based confidence
+            method: 'rule-based',
+            familiarity: result.familiarity,
+            weighted_average: result.weightedAverage,
+            penalty: result.penalty
+          };
+        } else {
+          predictions[position] = { 
+            position,
+            error: result.error?.message || 'Prediction failed',
+            predicted_rating: overall || 50 // Fallback to overall rating
+          };
+        }
+      } catch (error) {
+        predictions[position] = { 
+          position,
+          error: 'Prediction failed',
+          predicted_rating: overall || 50 // Fallback to overall rating
+        };
+      }
+    }
+    
+    return NextResponse.json({
+      predictions,
+      method: 'rule-based',
+      timestamp: new Date().toISOString()
+    });
+    
+  } catch (error) {
+    return NextResponse.json(
+      { error: 'Internal server error', details: error instanceof Error ? error.message : 'Unknown error' },
+      { status: 500 }
+    );
+  }
+}
+
+export async function GET() {
+  try {
+    return NextResponse.json({
+      status: 'healthy',
+      method: 'rule-based',
+      supported_positions: ['LB', 'CB', 'RB', 'LWB', 'RWB', 'CDM', 'CM', 'CAM', 'LM', 'RM', 'CF', 'ST', 'LW', 'RW', 'GK'],
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    // console.error('Health check error:', error); // Removed debug logging
+    return NextResponse.json(
+      { status: 'unhealthy', error: error instanceof Error ? error.message : 'Unknown error' },
+      { status: 500 }
+    );
+  }
+}

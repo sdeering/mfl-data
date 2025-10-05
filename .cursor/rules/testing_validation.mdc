@@ -1,0 +1,69 @@
+---
+description: Testing and validation best practices for development workflow
+globs: **/*
+alwaysApply: true
+---
+
+# Testing & Validation Best Practices
+
+## **Always Verify Before Reporting Success**
+
+- **Never claim "all gravy" without proper verification**
+- **Always check localhost for console errors** before reporting completion
+- **Test the actual functionality** not just build success
+
+## **Verification Checklist**
+
+### **Build Verification**
+- ✅ Check for linting errors: `read_lints`
+- ✅ Verify build compiles without errors
+- ✅ Test that the page loads: `curl localhost:3001/route`
+
+### **Runtime Verification**
+- ✅ Open browser and check console for JavaScript errors
+- ✅ Test the actual functionality that was implemented
+- ✅ Verify no runtime exceptions or warnings
+- ✅ Check network tab for failed requests
+
+### **User Experience Verification**
+- ✅ Ensure UI renders correctly
+- ✅ Test user interactions work as expected
+- ✅ Verify error handling works properly
+- ✅ Check responsive design on different screen sizes
+
+## **Common Issues to Check**
+
+### **Variable Conflicts**
+- **Problem**: Duplicate `const` declarations in same scope
+- **Solution**: Use different variable names or calculate inline
+- **Example**: Instead of multiple `const progress = ...`, use `baseProgress` and calculate inline
+
+### **Console Errors**
+- **Always check browser console** after making changes
+- **Look for**: JavaScript errors, network failures, React warnings
+- **Fix before**: Claiming the feature is complete
+
+### **Build vs Runtime**
+- **Build success ≠ Runtime success**
+- **Page loading ≠ Functionality working**
+- **Always test the actual feature** not just compilation
+
+## **Testing Commands**
+
+```bash
+# Check if server is responding
+curl -s "http://localhost:3001" > /dev/null && echo "✅ Server responding" || echo "❌ Server down"
+
+# Open browser to test
+open "http://localhost:3001/your-route"
+
+# Check for linting errors
+read_lints paths=['src/your-file.ts']
+```
+
+## **Remember**
+
+- **"It builds" is not the same as "it works"**
+- **Always verify functionality in browser**
+- **Check console errors before reporting success**
+- **Test user interactions, not just page loads**

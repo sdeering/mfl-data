@@ -1,0 +1,12 @@
+# Supabase Configuration Template
+# Copy these to your .env.local file
+
+NEXT_PUBLIC_SUPABASE_URL=https://your-project-id.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key-here
+
+# Instructions:
+# 1. Create a .env.local file in your project root
+# 2. Copy the above lines to .env.local
+# 3. Replace the values with your actual Supabase project URL and API key
+# 4. Get these from: https://supabase.com/dashboard -> Your Project -> Settings -> API
+

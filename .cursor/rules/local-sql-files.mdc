@@ -1,0 +1,11 @@
+---
+description: Put all .sql files that you want the user to run to update the database schema into folder /SQL. Make sure you inform the user very clear you need him to run this SQL now.
+globs:
+alwaysApply: true
+---
+
+## Database migrations
+- Use /SQL folder to store any DB schema migrations user has to run manually in Supabase. 
+- Once done user will move these to /SQL/archive. 
+- Make sure you write a test for every schema to check its correctly implemented in the DB. Add it to the test suite.
+-  Add timestamps to the front of the .sql filenames to keep it tidy.
