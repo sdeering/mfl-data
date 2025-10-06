@@ -630,6 +630,9 @@ export default function SquadBuilderPage() {
   const [squadValidation] = useState({ isValid: true, warnings: [] as string[], errors: [] as string[], recommendations: [] as string[] });
   const [squadHistory, setSquadHistory] = useState<Squad[]>([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
+  // Multi-squad warning popup state
+  const [hoveredPlayerId, setHoveredPlayerId] = useState<number | null>(null);
+  const [popupPosition, setPopupPosition] = useState({ x: 0, y: 0 });
   const [isLoadingPlayers, setIsLoadingPlayers] = useState(false);
   const [playersError, setPlayersError] = useState<string | null>(null);
   const [isInitializing, setIsInitializing] = useState(true);
@@ -995,6 +998,18 @@ export default function SquadBuilderPage() {
     }, 200);
     return () => clearTimeout(handle);
   }, [attrFilters, attrFiltersMax, overallMin, overallMax, positionRatingMin, positionRatingMax]);
+
+  // Function to get player squad appearances
+  const getPlayerSquadAppearances = (playerId: number): string[] => {
+    const appearances: string[] = [];
+    savedSquads.forEach(squad => {
+      const playerInSquad = Object.values(squad.players).some(sp => sp.player.id === playerId);
+      if (playerInSquad) {
+        appearances.push(squad.squad_name);
+      }
+    });
+    return appearances;
+  };
 
   // Load saved squads
   useEffect(() => {
@@ -2245,28 +2260,69 @@ export default function SquadBuilderPage() {
                           </td>
                         </tr>
                       ) : null}
-                      {tableSortedPlayers.map((p) => (
-                        <tr key={p.id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
-                          <td className="p-[5px] whitespace-nowrap text-base text-gray-900 dark:text-white">
-                            <div className="leading-tight">
-                              <div className="flex items-center gap-2">
-                                <span>{p.metadata.firstName} {p.metadata.lastName}</span>
-                                <a 
-                                  href={`/players/${p.id}`}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="flex-shrink-0 inline-flex items-center justify-center w-4 h-4 text-[9px] border border-gray-400 dark:border-gray-500 rounded-md text-gray-500 dark:text-gray-400 hover:text-blue-500 hover:border-blue-500 hover:ring-1 hover:ring-blue-500"
-                                  title="View player details"
-                                >
-                                  ↗
-                                </a>
+                      {tableSortedPlayers.map((p) => {
+                        const squadAppearances = getPlayerSquadAppearances(p.id);
+                        const isInMultipleSquads = squadAppearances.length > 1;
+                        
+                        return (
+                          <tr key={p.id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
+                            <td className="p-[5px] whitespace-nowrap text-base text-gray-900 dark:text-white">
+                              <div className="leading-tight">
+                                <div className="flex items-center gap-2">
+                                  <span>{p.metadata.firstName} {p.metadata.lastName}</span>
+                                  <a 
+                                    href={`/players/${p.id}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="flex-shrink-0 inline-flex items-center justify-center w-4 h-4 text-[9px] border border-gray-400 dark:border-gray-500 rounded-md text-gray-500 dark:text-gray-400 hover:text-blue-500 hover:border-blue-500 hover:ring-1 hover:ring-blue-500"
+                                    title="View player details"
+                                  >
+                                    ↗
+                                  </a>
+                                  {isInMultipleSquads && (
+                                    <div 
+                                      className="flex-shrink-0 inline-flex items-center justify-center w-4 h-4 text-[10px] bg-orange-100 dark:bg-orange-900/30 border border-orange-300 dark:border-orange-700 rounded-full text-orange-600 dark:text-orange-400 cursor-help relative"
+                                      onMouseEnter={(e) => {
+                                        setHoveredPlayerId(p.id);
+                                        const rect = e.currentTarget.getBoundingClientRect();
+                                        setPopupPosition({
+                                          x: rect.left + rect.width / 2,
+                                          y: rect.top - 10
+                                        });
+                                      }}
+                                      onMouseLeave={() => setHoveredPlayerId(null)}
+                                    >
+                                      ⚠
+                                      {hoveredPlayerId === p.id && (
+                                        <div 
+                                          className="fixed z-[99999] bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 text-xs px-3 py-2 rounded-lg shadow-xl border border-gray-700 dark:border-gray-300 whitespace-nowrap"
+                                          style={{
+                                            left: `${popupPosition.x}px`,
+                                            top: `${popupPosition.y}px`,
+                                            transform: 'translateX(-50%) translateY(-100%)',
+                                            marginTop: '-8px'
+                                          }}
+                                        >
+                                          <div className="font-semibold mb-1">Player in multiple squads:</div>
+                                          <div className="space-y-1">
+                                            {squadAppearances.map((squadName, index) => (
+                                              <div key={index} className="text-orange-300 dark:text-orange-600">
+                                                • {squadName}
+                                              </div>
+                                            ))}
+                                          </div>
+                                          <div className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-900 dark:border-t-gray-100"></div>
+                                        </div>
+                                      )}
+                                    </div>
+                                  )}
+                                </div>
+                                <div className="text-[10px] text-gray-500 dark:text-gray-400">ID: {p.id}</div>
                               </div>
-                              <div className="text-[10px] text-gray-500 dark:text-gray-400">ID: {p.id}</div>
-                            </div>
-                          </td>
-                          <td className="p-[5px] whitespace-nowrap text-base text-center">
-                            <span className="font-semibold" style={{ color: getTierTextColorValue(p.metadata.overall) }}>{p.metadata.overall}</span>
-                          </td>
+                            </td>
+                            <td className="p-[5px] whitespace-nowrap text-base text-center">
+                              <span className="font-semibold" style={{ color: getTierTextColorValue(p.metadata.overall) }}>{p.metadata.overall}</span>
+                            </td>
                           <td className="p-[5px] whitespace-nowrap text-base text-center text-[#9f9f9f]">
                             {p.metadata.age}
                           </td>
@@ -2318,7 +2374,8 @@ export default function SquadBuilderPage() {
                             </button>
                           </td>
                         </tr>
-                      ))}
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
