@@ -344,9 +344,11 @@ interface DraggablePlayerCardProps {
   onAdd: (player: MFLPlayer) => void;
   onRemove?: (player: MFLPlayer) => void;
   isInSquad?: boolean;
+  savedSquads?: Squad[];
+  currentSquad?: Squad;
 }
 
-function DraggablePlayerCard({ player, onAdd, onRemove, isInSquad = false }: DraggablePlayerCardProps) {
+function DraggablePlayerCard({ player, onAdd, onRemove, isInSquad = false, savedSquads = [], currentSquad }: DraggablePlayerCardProps) {
   const {
     attributes,
     listeners,
@@ -355,6 +357,33 @@ function DraggablePlayerCard({ player, onAdd, onRemove, isInSquad = false }: Dra
     transition,
     isDragging,
   } = useSortable({ id: player.id.toString() });
+
+  // State for popup management
+  const [hoveredPlayerId, setHoveredPlayerId] = useState<number | null>(null);
+  const [popupPosition, setPopupPosition] = useState({ x: 0, y: 0 });
+
+  // Check if player is in any saved squad (excluding current squad)
+  const getPlayerSquadAppearances = (playerId: number): string[] => {
+    const appearances: string[] = [];
+    savedSquads.forEach(squad => {
+      // Skip if this is the current squad being viewed
+      if (currentSquad && squad.squad_name === currentSquad.squad_name) {
+        return;
+      }
+      const playerInSquad = Object.values(squad.players).some(sp => sp.player.id === playerId);
+      if (playerInSquad) {
+        appearances.push(squad.squad_name);
+      }
+    });
+    return appearances;
+  };
+
+  // Check if player is already in the current squad being viewed
+  const isPlayerInCurrentSquad = currentSquad ? 
+    Object.values(currentSquad.players).some(sp => sp.player.id === player.id) : false;
+
+  const squadAppearances = getPlayerSquadAppearances(player.id);
+  const isInAnySquad = squadAppearances.length > 0;
 
   const style: React.CSSProperties = {
     transform: CSS.Transform.toString(transform),
@@ -404,6 +433,43 @@ function DraggablePlayerCard({ player, onAdd, onRemove, isInSquad = false }: Dra
             >
               ↗
             </a>
+            {isInAnySquad && !isPlayerInCurrentSquad && (
+              <div 
+                className="flex-shrink-0 inline-flex items-center justify-center w-4 h-4 text-[10px] bg-orange-100 dark:bg-orange-900/30 border border-orange-300 dark:border-orange-700 rounded-full text-orange-600 dark:text-orange-400 cursor-help relative"
+                onMouseEnter={(e) => {
+                  setHoveredPlayerId(player.id);
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  setPopupPosition({
+                    x: rect.left + rect.width / 2,
+                    y: rect.top - 10
+                  });
+                }}
+                onMouseLeave={() => setHoveredPlayerId(null)}
+              >
+                ⚠
+                {hoveredPlayerId === player.id && (
+                  <div 
+                    className="fixed z-[99999] bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 text-xs px-3 py-2 rounded-lg shadow-xl border border-gray-700 dark:border-gray-300 whitespace-nowrap"
+                    style={{
+                      left: `${popupPosition.x}px`,
+                      top: `${popupPosition.y}px`,
+                      transform: 'translateX(-50%) translateY(-100%)',
+                      marginTop: '-8px'
+                    }}
+                  >
+                    <div className="font-semibold mb-1">Player in multiple squads:</div>
+                    <div className="space-y-1">
+                      {squadAppearances.map((squadName, index) => (
+                        <div key={index} className="text-orange-300 dark:text-orange-600">
+                          • {squadName}
+                        </div>
+                      ))}
+                    </div>
+                    <div className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-900 dark:border-t-gray-100"></div>
+                  </div>
+                )}
+              </div>
+            )}
           </h3>
           <div className="text-xs md:text-sm text-gray-600 dark:text-gray-400 truncate">
             {player.metadata.positions.slice(0,3).map((position) => {
@@ -1803,7 +1869,7 @@ export default function SquadBuilderPage() {
                   const isInSquad = Object.values(squad.players).some(sp => sp.player.id === player.id);
                   return (
                   <div key={player.id} className="flex flex-col gap-1">
-                    <DraggablePlayerCard player={player} isInSquad={isInSquad} onAdd={(p) => {
+                    <DraggablePlayerCard player={player} isInSquad={isInSquad} savedSquads={savedSquads} currentSquad={squad} onAdd={(p) => {
                       const targetPos = pickTargetPositionForPlayer(p, selectedFormation, squad);
                       if (!targetPos) return;
                       const newSquad: Squad = { ...squad, players: { ...squad.players, [targetPos]: { player: p, position: targetPos } } };
