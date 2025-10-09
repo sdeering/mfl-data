@@ -60,12 +60,12 @@ export function calculateMarketValue(
     
     if (filteredListings.length > 0) {
       comparableAverage = filteredListings.reduce((sum, listing) => sum + listing.price, 0) / filteredListings.length;
-      // Apply -20% adjustment to account for live listings vs sold listings difference
-      baseValue = comparableAverage * 0.80;
+      // Apply -30% adjustment to account for live listings vs sold listings difference
+      baseValue = comparableAverage * 0.70;
     } else {
       // If all listings were filtered out, use the original average
       comparableAverage = comparableListings.reduce((sum, listing) => sum + listing.price, 0) / comparableListings.length;
-      baseValue = comparableAverage * 0.80;
+      baseValue = comparableAverage * 0.70;
     }
   }
   
