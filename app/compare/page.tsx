@@ -24,31 +24,39 @@ function ComparePageContent() {
   const router = useRouter();
   const [player1, setPlayer1] = useState<MFLPlayer | null>(null);
   const [player2, setPlayer2] = useState<MFLPlayer | null>(null);
+  const [player3, setPlayer3] = useState<MFLPlayer | null>(null);
   const [player1Id, setPlayer1Id] = useState<string>('');
   const [player2Id, setPlayer2Id] = useState<string>('');
+  const [player3Id, setPlayer3Id] = useState<string>('');
+  const [showPlayer3, setShowPlayer3] = useState<boolean>(false);
   const [isLoading1, setIsLoading1] = useState(false);
   const [isLoading2, setIsLoading2] = useState(false);
+  const [isLoading3, setIsLoading3] = useState(false);
   const [error1, setError1] = useState<string | null>(null);
   const [error2, setError2] = useState<string | null>(null);
+  const [error3, setError3] = useState<string | null>(null);
   const [marketValueEstimate1, setMarketValueEstimate1] = useState<MarketValueEstimate | null>(null);
   const [marketValueEstimate2, setMarketValueEstimate2] = useState<MarketValueEstimate | null>(null);
+  const [marketValueEstimate3, setMarketValueEstimate3] = useState<MarketValueEstimate | null>(null);
   const { setIsLoading: setGlobalLoading } = useLoading();
   
   // Use refs to track if we've already loaded players to prevent unnecessary re-fetches
   const hasLoadedPlayer1 = useRef(false);
   const hasLoadedPlayer2 = useRef(false);
+  const hasLoadedPlayer3 = useRef(false);
 
   // Get player IDs from URL search params
   const urlPlayer1Id = searchParams.get('player1Id');
   const urlPlayer2Id = searchParams.get('player2Id');
+  const urlPlayer3Id = searchParams.get('player3Id');
   const urlPlayerId = searchParams.get('playerId'); // Legacy support
 
-  const fetchPlayer = useCallback(async (playerId: string, playerNumber: 1 | 2) => {
+  const fetchPlayer = useCallback(async (playerId: string, playerNumber: 1 | 2 | 3) => {
     if (!playerId.trim()) return;
 
-    const setIsLoading = playerNumber === 1 ? setIsLoading1 : setIsLoading2;
-    const setError = playerNumber === 1 ? setError1 : setError2;
-    const setPlayer = playerNumber === 1 ? setPlayer1 : setPlayer2;
+    const setIsLoading = playerNumber === 1 ? setIsLoading1 : playerNumber === 2 ? setIsLoading2 : setIsLoading3;
+    const setError = playerNumber === 1 ? setError1 : playerNumber === 2 ? setError2 : setError3;
+    const setPlayer = playerNumber === 1 ? setPlayer1 : playerNumber === 2 ? setPlayer2 : setPlayer3;
 
     setIsLoading(true);
     setGlobalLoading(true);
@@ -70,10 +78,11 @@ function ComparePageContent() {
     }
   }, [setGlobalLoading]);
 
-  const updateURL = (player1Id: string, player2Id: string) => {
+  const updateURL = (player1Id: string, player2Id: string, player3Id?: string) => {
     const params = new URLSearchParams();
     if (player1Id) params.set('player1Id', player1Id);
     if (player2Id) params.set('player2Id', player2Id);
+    if (player3Id) params.set('player3Id', player3Id);
     
     const newURL = params.toString() ? `?${params.toString()}` : '/compare';
     router.replace(newURL, { scroll: false });
@@ -82,26 +91,40 @@ function ComparePageContent() {
   const handlePlayer1Search = () => {
     fetchPlayer(player1Id, 1);
     hasLoadedPlayer1.current = true;
-    updateURL(player1Id, player2Id);
+    updateURL(player1Id, player2Id, player3Id);
   };
 
   const handlePlayer2Search = () => {
     fetchPlayer(player2Id, 2);
     hasLoadedPlayer2.current = true;
-    updateURL(player1Id, player2Id);
+    updateURL(player1Id, player2Id, player3Id);
   };
 
-  const handleKeyPress = (e: React.KeyboardEvent, playerNumber: 1 | 2) => {
+  const handlePlayer3Search = () => {
+    fetchPlayer(player3Id, 3);
+    hasLoadedPlayer3.current = true;
+    updateURL(player1Id, player2Id, player3Id);
+  };
+
+  const handleAddPlayer = () => {
+    // Show the player 3 column and input field
+    setShowPlayer3(true);
+    setPlayer3Id('');
+  };
+
+  const handleKeyPress = (e: React.KeyboardEvent, playerNumber: 1 | 2 | 3) => {
     if (e.key === 'Enter') {
       if (playerNumber === 1) {
         handlePlayer1Search();
-      } else {
+      } else if (playerNumber === 2) {
         handlePlayer2Search();
+      } else {
+        handlePlayer3Search();
       }
     }
   };
 
-  const handlePaste = (e: React.ClipboardEvent, playerNumber: 1 | 2) => {
+  const handlePaste = (e: React.ClipboardEvent, playerNumber: 1 | 2 | 3) => {
     // Prevent the default paste behavior to avoid duplicate values
     e.preventDefault();
     
@@ -117,21 +140,29 @@ function ComparePageContent() {
         setTimeout(() => {
           fetchPlayer(pastedText.trim(), 1);
           hasLoadedPlayer1.current = true;
-          updateURL(pastedText.trim(), player2Id);
+          updateURL(pastedText.trim(), player2Id, player3Id);
         }, 100);
-      } else {
+      } else if (playerNumber === 2) {
         setPlayer2Id(pastedText.trim());
         // Trigger search after a short delay to allow the state to update
         setTimeout(() => {
           fetchPlayer(pastedText.trim(), 2);
           hasLoadedPlayer2.current = true;
-          updateURL(player1Id, pastedText.trim());
+          updateURL(player1Id, pastedText.trim(), player3Id);
+        }, 100);
+      } else {
+        setPlayer3Id(pastedText.trim());
+        // Trigger search after a short delay to allow the state to update
+        setTimeout(() => {
+          fetchPlayer(pastedText.trim(), 3);
+          hasLoadedPlayer3.current = true;
+          updateURL(player1Id, player2Id, pastedText.trim());
         }, 100);
       }
     }
   };
 
-  const calculateMarketValueForPlayer = useCallback(async (player: MFLPlayer, playerNumber: 1 | 2) => {
+  const calculateMarketValueForPlayer = useCallback(async (player: MFLPlayer, playerNumber: 1 | 2 | 3) => {
     try {
       // Validate that player and metadata exist
       if (!player || !player.metadata) {
@@ -194,8 +225,10 @@ function ComparePageContent() {
 
         if (playerNumber === 1) {
           setMarketValueEstimate1(estimate);
-        } else {
+        } else if (playerNumber === 2) {
           setMarketValueEstimate2(estimate);
+        } else {
+          setMarketValueEstimate3(estimate);
         }
       }
     } catch (error) {
@@ -224,6 +257,14 @@ function ComparePageContent() {
       setPlayer2Id(urlPlayer2Id);
       fetchPlayer(urlPlayer2Id, 2);
       hasLoadedPlayer2.current = true;
+    }
+    
+    // Handle player3Id parameter
+    if (urlPlayer3Id && !hasLoadedPlayer3.current) {
+      setPlayer3Id(urlPlayer3Id);
+      setShowPlayer3(true);
+      fetchPlayer(urlPlayer3Id, 3);
+      hasLoadedPlayer3.current = true;
     }
   }, []); // Empty dependency array - only run on mount
 
@@ -295,6 +336,49 @@ function ComparePageContent() {
               <p className="text-red-600 text-sm mt-1">{error2}</p>
             )}
           </div>
+
+          {/* Add Player Button - Shows when player2 is loaded and player3 column is not shown */}
+          {player2 && !showPlayer3 && (
+            <div className="flex items-end">
+              <button
+                onClick={handleAddPlayer}
+                className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors whitespace-nowrap"
+              >
+                + Add Player
+              </button>
+            </div>
+          )}
+
+          {/* Player 3 Search - Shows when player3 column should be displayed */}
+          {showPlayer3 && (
+            <div className="flex-1">
+              <label htmlFor="player3" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Player 3 ID
+              </label>
+              <div className="flex gap-2">
+                <input
+                  id="player3"
+                  type="text"
+                  value={player3Id}
+                  onChange={(e) => setPlayer3Id(e.target.value)}
+                  onKeyPress={(e) => handleKeyPress(e, 3)}
+                  onPaste={(e) => handlePaste(e, 3)}
+                  placeholder="Enter player ID..."
+                  className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+                <button
+                  onClick={handlePlayer3Search}
+                  disabled={isLoading3 || !player3Id.trim()}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
+                >
+                  {isLoading3 ? 'Loading...' : 'Search'}
+                </button>
+              </div>
+              {error3 && (
+                <p className="text-red-600 text-sm mt-1">{error3}</p>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Comparison Layout */}
@@ -458,6 +542,89 @@ function ComparePageContent() {
               </div>
             )}
           </div>
+
+          {/* Player 3 Column - Show when player3 column should be displayed */}
+          {showPlayer3 && (
+            <div className="flex-1">
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4 text-center">
+                {player3 ? (
+                  <div className="flex flex-col items-center space-y-2">
+                    <span>{player3.metadata.firstName} {player3.metadata.lastName}</span>
+                    <a 
+                      href={`/players/${player3.id}`}
+                      className="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 underline transition-colors"
+                    >
+                      Full Profile
+                    </a>
+                  </div>
+                ) : (
+                  'Player 3'
+                )}
+              </h2>
+              
+              {isLoading3 ? (
+                <div className="flex items-center justify-center h-64 bg-gray-50 dark:bg-gray-800 rounded-lg border-2 border-dashed border-gray-300 dark:border-gray-600">
+                  <div className="text-center">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                    <p className="text-gray-500 dark:text-gray-400">Loading player data...</p>
+                  </div>
+                </div>
+              ) : player3 ? (
+                <div className="space-y-6">
+                  {/* Player Card Column */}
+                  <div className="flex flex-col items-center space-y-4 p-[5px]">
+                    <PlayerImage player={player3} />
+                    <div className="w-full max-w-[400px]">
+                      <PlayerStatsGrid player={player3} />
+                    </div>
+                  </div>
+
+                  {/* Position Ratings Column */}
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-[5px] p-[5px]">
+                      Position Ratings
+                    </h3>
+                    <div className="w-full p-[5px]">
+                      <PositionRatingsDisplay player={player3} />
+                    </div>
+                  </div>
+
+                  {/* Progression Graph Column */}
+                  <div className="w-full">
+                    <PlayerProgressionGraph 
+                      playerId={player3.id.toString()} 
+                      playerName={`${player3.metadata.firstName} ${player3.metadata.lastName}`}
+                      playerPositions={player3.metadata.positions}
+                    />
+                  </div>
+
+                  {/* Recent Matches Column */}
+                  <div className="w-full p-[5px]">
+                    <PlayerRecentMatches 
+                      playerId={player3.id.toString()} 
+                      playerName={`${player3.metadata.firstName} ${player3.metadata.lastName}`}
+                    />
+                  </div>
+
+                  {/* Sale History Column */}
+                  <div className="w-full p-[5px]">
+                    <PlayerSaleHistory 
+                      playerId={player3.id.toString()} 
+                      playerName={`${player3.metadata.firstName} ${player3.metadata.lastName}`}
+                      playerMetadata={player3.metadata}
+                      marketValueEstimate={marketValueEstimate3}
+                    />
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-center justify-center h-64 bg-gray-50 dark:bg-gray-800 rounded-lg border-2 border-dashed border-gray-300 dark:border-gray-600">
+                  <div className="text-center">
+                    <p className="text-gray-500 dark:text-gray-400">Enter a player ID to load player data</p>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </div>
