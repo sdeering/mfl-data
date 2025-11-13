@@ -26,6 +26,14 @@ export default function PlayerSaleHistory({ playerId, playerName, playerMetadata
   const [error, setError] = useState<string | null>(null);
   const [showAllSales, setShowAllSales] = useState(false);
 
+  // Update market value estimate when prop changes
+  useEffect(() => {
+    if (propMarketValueEstimate) {
+      console.log('📊 PlayerSaleHistory: Updating market value estimate from props:', propMarketValueEstimate.estimatedValue);
+      setMarketValueEstimate(propMarketValueEstimate);
+    }
+  }, [propMarketValueEstimate]);
+
   useEffect(() => {
     const loadData = async () => {
       setIsLoading(true);
@@ -57,11 +65,6 @@ export default function PlayerSaleHistory({ playerId, playerName, playerMetadata
           const processedData = processProgressionData(progressionResponse.data);
           setProgressionData(processedData);
         }
-
-        // Use the market value estimate from props (calculated with position ratings)
-        if (propMarketValueEstimate) {
-          setMarketValueEstimate(propMarketValueEstimate);
-        }
       } catch (err) {
         setError('Failed to load sale history');
       } finally {
@@ -72,7 +75,7 @@ export default function PlayerSaleHistory({ playerId, playerName, playerMetadata
     if (playerId) {
       loadData();
     }
-  }, [playerId]);
+  }, [playerId, playerMetadata]);
 
   // Loading state
   if (isLoading) {

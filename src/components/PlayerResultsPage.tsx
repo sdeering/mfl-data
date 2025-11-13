@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { mflApi } from '../services/mflApi';
-import { getPlayerMarketValue } from '../services/marketValueService';
+import { getPlayerMarketValue, type MarketValueCalculationResult } from '../services/marketValueService';
 import { fetchPlayerExperienceHistory, processProgressionData } from '../services/playerExperienceService';
 import { fetchPlayerMatches } from '../services/playerMatchesService';
 import { calculateAllPositionOVRs } from '../utils/ruleBasedPositionCalculator';
@@ -68,27 +68,81 @@ const PlayerResultsPage: React.FC<PlayerResultsPageProps> = ({ propPlayerId, ini
   // (searchParams will be checked in useEffect)
   const [isLoading, setIsLoading] = useState(!!propPlayerId && !initialPlayer);
   const [error, setError] = useState<string | null>(initialError || null);
+  // Track loading state for sub-queries
+  const [loadingStates, setLoadingStates] = useState({
+    playerData: false,
+    marketValue: false,
+    matches: false,
+    positionRatings: false,
+  });
   const { setIsLoading: setGlobalLoading } = useLoading();
   const hasFetchedRef = useRef<string | null>(null); // Track which playerId we've fetched
 
 
   const calculateMarketValueForPlayer = useCallback(async (player: MFLPlayer) => {
+    // Validate that player and metadata exist
+    if (!player || !player.metadata) {
+      console.warn('Player or player metadata not available for market value calculation');
+      setIsCalculatingMarketValue(false);
+      return;
+    }
+
+    // Set a timeout to ensure we don't hang forever
+    const timeoutId = setTimeout(() => {
+      console.warn('⚠️ Market value calculation timeout - forcing state to false');
+      setIsCalculatingMarketValue(false);
+      setLoadingStates(prev => ({ ...prev, marketValue: false, matches: false }));
+    }, 60000); // 60 second timeout
+
     try {
-      // Validate that player and metadata exist
-      if (!player || !player.metadata) {
-        console.warn('Player or player metadata not available for market value calculation');
-        return;
-      }
-
-      console.log('🔄 Calculating market value for player:', player.id);
-      setIsCalculatingMarketValue(true);
-
-      // Use the centralized market value calculation service
-      const result = await getPlayerMarketValue(
+      console.log('🔍 Checking market value for player:', player.id);
+      
+      // Use the centralized market value calculation service with timeout
+      const calculationPromise = getPlayerMarketValue(
         player.id.toString(),
         account || 'anonymous',
         false // Use cached value if available
       );
+
+      // Race the calculation against a timeout
+      const timeoutPromise = new Promise<MarketValueCalculationResult>((_, reject) => {
+        setTimeout(() => reject(new Error('Market value calculation timeout')), 45000); // 45 second timeout
+      });
+
+      // Check if result comes back quickly (likely from cache) - only show "Calculating..." if it takes longer
+      const startTime = Date.now();
+      const quickCheckPromise = Promise.race([
+        calculationPromise,
+        new Promise<MarketValueCalculationResult>((resolve) => {
+          setTimeout(() => resolve({ success: false, error: 'still_loading' }), 1000); // 1 second threshold (database queries can take 200-500ms)
+        })
+      ]);
+
+      let result;
+      const quickResult = await quickCheckPromise;
+      
+      if (quickResult.success) {
+        // Got valid result quickly (likely from cache) - don't show "Calculating..."
+        result = quickResult;
+        const duration = Date.now() - startTime;
+        console.log(`✅ Market value loaded quickly (${duration}ms, likely from cache): $${result.marketValue || 0}`);
+      } else if (quickResult.error === 'still_loading') {
+        // Taking longer than 1 second - likely a real calculation, show "Calculating..."
+        console.log('🔄 Market value calculation taking longer than 1s, showing "Calculating..."');
+        setIsCalculatingMarketValue(true);
+        setLoadingStates(prev => ({ ...prev, marketValue: true }));
+        
+        try {
+          result = await Promise.race([calculationPromise, timeoutPromise]);
+        } catch (timeoutError) {
+          console.error('⏰ Market value calculation timed out:', timeoutError);
+          result = { success: false, error: 'Calculation timed out' };
+        }
+      } else {
+        // Got an error result quickly
+        result = quickResult;
+        console.error('❌ Market value check returned error:', quickResult.error);
+      }
 
       if (result.success && result.details) {
         // Convert the result to the expected format for the component
@@ -100,8 +154,18 @@ const PlayerResultsPage: React.FC<PlayerResultsPageProps> = ({ propPlayerId, ini
         };
         
         setMarketValueEstimate(estimate);
+        console.log('✅ Market value calculated:', estimate.estimatedValue);
+      } else {
+        console.error('Failed to calculate market value:', result.error);
+        // Still set estimate to null/undefined so UI doesn't show "Calculating..." forever
+        setMarketValueEstimate(null);
+      }
+      
+      setLoadingStates(prev => ({ ...prev, marketValue: false }));
 
-        // Still need to fetch progression and match data for tags
+      // Fetch progression and match data for tags (non-blocking, don't block UI)
+      setLoadingStates(prev => ({ ...prev, matches: true }));
+      try {
         const [progressionResponse, matchesResponse] = await Promise.all([
           fetchPlayerExperienceHistory(player.id.toString()),
           fetchPlayerMatches(player.id.toString())
@@ -113,13 +177,20 @@ const PlayerResultsPage: React.FC<PlayerResultsPageProps> = ({ propPlayerId, ini
         if (matchesResponse.success) {
           setMatchCount(matchesResponse.data.length);
         }
-      } else {
-        console.error('Failed to calculate market value:', result.error);
+      } catch (fetchError) {
+        console.warn('⚠️ Error fetching progression/matches (non-critical):', fetchError);
+      } finally {
+        setLoadingStates(prev => ({ ...prev, matches: false }));
       }
     } catch (error) {
-      console.error('Failed to calculate market value:', error);
+      console.error('❌ Failed to calculate market value:', error);
+      setMarketValueEstimate(null); // Clear estimate on error
+      setLoadingStates(prev => ({ ...prev, marketValue: false, matches: false }));
     } finally {
+      clearTimeout(timeoutId);
+      // Always set calculating to false, even on error or timeout
       setIsCalculatingMarketValue(false);
+      console.log('✅ Market value calculation complete (isCalculatingMarketValue set to false)');
     }
   }, [account]);
 
@@ -127,6 +198,12 @@ const PlayerResultsPage: React.FC<PlayerResultsPageProps> = ({ propPlayerId, ini
     setIsLoading(true);
     setGlobalLoading(true);
     setError(null);
+    setLoadingStates({
+      playerData: true,
+      marketValue: false,
+      matches: false,
+      positionRatings: false,
+    });
     
     try {
       console.log('🔍 Fetching player data for ID:', playerId);
@@ -154,19 +231,33 @@ const PlayerResultsPage: React.FC<PlayerResultsPageProps> = ({ propPlayerId, ini
       }
       
       const player = data.data;
-      console.log('✅ Player data received:', player?.id, player?.metadata?.name);
+      console.log('✅ Player data received:', player?.id, player?.metadata?.firstName, player?.metadata?.lastName);
       
       if (!player) {
         throw new Error('Player data is null or undefined');
       }
       
+      // Validate player structure
+      if (!player.metadata) {
+        console.error('❌ Player data missing metadata:', player);
+        throw new Error('Invalid player data: missing metadata');
+      }
+      
       setPlayer(player);
+      setLoadingStates(prev => ({ ...prev, playerData: false }));
       
       // Add player to recent searches when successfully loaded
       addToRecentSearches(player);
       
-      // Calculate market value
-      await calculateMarketValueForPlayer(player);
+      // Show player info immediately (non-blocking)
+      setIsLoading(false);
+      setGlobalLoading(false);
+      
+      // Calculate market value in background (non-blocking)
+      calculateMarketValueForPlayer(player)
+        .catch((err) => {
+          console.error('⚠️ Market value calculation failed (non-blocking):', err);
+        });
     } catch (err) {
       console.error('❌ Error in fetchPlayerData:', err);
       let errorMessage = 'Failed to fetch player data';
@@ -191,11 +282,23 @@ const PlayerResultsPage: React.FC<PlayerResultsPageProps> = ({ propPlayerId, ini
       }
       
       setError(errorMessage);
-    } finally {
+      setLoadingStates({
+        playerData: false,
+        marketValue: false,
+        matches: false,
+        positionRatings: false,
+      });
       setIsLoading(false);
       setGlobalLoading(false);
     }
+    // Note: Don't set isLoading to false in finally block if sub-queries are still running
+    // The sub-queries will handle setting isLoading to false when they complete
   }, [setGlobalLoading, calculateMarketValueForPlayer]);
+
+  // Debug: Monitor isCalculatingMarketValue state changes
+  useEffect(() => {
+    console.log('🔍 isCalculatingMarketValue state changed:', isCalculatingMarketValue);
+  }, [isCalculatingMarketValue]);
 
   // Initialize player data on component mount - only run once per playerId
   useEffect(() => {
@@ -213,15 +316,15 @@ const PlayerResultsPage: React.FC<PlayerResultsPageProps> = ({ propPlayerId, ini
   }, [propPlayerId]);
 
 
-  // Loading state
-  if (isLoading) {
+  // Loading state - only show while fetching initial player data
+  if (isLoading && loadingStates.playerData) {
     return (
       <div className="min-h-screen">
         <div className="p-6 bg-white dark:bg-[#111827]">
           <div className="flex items-center justify-center h-64">
             <div className="text-center">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
-              <p className="text-gray-600">Loading player data...</p>
+              <p className="text-gray-600 dark:text-gray-400">Loading player data...</p>
             </div>
           </div>
         </div>

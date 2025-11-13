@@ -286,6 +286,7 @@ class SupabaseDataService {
    */
   async getPlayer(playerId: string): Promise<MFLPlayer | null> {
     const cacheKey = `player_${playerId}`
+    const PLAYER_CACHE_TTL = 6 * 60 * 60 * 1000 // 6 hours
     
     return this.getCachedData(cacheKey, async () => {
       const { data, error } = await supabase
@@ -299,7 +300,7 @@ class SupabaseDataService {
       }
 
       return data?.data || null
-    })
+    }, PLAYER_CACHE_TTL)
   }
 
   /**
@@ -347,6 +348,7 @@ class SupabaseDataService {
    */
   async getPlayerProgression(playerId: string) {
     const cacheKey = `player_progression_${playerId}`
+    const PROGRESSION_CACHE_TTL = 60 * 60 * 1000 // 1 hour
     
     return this.getCachedData(cacheKey, async () => {
       const { data, error } = await supabase
@@ -362,7 +364,7 @@ class SupabaseDataService {
       }
 
       return data?.data || null
-    })
+    }, PROGRESSION_CACHE_TTL)
   }
 
   /**
@@ -370,6 +372,7 @@ class SupabaseDataService {
    */
   async getPlayerSaleHistory(playerId: string, limit: number = 25) {
     const cacheKey = `player_sales_${playerId}_${limit}`
+    const SALE_HISTORY_CACHE_TTL = 60 * 60 * 1000 // 1 hour
     
     return this.getCachedData(cacheKey, async () => {
       const { data, error } = await supabase
@@ -382,7 +385,7 @@ class SupabaseDataService {
       if (error) throw error
 
       return data?.map(item => item.data) || []
-    })
+    }, SALE_HISTORY_CACHE_TTL)
   }
 
   /**

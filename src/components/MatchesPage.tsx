@@ -113,9 +113,15 @@ const MatchesPage: React.FC = () => {
     setIsLoadingMatches(true);
     setError(null);
     
+    // Clear previous matches immediately to show fresh state
+    setPastMatches([]);
+    setUpcomingMatches([]);
+    
     try {
       // Always use club-specific methods to get matches for the selected club
       console.log('🔍 Fetching matches for club:', clubId);
+      
+      // Fetch matches in background - don't block UI
       const [pastData, upcomingData] = await Promise.all([
         matchesService.fetchPastMatches(clubId),
         matchesService.fetchUpcomingMatches(clubId)
@@ -179,7 +185,10 @@ const MatchesPage: React.FC = () => {
     console.log('MatchesPage useEffect - isConnected:', isConnected, 'account:', account);
     if (isConnected && account) {
       console.log('Wallet connected, fetching clubs for:', account);
-      fetchClubs();
+      // Fetch clubs in background - don't block UI
+      fetchClubs().catch(err => {
+        console.error('Background fetch clubs error:', err);
+      });
     } else {
       console.log('Wallet not connected or no account address');
     }
@@ -194,7 +203,10 @@ const MatchesPage: React.FC = () => {
       // Use the club ID directly
       const clubId = selectedClub.club.id.toString();
       console.log('Using club ID:', clubId, 'for club:', selectedClub.club.name);
-      fetchMatches(clubId);
+      // Fetch matches in background - don't block UI
+      fetchMatches(clubId).catch(err => {
+        console.error('Background fetch matches error:', err);
+      });
     }
   }, [selectedClub]);
 
@@ -257,13 +269,6 @@ const MatchesPage: React.FC = () => {
           )}
         </div>
 
-        {isLoading && (
-          <div className="flex items-center justify-center py-12">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-            <span className="ml-3 text-gray-600 dark:text-gray-400">Loading clubs...</span>
-          </div>
-        )}
-
         {error && (
           <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4 mb-6">
             <p className="text-red-800 dark:text-red-200">{error}</p>
@@ -276,7 +281,17 @@ const MatchesPage: React.FC = () => {
           </div>
         )}
 
-        {!isLoading && !error && clubs.length === 0 && (
+        {/* Show loading indicator only for clubs section, not blocking entire page */}
+        {isLoading && clubs.length === 0 && (
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 mb-6">
+            <div className="flex items-center justify-center py-8">
+              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+              <span className="ml-3 text-gray-600 dark:text-gray-400">Loading clubs...</span>
+            </div>
+          </div>
+        )}
+
+        {!isLoading && clubs.length === 0 && (
           <div className="text-center py-12">
             <div className="text-gray-400 dark:text-gray-600 mb-4">
               <svg className="w-16 h-16 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -292,7 +307,7 @@ const MatchesPage: React.FC = () => {
           </div>
         )}
 
-        {!isLoading && !error && clubs.length > 0 && (
+        {clubs.length > 0 && (
           <div className="space-y-8">
             {/* Club Selector */}
             <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
@@ -326,7 +341,8 @@ const MatchesPage: React.FC = () => {
             {/* Matches Content */}
             {selectedClub && (
               <div className="space-y-6">
-                {isLoadingMatches && (
+                {/* Show loading indicator only when matches are loading and we have no data yet */}
+                {isLoadingMatches && upcomingMatches.length === 0 && pastMatches.length === 0 && (
                   <div className="flex items-center justify-center py-8">
                     <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
                     <span className="ml-3 text-gray-600 dark:text-gray-400">Loading matches...</span>
@@ -334,7 +350,7 @@ const MatchesPage: React.FC = () => {
                 )}
 
                 {/* Upcoming Matches */}
-                {!isLoadingMatches && upcomingMatches.length > 0 && (
+                {upcomingMatches.length > 0 && (
                   <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden">
                     <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
                       <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
@@ -399,7 +415,7 @@ const MatchesPage: React.FC = () => {
                 )}
 
                 {/* Past Matches */}
-                {!isLoadingMatches && pastMatches.length > 0 && (
+                {pastMatches.length > 0 && (
                   <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden">
                     <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
                       <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
@@ -485,7 +501,7 @@ const MatchesPage: React.FC = () => {
                   </div>
                 )}
 
-                {/* No Matches */}
+                {/* No Matches - only show if not loading and no data */}
                 {!isLoadingMatches && upcomingMatches.length === 0 && pastMatches.length === 0 && (
                   <div className="text-center py-12">
                     <div className="text-gray-400 dark:text-gray-600 mb-4">

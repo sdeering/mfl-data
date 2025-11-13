@@ -1,4 +1,4 @@
-import { calculatePlayerMarketValue, getCachedMarketValue, getPlayerMarketValue } from '../services/marketValueService';
+import { calculatePlayerMarketValue, getCachedMarketValue, getPlayerMarketValue, clearMarketValueCache } from '../services/marketValueService';
 import { supabase, TABLES } from '../lib/supabase';
 
 // Mock the dependencies
@@ -15,6 +15,7 @@ const mockSupabase = supabase as jest.Mocked<typeof supabase>;
 describe('MarketValueService', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    clearMarketValueCache(); // Clear in-memory cache between tests
   });
 
   describe('calculatePlayerMarketValue', () => {
@@ -167,7 +168,7 @@ describe('MarketValueService', () => {
         confidence: 'medium',
         breakdown: {},
         details: {},
-        calculated_at: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
+        calculated_at: new Date(Date.now() - 30 * 60 * 1000).toISOString() // 30 minutes old (within 1 hour cache)
       };
 
       mockSupabase.from.mockReturnValue({
@@ -177,6 +178,13 @@ describe('MarketValueService', () => {
           })
         })
       } as any);
+
+      // Mock mflApi.getPlayer in case cache check fails (shouldn't happen, but prevents errors)
+      const { mflApi } = require('../services/mflApi');
+      mflApi.getPlayer.mockResolvedValue({
+        id: 116267,
+        metadata: { firstName: 'Test', lastName: 'Player', overall: 83, age: 27, positions: ['LB'] }
+      });
 
       const result = await getPlayerMarketValue('116267', '0x123', false);
 
@@ -337,11 +345,27 @@ describe('MarketValueService', () => {
     it('should handle repeated calls consistently (cache)', async () => {
       const playerId = '116267';
       const wallet = '0x123';
+      
+      // Mock mflApi.getPlayer in case cache check fails (shouldn't happen, but prevents errors)
+      const { mflApi } = require('../services/mflApi');
+      mflApi.getPlayer.mockResolvedValue({
+        id: 116267,
+        metadata: { firstName: 'Test', lastName: 'Player', overall: 83, age: 27, positions: ['LB'] }
+      });
+      
       // Same cached value on repeated calls
+      const mockCachedData = {
+        market_value: 194,
+        confidence: 'medium',
+        breakdown: {},
+        details: {},
+        calculated_at: new Date().toISOString() // Fresh cache
+      };
+      
       mockSupabase.from.mockReturnValue({
         select: jest.fn().mockReturnValue({
           eq: jest.fn().mockReturnValue({
-            maybeSingle: jest.fn().mockResolvedValue({ data: { data: { market_value: 194, confidence: 'medium', breakdown: {}, details: {}, calculated_at: new Date().toISOString() } }, error: null })
+            maybeSingle: jest.fn().mockResolvedValue({ data: { data: mockCachedData }, error: null })
           })
         }),
         upsert: jest.fn().mockResolvedValue({ error: null })

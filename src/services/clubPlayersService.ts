@@ -113,17 +113,61 @@ class ClubPlayersService {
     }
 
     try {
-      const response = await axios.get<ClubPlayer[]>(
-        `https://z519wdyajg.execute-api.us-east-1.amazonaws.com/prod/clubs/${clubId}/players`
-      );
+      // Detect environment: use proxy in browser, direct API in Node/test
+      const hasDom = typeof window !== 'undefined' && typeof document !== 'undefined';
+      const isTest = typeof process !== 'undefined' && !!(process.env?.JEST_WORKER_ID || process.env?.NODE_ENV === 'test');
+      const isBrowserRuntime = hasDom && !isTest;
 
-      const players = response.data;
-      
-      // Cache the result with timestamp
-      this.cache.set(cacheKey, { data: players, timestamp: Date.now() });
-      console.log(`🚀 CACHE MISS: Fetched club players data from API for ${cacheKey}`);
+      if (isBrowserRuntime) {
+        // Use proxy API route to avoid CORS issues in browser
+        const proxyUrl = `/api/clubs/${clubId}/players`;
+        console.log(`🌐 Using proxy API route: ${proxyUrl}`);
+        
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+        
+        try {
+          const response = await fetch(proxyUrl, {
+            method: 'GET',
+            headers: {
+              'Accept': 'application/json',
+            },
+            signal: controller.signal
+          });
+          
+          clearTimeout(timeoutId);
+          
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+          }
+          
+          const result = await response.json();
+          const players: ClubPlayer[] = result.data || result;
+          
+          // Cache the result with timestamp
+          this.cache.set(cacheKey, { data: players, timestamp: Date.now() });
+          console.log(`🚀 CACHE MISS: Fetched club players data from API for ${cacheKey}`);
 
-      return players;
+          return players;
+        } catch (error) {
+          clearTimeout(timeoutId);
+          throw error;
+        }
+      } else {
+        // In Node.js/test environment, use direct MFL API call
+        const response = await axios.get<ClubPlayer[]>(
+          `https://z519wdyajg.execute-api.us-east-1.amazonaws.com/prod/clubs/${clubId}/players`,
+          { timeout: 30000 }
+        );
+
+        const players = response.data;
+        
+        // Cache the result with timestamp
+        this.cache.set(cacheKey, { data: players, timestamp: Date.now() });
+        console.log(`🚀 CACHE MISS: Fetched club players data from API for ${cacheKey}`);
+
+        return players;
+      }
     } catch (error) {
       console.error('Error fetching club players:', error);
       throw new Error('Failed to fetch club players data');

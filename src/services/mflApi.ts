@@ -36,7 +36,7 @@ const MFL_API_CONFIG = {
     },
   },
   cache: {
-    ttl: 60 * 60 * 1000, // 1 hour
+    ttl: 6 * 60 * 60 * 1000, // 6 hours for player data
     maxSize: 100, // Maximum number of cached items
   },
 } as const;
@@ -398,11 +398,69 @@ export class MFLAPIService {
    * Get player information by ID
    */
   async getPlayer(playerId: MFLPlayerId): Promise<MFLPlayer> {
-    const response = await this.httpClient.request<MFLPlayerResponse>(
-      `/players/${playerId}`,
-      { signal: this.abortSignal }
-    );
-    return response.player;
+    // Detect environment: use proxy in browser, direct API in Node/test
+    const hasDom = typeof window !== 'undefined' && typeof document !== 'undefined';
+    const isTest = typeof process !== 'undefined' && !!(process.env?.JEST_WORKER_ID || process.env?.NODE_ENV === 'test');
+    const isBrowserRuntime = hasDom && !isTest;
+
+    if (isBrowserRuntime) {
+      // Use proxy API route to avoid CORS issues in browser
+      const proxyUrl = `/api/player/${playerId}`;
+      console.log(`🌐 Using proxy API route: ${proxyUrl}`);
+      
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), MFL_API_CONFIG.timeout);
+      
+      try {
+        const startTime = Date.now();
+        const response = await fetch(proxyUrl, {
+          method: 'GET',
+          headers: {
+            'Accept': 'application/json',
+          },
+          signal: controller.signal,
+          // Cache for 6 hours (21600 seconds) - Next.js will handle this
+          next: { revalidate: 21600 },
+        });
+        
+        clearTimeout(timeoutId);
+        const duration = Date.now() - startTime;
+        
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+          throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`);
+        }
+        
+        const result = await response.json();
+        console.log(`✅ Received player data from proxy in ${duration}ms`);
+        
+        // The proxy returns { success: true, data: {...} } format
+        const playerData = result.data || result;
+        
+        // If it's already in MFLPlayerResponse format, return the player
+        if (playerData.player) {
+          return playerData.player;
+        }
+        
+        // Otherwise assume it's the player object directly
+        return playerData as MFLPlayer;
+      } catch (error) {
+        clearTimeout(timeoutId);
+        console.error(`❌ Proxy API Request failed for ${proxyUrl}:`, error);
+        if (error instanceof Error && (error.name === 'AbortError' || error.message.includes('timeout') || error.message.includes('aborted'))) {
+          console.error(`⏰ Request timed out after ${MFL_API_CONFIG.timeout}ms - API may be slow or unreachable`);
+          throw new Error(`Request timeout after ${MFL_API_CONFIG.timeout}ms`);
+        }
+        throw error;
+      }
+    } else {
+      // In Node.js/test environment, use direct MFL API call
+      const response = await this.httpClient.request<MFLPlayerResponse>(
+        `/players/${playerId}`,
+        { signal: this.abortSignal }
+      );
+      return response.player;
+    }
   }
 
   /**

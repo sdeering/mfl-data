@@ -8,6 +8,24 @@ import { calculateAllPositionOVRs } from '../utils/ruleBasedPositionCalculator';
 import { supabase, TABLES } from '../lib/supabase';
 import type { MarketValueEstimate } from '../utils/marketValueCalculator';
 
+// In-memory cache for market values (1 hour TTL)
+interface MarketValueCacheEntry {
+  result: MarketValueCalculationResult;
+  timestamp: number;
+}
+
+const marketValueCache = new Map<string, MarketValueCacheEntry>();
+const MARKET_VALUE_CACHE_TTL = 60 * 60 * 1000; // 1 hour
+
+const isCacheValid = (timestamp: number): boolean => {
+  return Date.now() - timestamp < MARKET_VALUE_CACHE_TTL;
+};
+
+// Export function to clear cache for testing
+export function clearMarketValueCache(): void {
+  marketValueCache.clear();
+}
+
 export interface MarketValueCalculationResult {
   success: boolean;
   marketValue?: number;
@@ -153,21 +171,32 @@ export async function getCachedMarketValue(
   maxAgeHours: number = 168 // 7 days default
 ): Promise<MarketValueCalculationResult | null> {
   try {
-    console.log(`🔍 Checking cache for player ${playerId}`);
+    const playerIdStr = playerId.toString();
+    console.log(`🔍 Checking database cache for player ${playerIdStr} (max age: ${maxAgeHours}h)`);
     
     const { data, error } = await supabase
       .from(TABLES.MARKET_VALUES)
       .select('*')
-      .eq('mfl_player_id', parseInt(playerId.toString()))
+      .eq('mfl_player_id', parseInt(playerIdStr))
       .maybeSingle();
 
     if (error) {
-      console.log(`❌ Cache lookup error for player ${playerId}:`, error);
+      console.log(`❌ Cache lookup error for player ${playerIdStr}:`, error);
       return null;
     }
     
     if (!data || !data.data) {
-      console.log(`❌ No cached data found for player ${playerId}`);
+      console.log(`❌ No cached data found in database for player ${playerIdStr}`);
+      return null;
+    }
+
+    console.log(`📦 Found cached data for player ${playerIdStr}, checking age...`);
+    console.log(`   - calculated_at: ${data.data.calculated_at}`);
+    console.log(`   - cache_version: ${data.data.cache_version || 'none'}`);
+    console.log(`   - market_value: $${data.data.market_value || 0}`);
+
+    if (!data.data.calculated_at) {
+      console.log(`❌ Cached data for player ${playerIdStr} missing calculated_at timestamp`);
       return null;
     }
 
@@ -175,16 +204,20 @@ export async function getCachedMarketValue(
     const now = new Date();
     const ageHours = (now.getTime() - calculatedAt.getTime()) / (1000 * 60 * 60);
 
+    console.log(`   - Age: ${ageHours.toFixed(2)} hours (max: ${maxAgeHours}h)`);
+
     if (ageHours > maxAgeHours) {
-      console.log(`❌ Cached data for player ${playerId} expired (${ageHours.toFixed(2)}h old, max ${maxAgeHours}h)`);
+      console.log(`❌ Cached data for player ${playerIdStr} expired (${ageHours.toFixed(2)}h old, max ${maxAgeHours}h)`);
       return null; // Expired
     }
 
-    // Additional validation: Check cache version
+    // Additional validation: Check cache version (only invalidate if version exists and doesn't match)
     const currentCacheVersion = '1.1';
     if (data.data.cache_version && data.data.cache_version !== currentCacheVersion) {
-      console.log(`⚠️ Cached data for player ${playerId} has outdated cache version (${data.data.cache_version} vs ${currentCacheVersion}), invalidating cache`);
+      console.log(`⚠️ Cached data for player ${playerIdStr} has outdated cache version (${data.data.cache_version} vs ${currentCacheVersion}), invalidating cache`);
       return null; // Invalidate outdated cache
+    } else if (!data.data.cache_version) {
+      console.log(`ℹ️ Cached data for player ${playerIdStr} has no cache version (old format), accepting it`);
     }
 
     // Additional validation: Check if cached value of 0 (Unknown) is actually valid
@@ -224,47 +257,49 @@ export async function getPlayerMarketValue(
   walletAddress?: string,
   forceRecalculate: boolean = false
 ): Promise<MarketValueCalculationResult> {
-  // Try to get cached value first (unless force recalculate)
+  const playerIdStr = playerId.toString();
+  const cacheKey = `market_value_${playerIdStr}`;
+  
+  // Check in-memory cache first (1 hour TTL)
   if (!forceRecalculate) {
-    const cached = await getCachedMarketValue(playerId, walletAddress);
-    if (cached) {
-      // If cache reports 0 (Unknown), verify against live data; recalc if sales/listings exist
-      if (cached.marketValue === 0) {
-        try {
-          const playerIdStr = playerId.toString();
-          // Lightweight checks: recent sales and comparable listings count
-          const player = await mflApi.getPlayer(playerIdStr);
-          const [historyResponse, marketResponse] = await Promise.all([
-            fetchPlayerSaleHistory(playerIdStr, 5),
-            fetchMarketData({
-              positions: player.metadata.positions,
-              ageMin: Math.max(1, player.metadata.age - 1),
-              ageMax: player.metadata.age + 1,
-              overallMin: Math.max(1, player.metadata.overall - 1),
-              overallMax: player.metadata.overall + 1,
-              limit: 50
-            })
-          ]);
-
-          const hasRecentSales = historyResponse.success && historyResponse.data.length > 0;
-          const hasListings = marketResponse.success && marketResponse.data.length > 0;
-
-          if (hasRecentSales || hasListings) {
-            console.log(`♻️ Recalculating player ${playerId} (cached 0 but sales/listings exist)`);
-            return await calculatePlayerMarketValue(playerId, walletAddress);
-          }
-        } catch (e) {
-          // If verification fails, fall back to cached value
-          console.warn(`⚠️ Zero-value cache verification failed for player ${playerId}:`, e);
-        }
-      }
-
-      console.log(`📋 Using cached market value for player ${playerId} (${cached.marketValue === 0 ? 'Unknown' : `$${cached.marketValue}`})`);
-      return cached;
+    const cached = marketValueCache.get(cacheKey);
+    if (cached && isCacheValid(cached.timestamp)) {
+      const age = ((Date.now() - cached.timestamp) / (1000 * 60 * 60)).toFixed(2);
+      console.log(`🎯 IN-MEMORY CACHE HIT: Using cached market value for player ${playerIdStr}: $${cached.result.marketValue || 0} (${age}h old)`);
+      return cached.result;
+    } else if (cached) {
+      console.log(`⏰ In-memory cache expired for player ${playerIdStr}, checking database...`);
+    } else {
+      console.log(`🔍 No in-memory cache for player ${playerIdStr}, checking database...`);
+    }
+    
+    // Check database cache (1 hour TTL)
+    console.log(`🔍 Checking database cache for player ${playerIdStr}...`);
+    const dbCached = await getCachedMarketValue(playerId, walletAddress, 1); // 1 hour
+    if (dbCached) {
+      console.log(`✅ Database cache found for player ${playerIdStr}`);
+      
+      // Skip the zero-value verification for now - it causes delays and shows "Calculating..."
+      // The cache is valid for 1 hour, so we'll trust it
+      // If cache reports 0 (Unknown), just return it - don't verify (too slow)
+      
+      // Cache in memory for faster subsequent access
+      marketValueCache.set(cacheKey, { result: dbCached, timestamp: Date.now() });
+      console.log(`📋 Using cached market value for player ${playerIdStr} (${dbCached.marketValue === 0 ? 'Unknown' : `$${dbCached.marketValue}`})`);
+      return dbCached;
     }
   }
 
-  // Calculate fresh value
-  console.log(`🔄 Calculating fresh market value for player ${playerId} (forceRecalculate: ${forceRecalculate})`);
-  return await calculatePlayerMarketValue(playerId, walletAddress);
+  // Calculate fresh value (no cache found or force recalculate)
+  console.log(`🔄 No valid cache found - Calculating fresh market value for player ${playerIdStr} (forceRecalculate: ${forceRecalculate})`);
+  const result = await calculatePlayerMarketValue(playerId, walletAddress);
+  
+  // Cache the result in memory
+  if (result.success) {
+    marketValueCache.set(cacheKey, { result, timestamp: Date.now() });
+    console.log(`💾 Cached market value in memory for player ${playerIdStr}: $${result.marketValue || 0}`);
+  }
+  
+  return result;
 }
+

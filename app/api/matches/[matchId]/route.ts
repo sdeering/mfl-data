@@ -5,29 +5,31 @@ const TIMEOUT_MS = 30000; // 30 seconds
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: Promise<{ playerId: string }> }
+  { params }: { params: Promise<{ matchId: string }> }
 ) {
   const startTime = Date.now();
   
   try {
-    const { playerId } = await params;
+    const { matchId } = await params;
+    const { searchParams } = new URL(request.url);
+    const withFormations = searchParams.get('withFormations') === 'true';
     
-    console.log(`[API] GET /api/player/${playerId} - Starting request`);
-    
-    if (!playerId) {
+    if (!matchId) {
       return NextResponse.json(
-        { success: false, error: 'Player ID is required' },
+        { success: false, error: 'Match ID is required' },
         { status: 400 }
       );
     }
 
-    const url = `${MFL_API_BASE}/players/${playerId}`;
+    console.log(`[API] GET /api/matches/${matchId} - withFormations: ${withFormations}`);
+    
+    const url = `${MFL_API_BASE}/matches/${matchId}${withFormations ? '?withFormations=true' : ''}`;
     console.log(`[API] Fetching from MFL API: ${url}`);
     
     // Use native fetch with proper timeout handling
     const controller = new AbortController();
     const timeoutId = setTimeout(() => {
-      console.log(`[API] Timeout reached, aborting request for player ${playerId}`);
+      console.log(`[API] Timeout reached, aborting request for match ${matchId}`);
       controller.abort();
     }, TIMEOUT_MS);
     
@@ -62,26 +64,11 @@ export async function GET(
       }
       
       const data = await response.json();
-      console.log(`[API] Successfully parsed JSON response for player ${playerId}`);
+      console.log(`[API] Successfully fetched match ${matchId}`);
       
-      // The MFL API returns { player: {...} } format
-      const playerData = data?.player || data;
-      
-      if (!playerData) {
-        console.error(`[API] No player data in response:`, JSON.stringify(data).substring(0, 200));
-        return NextResponse.json(
-          { 
-            success: false, 
-            error: 'Player data not found in API response'
-          },
-          { status: 404 }
-        );
-      }
-      
-      console.log(`[API] Successfully fetched player ${playerId} in ${totalDuration}ms`);
       return NextResponse.json({
         success: true,
-        data: playerData
+        data: data
       });
     } catch (error: any) {
       clearTimeout(timeoutId);
@@ -94,7 +81,7 @@ export async function GET(
         cause: error?.cause?.message,
         code: error?.code,
       };
-      console.error(`[API] Error fetching player ${playerId} (took ${duration}ms):`, errorDetails);
+      console.error(`[API] Error fetching match ${matchId} (took ${duration}ms):`, errorDetails);
       
       // Handle specific error types
       if (error.name === 'AbortError' || error.message?.includes('aborted') || error.message?.includes('timeout')) {
@@ -104,16 +91,6 @@ export async function GET(
             error: 'Request timeout - MFL API did not respond in time. Please try again.'
           },
           { status: 504 }
-        );
-      }
-      
-      if (error.message?.includes('404') || error.message?.includes('not found')) {
-        return NextResponse.json(
-          { 
-            success: false, 
-            error: 'Player not found'
-          },
-          { status: 404 }
         );
       }
       
@@ -137,14 +114,14 @@ export async function GET(
       return NextResponse.json(
         { 
           success: false, 
-          error: error instanceof Error ? error.message : 'Failed to fetch player data'
+          error: error instanceof Error ? error.message : 'Failed to fetch match data'
         },
         { status: 500 }
       );
     }
   } catch (error) {
     const duration = Date.now() - startTime;
-    console.error(`[API] Unexpected error in player proxy (took ${duration}ms):`, error);
+    console.error(`[API] Unexpected error in match proxy (took ${duration}ms):`, error);
     
     return NextResponse.json(
       { 
@@ -155,3 +132,4 @@ export async function GET(
     );
   }
 }
+

@@ -60,7 +60,7 @@ export interface MFLMatch {
 
 class MatchesService {
   private cache = new Map<string, { data: MFLMatch[]; timestamp: number }>();
-  private readonly CACHE_DURATION = 60 * 60 * 1000; // 1 hour
+  private readonly CACHE_DURATION = 6 * 60 * 60 * 1000; // 6 hours
   private readonly OPPONENT_CACHE_DURATION = 12 * 60 * 60 * 1000; // 12 hours for opponent matches
 
   // Local storage helpers (client-side persistence across refreshes)
@@ -151,13 +151,50 @@ class MatchesService {
     }
 
     try {
-      const url = `https://z519wdyajg.execute-api.us-east-1.amazonaws.com/prod/clubs/${clubId}`;
-      
-      const response = await axios.get(url);
-      
-      const data = response.data;
-      this.cache.set(cacheKey, { data, timestamp: Date.now() });
-      return data;
+      // Detect environment: use proxy in browser, direct API in Node/test
+      const hasDom = typeof window !== 'undefined' && typeof document !== 'undefined';
+      const isTest = typeof process !== 'undefined' && !!(process.env?.JEST_WORKER_ID || process.env?.NODE_ENV === 'test');
+      const isBrowserRuntime = hasDom && !isTest;
+
+      if (isBrowserRuntime) {
+        // Use proxy API route to avoid CORS issues in browser
+        const proxyUrl = `/api/clubs/${clubId}`;
+        console.log(`🌐 Using proxy API route: ${proxyUrl}`);
+        
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+        
+        try {
+          const response = await fetch(proxyUrl, {
+            method: 'GET',
+            headers: {
+              'Accept': 'application/json',
+            },
+            signal: controller.signal
+          });
+          
+          clearTimeout(timeoutId);
+          
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+          }
+          
+          const result = await response.json();
+          const data = result.data || result;
+          this.cache.set(cacheKey, { data, timestamp: Date.now() });
+          return data;
+        } catch (error) {
+          clearTimeout(timeoutId);
+          throw error;
+        }
+      } else {
+        // In Node.js/test environment, use direct MFL API call
+        const url = `https://z519wdyajg.execute-api.us-east-1.amazonaws.com/prod/clubs/${clubId}`;
+        const response = await axios.get(url, { timeout: 30000 });
+        const data = response.data;
+        this.cache.set(cacheKey, { data, timestamp: Date.now() });
+        return data;
+      }
     } catch (error) {
       console.error('Error fetching club details:', error);
       throw new Error('Failed to fetch club details');
@@ -199,40 +236,95 @@ class MatchesService {
       
       console.log('Found squad ID:', squadId, 'for club:', clubId);
       
-      const url = `https://z519wdyajg.execute-api.us-east-1.amazonaws.com/prod/matches`;
-      const params = {
-        squadId: squadId.toString(),
-        past: true,
-        onlyCompetitions: true,
-        limit: 15
-      };
-      
-      console.log('Fetching past matches from:', url, 'with params:', params);
-      
-      const response = await axios.get(url, { params });
-      try { await incrementUsage('mfl', '/matches'); } catch {}
-      
-      console.log('Past matches response:', response.data);
-      console.log('Past matches count:', response.data?.length);
-      if (response.data?.length > 0) {
-        console.log('First match details:', {
-          homeTeam: response.data[0].homeTeamName,
-          awayTeam: response.data[0].awayTeamName,
-          status: response.data[0].status
-        });
-        
-        // Log all unique team names in past matches
-        const allTeamNames = new Set();
-        response.data.forEach(match => {
-          allTeamNames.add(match.homeTeamName);
-          allTeamNames.add(match.awayTeamName);
-        });
-        console.log('All team names in past matches:', Array.from(allTeamNames).sort());
-      }
+      // Detect environment: use proxy in browser, direct API in Node/test
+      const hasDom = typeof window !== 'undefined' && typeof document !== 'undefined';
+      const isTest = typeof process !== 'undefined' && !!(process.env?.JEST_WORKER_ID || process.env?.NODE_ENV === 'test');
+      const isBrowserRuntime = hasDom && !isTest;
 
-      const data = response.data;
-      this.cache.set(cacheKey, { data, timestamp: Date.now() });
-      return data;
+      if (isBrowserRuntime) {
+        // Use proxy API route to avoid CORS issues in browser
+        const params = new URLSearchParams({
+          squadId: squadId.toString(),
+          past: 'true',
+          onlyCompetitions: 'true',
+          limit: '15'
+        });
+        const proxyUrl = `/api/matches?${params.toString()}`;
+        console.log(`🌐 Using proxy API route: ${proxyUrl}`);
+        
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+        
+        try {
+          const startTime = Date.now();
+          const response = await fetch(proxyUrl, {
+            method: 'GET',
+            headers: {
+              'Accept': 'application/json',
+            },
+            signal: controller.signal
+          });
+          
+          clearTimeout(timeoutId);
+          const duration = Date.now() - startTime;
+          
+          if (!response.ok) {
+            const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+            throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`);
+          }
+          
+          const result = await response.json();
+          console.log(`✅ Received ${Array.isArray(result.data) ? result.data.length : 0} past matches from proxy in ${duration}ms`);
+          
+          const data = result.data || [];
+          this.cache.set(cacheKey, { data, timestamp: Date.now() });
+          return data;
+        } catch (error) {
+          clearTimeout(timeoutId);
+          console.error(`❌ Proxy API Request failed for ${proxyUrl}:`, error);
+          if (error instanceof Error && (error.name === 'AbortError' || error.message.includes('timeout') || error.message.includes('aborted'))) {
+            console.error(`⏰ Request timed out after 30s - API may be slow or unreachable`);
+            throw new Error(`Request timeout after 30s`);
+          }
+          throw error;
+        }
+      } else {
+        // In Node.js/test environment, use direct MFL API call
+        const url = `https://z519wdyajg.execute-api.us-east-1.amazonaws.com/prod/matches`;
+        const params = {
+          squadId: squadId.toString(),
+          past: true,
+          onlyCompetitions: true,
+          limit: 15
+        };
+        
+        console.log('Fetching past matches from:', url, 'with params:', params);
+        
+        const response = await axios.get(url, { params, timeout: 30000 });
+        try { await incrementUsage('mfl', '/matches'); } catch {}
+        
+        console.log('Past matches response:', response.data);
+        console.log('Past matches count:', response.data?.length);
+        if (response.data?.length > 0) {
+          console.log('First match details:', {
+            homeTeam: response.data[0].homeTeamName,
+            awayTeam: response.data[0].awayTeamName,
+            status: response.data[0].status
+          });
+          
+          // Log all unique team names in past matches
+          const allTeamNames = new Set();
+          response.data.forEach(match => {
+            allTeamNames.add(match.homeTeamName);
+            allTeamNames.add(match.awayTeamName);
+          });
+          console.log('All team names in past matches:', Array.from(allTeamNames).sort());
+        }
+
+        const data = response.data;
+        this.cache.set(cacheKey, { data, timestamp: Date.now() });
+        return data;
+      }
     } catch (error) {
       console.error('Error fetching past matches:', error);
       throw new Error('Failed to fetch past matches');
@@ -274,40 +366,95 @@ class MatchesService {
       
       console.log('Found squad ID:', squadId, 'for club:', clubId);
       
-      const url = `https://z519wdyajg.execute-api.us-east-1.amazonaws.com/prod/matches`;
-      const params = {
-        squadId: squadId.toString(),
-        upcoming: true,
-        live: true,
-        limit: 30
-      };
-      
-      console.log('Fetching upcoming matches from:', url, 'with params:', params);
-      
-      const response = await axios.get(url, { params });
-      try { await incrementUsage('mfl', '/matches'); } catch {}
-      
-      console.log('Upcoming matches response:', response.data);
-      console.log('Upcoming matches count:', response.data?.length);
-      if (response.data?.length > 0) {
-        console.log('First upcoming match details:', {
-          homeTeam: response.data[0].homeTeamName,
-          awayTeam: response.data[0].awayTeamName,
-          status: response.data[0].status
-        });
-        
-        // Log all unique team names in upcoming matches
-        const allTeamNames = new Set();
-        response.data.forEach(match => {
-          allTeamNames.add(match.homeTeamName);
-          allTeamNames.add(match.awayTeamName);
-        });
-        console.log('All team names in upcoming matches:', Array.from(allTeamNames).sort());
-      }
+      // Detect environment: use proxy in browser, direct API in Node/test
+      const hasDom = typeof window !== 'undefined' && typeof document !== 'undefined';
+      const isTest = typeof process !== 'undefined' && !!(process.env?.JEST_WORKER_ID || process.env?.NODE_ENV === 'test');
+      const isBrowserRuntime = hasDom && !isTest;
 
-      const data = response.data;
-      this.cache.set(cacheKey, { data, timestamp: Date.now() });
-      return data;
+      if (isBrowserRuntime) {
+        // Use proxy API route to avoid CORS issues in browser
+        const params = new URLSearchParams({
+          squadId: squadId.toString(),
+          upcoming: 'true',
+          live: 'true',
+          limit: '30'
+        });
+        const proxyUrl = `/api/matches?${params.toString()}`;
+        console.log(`🌐 Using proxy API route: ${proxyUrl}`);
+        
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+        
+        try {
+          const startTime = Date.now();
+          const response = await fetch(proxyUrl, {
+            method: 'GET',
+            headers: {
+              'Accept': 'application/json',
+            },
+            signal: controller.signal
+          });
+          
+          clearTimeout(timeoutId);
+          const duration = Date.now() - startTime;
+          
+          if (!response.ok) {
+            const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+            throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`);
+          }
+          
+          const result = await response.json();
+          console.log(`✅ Received ${Array.isArray(result.data) ? result.data.length : 0} upcoming matches from proxy in ${duration}ms`);
+          
+          const data = result.data || [];
+          this.cache.set(cacheKey, { data, timestamp: Date.now() });
+          return data;
+        } catch (error) {
+          clearTimeout(timeoutId);
+          console.error(`❌ Proxy API Request failed for ${proxyUrl}:`, error);
+          if (error instanceof Error && (error.name === 'AbortError' || error.message.includes('timeout') || error.message.includes('aborted'))) {
+            console.error(`⏰ Request timed out after 30s - API may be slow or unreachable`);
+            throw new Error(`Request timeout after 30s`);
+          }
+          throw error;
+        }
+      } else {
+        // In Node.js/test environment, use direct MFL API call
+        const url = `https://z519wdyajg.execute-api.us-east-1.amazonaws.com/prod/matches`;
+        const params = {
+          squadId: squadId.toString(),
+          upcoming: true,
+          live: true,
+          limit: 30
+        };
+        
+        console.log('Fetching upcoming matches from:', url, 'with params:', params);
+        
+        const response = await axios.get(url, { params, timeout: 30000 });
+        try { await incrementUsage('mfl', '/matches'); } catch {}
+        
+        console.log('Upcoming matches response:', response.data);
+        console.log('Upcoming matches count:', response.data?.length);
+        if (response.data?.length > 0) {
+          console.log('First upcoming match details:', {
+            homeTeam: response.data[0].homeTeamName,
+            awayTeam: response.data[0].awayTeamName,
+            status: response.data[0].status
+          });
+          
+          // Log all unique team names in upcoming matches
+          const allTeamNames = new Set();
+          response.data.forEach(match => {
+            allTeamNames.add(match.homeTeamName);
+            allTeamNames.add(match.awayTeamName);
+          });
+          console.log('All team names in upcoming matches:', Array.from(allTeamNames).sort());
+        }
+
+        const data = response.data;
+        this.cache.set(cacheKey, { data, timestamp: Date.now() });
+        return data;
+      }
     } catch (error) {
       console.error('Error fetching upcoming matches:', error);
       throw new Error('Failed to fetch upcoming matches');
@@ -383,26 +530,75 @@ class MatchesService {
     try {
       console.log(`🚀 CACHE MISS: Fetching from API for ${cacheKey}`);
       // Fetch past matches using the opponent's squad ID
-      const url = `https://z519wdyajg.execute-api.us-east-1.amazonaws.com/prod/matches`;
-      const params = {
-        squadId: opponentSquadId.toString(),
-        past: true,
-        onlyCompetitions: true,
-        limit: limit
-      };
-      
+      // Detect environment: use proxy in browser, direct API in Node/test
+      const hasDom = typeof window !== 'undefined' && typeof document !== 'undefined';
+      const isTest = typeof process !== 'undefined' && !!(process.env?.JEST_WORKER_ID || process.env?.NODE_ENV === 'test');
+      const isBrowserRuntime = hasDom && !isTest;
+
       console.log('Fetching opponent past matches for squad ID:', opponentSquadId);
       
-      const response = await axios.get(url, { params });
-      try { await incrementUsage('mfl', '/matches'); } catch {}
-      
-      console.log(`Found ${response.data.length} past matches for squad ${opponentSquadId}`);
+      if (isBrowserRuntime) {
+        // Use proxy API route to avoid CORS issues in browser
+        const params = new URLSearchParams({
+          squadId: opponentSquadId.toString(),
+          past: 'true',
+          onlyCompetitions: 'true',
+          limit: limit.toString()
+        });
+        const proxyUrl = `/api/matches?${params.toString()}`;
+        console.log(`🌐 Using proxy API route: ${proxyUrl}`);
+        
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+        
+        try {
+          const response = await fetch(proxyUrl, {
+            method: 'GET',
+            headers: {
+              'Accept': 'application/json',
+            },
+            signal: controller.signal
+          });
+          
+          clearTimeout(timeoutId);
+          
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+          }
+          
+          const result = await response.json();
+          const data = result.data || [];
+          console.log(`Found ${data.length} past matches for squad ${opponentSquadId}`);
+          
+          this.cache.set(cacheKey, { data, timestamp: Date.now() });
+          return data;
+        } catch (error) {
+          clearTimeout(timeoutId);
+          throw error;
+        }
+      } else {
+        // In Node.js/test environment, use direct MFL API call
+        const url = `https://z519wdyajg.execute-api.us-east-1.amazonaws.com/prod/matches`;
+        const params = {
+          squadId: opponentSquadId.toString(),
+          past: true,
+          onlyCompetitions: true,
+          limit: limit
+        };
+        
+        const response = await axios.get(url, { params, timeout: 30000 });
+        try { await incrementUsage('mfl', '/matches'); } catch {}
+        
+        console.log(`Found ${response.data.length} past matches for squad ${opponentSquadId}`);
 
-      this.cache.set(cacheKey, { data: response.data, timestamp: Date.now() });
-      // Persist to localStorage to avoid re-fetch on refresh for 12 hours
-      this.writeLocalCache(cacheKey, response.data);
-      console.log(`🔍 CACHE: Set ${cacheKey} with timestamp ${Date.now()}`);
-      return response.data;
+        const data = response.data;
+        this.cache.set(cacheKey, { data, timestamp: Date.now() });
+        // Persist to localStorage to avoid re-fetch on refresh for 12 hours
+        this.writeLocalCache(cacheKey, data);
+        console.log(`🔍 CACHE: Set ${cacheKey} with timestamp ${Date.now()}`);
+        
+        return data;
+      }
     } catch (error) {
       console.error('Error fetching opponent past matches:', error);
       return [];
@@ -459,15 +655,65 @@ class MatchesService {
   // Fetch both home and away formations for a match
   async fetchMatchFormations(matchId: string): Promise<{ home?: string | null; away?: string | null }> {
     try {
-      const url = `https://z519wdyajg.execute-api.us-east-1.amazonaws.com/prod/matches/${matchId}?withFormations=true`;
-      const response = await axios.get(url);
-      try { await incrementUsage('mfl', '/matches/:id'); } catch {}
-      const matchData = response.data;
+      // Detect environment: use proxy in browser, direct API in Node/test
+      const hasDom = typeof window !== 'undefined' && typeof document !== 'undefined';
+      const isTest = typeof process !== 'undefined' && !!(process.env?.JEST_WORKER_ID || process.env?.NODE_ENV === 'test');
+      const isBrowserRuntime = hasDom && !isTest;
 
-      return {
-        home: matchData?.homeFormation?.type ?? null,
-        away: matchData?.awayFormation?.type ?? null
-      };
+      if (isBrowserRuntime) {
+        // Use proxy API route to avoid CORS issues in browser
+        const proxyUrl = `/api/matches/${matchId}?withFormations=true`;
+        console.log(`🌐 Using proxy API route: ${proxyUrl}`);
+        
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+        
+        try {
+          const startTime = Date.now();
+          const response = await fetch(proxyUrl, {
+            method: 'GET',
+            headers: {
+              'Accept': 'application/json',
+            },
+            signal: controller.signal
+          });
+          
+          clearTimeout(timeoutId);
+          const duration = Date.now() - startTime;
+          
+          if (!response.ok) {
+            const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+            throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`);
+          }
+          
+          const result = await response.json();
+          console.log(`✅ Received match formations from proxy in ${duration}ms`);
+          
+          const matchData = result.data || {};
+          return {
+            home: matchData?.homeFormation?.type ?? null,
+            away: matchData?.awayFormation?.type ?? null
+          };
+        } catch (error) {
+          clearTimeout(timeoutId);
+          console.error(`❌ Proxy API Request failed for ${proxyUrl}:`, error);
+          if (error instanceof Error && (error.name === 'AbortError' || error.message.includes('timeout') || error.message.includes('aborted'))) {
+            console.error(`⏰ Request timed out after 30s - API may be slow or unreachable`);
+          }
+          return { home: null, away: null };
+        }
+      } else {
+        // In Node.js/test environment, use direct MFL API call
+        const url = `https://z519wdyajg.execute-api.us-east-1.amazonaws.com/prod/matches/${matchId}?withFormations=true`;
+        const response = await axios.get(url, { timeout: 30000 });
+        try { await incrementUsage('mfl', '/matches/:id'); } catch {}
+        const matchData = response.data;
+
+        return {
+          home: matchData?.homeFormation?.type ?? null,
+          away: matchData?.awayFormation?.type ?? null
+        };
+      }
     } catch (error) {
       console.error('Error fetching match formations:', error);
       return { home: null, away: null };

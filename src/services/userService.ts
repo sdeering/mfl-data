@@ -32,12 +32,51 @@ class UserService {
 
   private async fetchUserFromClubs(walletAddress: string): Promise<MFLUser | null> {
     try {
-      const url = `https://z519wdyajg.execute-api.us-east-1.amazonaws.com/prod/clubs?walletAddress=${walletAddress}`;
-      const response = await axios.get(url);
+      // Detect environment: use proxy in browser, direct API in Node/test
+      const hasDom = typeof window !== 'undefined' && typeof document !== 'undefined';
+      const isTest = typeof process !== 'undefined' && !!(process.env?.JEST_WORKER_ID || process.env?.NODE_ENV === 'test');
+      const isBrowserRuntime = hasDom && !isTest;
+
+      let responseData: any;
+      if (isBrowserRuntime) {
+        // Use proxy API route to avoid CORS issues in browser
+        const proxyUrl = `/api/clubs?walletAddress=${walletAddress}`;
+        console.log(`🌐 Using proxy API route: ${proxyUrl}`);
+        
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+        
+        try {
+          const response = await fetch(proxyUrl, {
+            method: 'GET',
+            headers: {
+              'Accept': 'application/json',
+            },
+            signal: controller.signal
+          });
+          
+          clearTimeout(timeoutId);
+          
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+          }
+          
+          const result = await response.json();
+          responseData = result.data || result;
+        } catch (error) {
+          clearTimeout(timeoutId);
+          throw error;
+        }
+      } else {
+        // In Node.js/test environment, use direct MFL API call
+        const url = `https://z519wdyajg.execute-api.us-east-1.amazonaws.com/prod/clubs?walletAddress=${walletAddress}`;
+        const response = await axios.get(url, { timeout: 30000 });
+        responseData = response.data;
+      }
       
-      if (response.data && response.data.length > 0) {
+      if (responseData && responseData.length > 0) {
         // Extract user name from club names (e.g., "DogeSports Japan" -> "DogeSports")
-        const clubNames = response.data.map((club: any) => club.club.name);
+        const clubNames = responseData.map((club: any) => club.club.name);
         const commonPrefix = this.findCommonPrefix(clubNames);
         
         if (commonPrefix) {

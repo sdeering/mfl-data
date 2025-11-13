@@ -1,38 +1,77 @@
 import type { PlayerExperienceHistory, PlayerExperienceEntry } from '../types/playerExperience';
 
+interface CacheEntry {
+  data: PlayerExperienceHistory;
+  timestamp: number;
+}
+
 class PlayerExperienceService {
-  private cache = new Map<string, PlayerExperienceHistory>();
-  private readonly CACHE_DURATION = 60 * 60 * 1000; // 1 hour (experience data changes less frequently)
+  private cache = new Map<string, CacheEntry>();
+  private readonly CACHE_DURATION = 60 * 60 * 1000; // 1 hour
+
+  private isCacheValid(timestamp: number): boolean {
+    return Date.now() - timestamp < this.CACHE_DURATION;
+  }
 
   async fetchPlayerExperienceHistory(playerId: string): Promise<PlayerExperienceHistory> {
     const cacheKey = `player_experience_${playerId}`;
     const cached = this.cache.get(cacheKey);
     
-    if (cached) {
-      return cached;
+    if (cached && this.isCacheValid(cached.timestamp)) {
+      console.log(`🎯 CACHE HIT: Using cached player experience data for ${cacheKey}`);
+      return cached.data;
     }
 
     try {
-      const response = await fetch(`https://z519wdyajg.execute-api.us-east-1.amazonaws.com/prod/players/${playerId}/experiences/history`);
+      // Detect environment: use proxy in browser, direct API in Node/test
+      const hasDom = typeof window !== 'undefined' && typeof document !== 'undefined';
+      const isTest = typeof process !== 'undefined' && !!(process.env?.JEST_WORKER_ID || process.env?.NODE_ENV === 'test');
+      const isBrowserRuntime = hasDom && !isTest;
+
+      let response;
+      if (isBrowserRuntime) {
+        // Use proxy API route to avoid CORS issues in browser
+        const proxyUrl = `/api/players/${playerId}/experiences`;
+        console.log(`🌐 Using proxy API route: ${proxyUrl}`);
+        
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+        
+        try {
+          response = await fetch(proxyUrl, {
+            method: 'GET',
+            headers: {
+              'Accept': 'application/json',
+            },
+            signal: controller.signal
+          });
+          clearTimeout(timeoutId);
+        } catch (error) {
+          clearTimeout(timeoutId);
+          throw error;
+        }
+      } else {
+        // In Node.js/test environment, use direct MFL API call
+        response = await fetch(`https://z519wdyajg.execute-api.us-east-1.amazonaws.com/prod/players/${playerId}/experiences/history`);
+      }
       
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
 
-      const data: PlayerExperienceEntry[] = await response.json();
+      const resultData = await response.json();
+      
+      // Handle proxy response format { success: true, data: [...] }
+      const data: PlayerExperienceEntry[] = resultData.data || resultData;
       
       const result: PlayerExperienceHistory = {
         success: true,
         data: data
       };
 
-      // Cache the result
-      this.cache.set(cacheKey, result);
-      
-      // Clear cache after duration
-      setTimeout(() => {
-        this.cache.delete(cacheKey);
-      }, this.CACHE_DURATION);
+      // Cache the result with timestamp
+      this.cache.set(cacheKey, { data: result, timestamp: Date.now() });
+      console.log(`✅ Cached player experience data for ${cacheKey}`);
 
       return result;
     } catch (error) {
