@@ -70,9 +70,15 @@ export const PlayerStatsGrid: React.FC<PlayerStatsGridProps> = ({ player, onAttr
     physical?: number;
   }>({});
   
+  // State to track net button press count for each stat (net = plus clicks - minus clicks)
+  const [buttonCounts, setButtonCounts] = useState<{
+    [key: string]: number;
+  }>({});
+  
   // Reset when player changes
   useEffect(() => {
     setModifiedAttributes({});
+    setButtonCounts({});
   }, [player.id]);
   
   // Notify parent of changes
@@ -113,7 +119,18 @@ export const PlayerStatsGrid: React.FC<PlayerStatsGridProps> = ({ player, onAttr
     
     const originalValue = player.metadata[key];
     const currentValue = getCurrentValue(label, originalValue);
-    const newValue = Math.max(0, Math.min(99, currentValue + delta));
+    // Prevent going below original value, max at 99
+    const newValue = Math.max(originalValue, Math.min(99, currentValue + delta));
+    
+    // Update button counts (track net: +1 for plus, -1 for minus)
+    setButtonCounts(prev => {
+      const current = prev[label] || 0;
+      const newCount = Math.max(0, current + delta);
+      return {
+        ...prev,
+        [label]: newCount,
+      };
+    });
     
     setModifiedAttributes(prev => {
       if (newValue === originalValue) {
@@ -131,6 +148,7 @@ export const PlayerStatsGrid: React.FC<PlayerStatsGridProps> = ({ player, onAttr
   // Reset all modifications
   const handleReset = () => {
     setModifiedAttributes({});
+    setButtonCounts({});
   };
   
   const stats = isGoalkeeper 
@@ -192,13 +210,13 @@ export const PlayerStatsGrid: React.FC<PlayerStatsGridProps> = ({ player, onAttr
               </div>
               {/* +/- buttons for outfield players */}
               {!isGoalkeeper && !isOverallRating && (
-                <div className="flex items-center mt-1 relative">
+                <div className="flex flex-col items-center mt-1 relative">
                   <div className="flex items-center">
                     <button
                       onClick={() => updateAttribute(stat.label, -1)}
                       className="w-6 h-6 flex items-center justify-center text-gray-700 dark:text-gray-300 text-sm font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed opacity-30 hover:opacity-100 hover:bg-gray-200 dark:hover:bg-gray-700"
                       style={{ border: 0, background: 'none' }}
-                      disabled={stat.value <= 0}
+                      disabled={stat.value <= stat.originalValue}
                     >
                       −
                     </button>
@@ -211,6 +229,12 @@ export const PlayerStatsGrid: React.FC<PlayerStatsGridProps> = ({ player, onAttr
                       +
                     </button>
                   </div>
+                  {/* Button press counter (show net count) */}
+                  {buttonCounts[stat.label] > 0 && (
+                    <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                      <span className="text-green-600 dark:text-green-400">+{buttonCounts[stat.label]}</span>
+                    </div>
+                  )}
                   {/* Reset button - floating on the right */}
                   {isDirty && stat.label === 'PHY' && (
                     <button
