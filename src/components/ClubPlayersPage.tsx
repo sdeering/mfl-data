@@ -6,6 +6,8 @@ import { useWallet } from '@/src/contexts/WalletContext';
 import { clubPlayersService, ClubPlayer } from '@/src/services/clubPlayersService';
 import { clubsService } from '@/src/services/clubsService';
 import { OverallRatingTooltip } from './OverallRatingTooltip';
+import { PlayerFilters, FilterState, applyFilters } from './PlayerFilters';
+import { MFLPlayer } from '../types/mflApi';
 
 interface ClubPlayersPageProps {
   clubId: string;
@@ -20,6 +22,33 @@ export default function ClubPlayersPage({ clubId }: ClubPlayersPageProps) {
   const [sortField, setSortField] = useState<string>('overall');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
   const [isLoadingPlayers, setIsLoadingPlayers] = useState(false);
+  const [showFilters, setShowFilters] = useState(false);
+  const [filters, setFilters] = useState<FilterState>({
+    filterPosition: 'all',
+    selectedCardTypes: [],
+    overallMin: 0,
+    overallMax: 100,
+    positionRatingMin: 0,
+    positionRatingMax: 100,
+    attrFilters: {
+      pace: 0,
+      shooting: 0,
+      passing: 0,
+      dribbling: 0,
+      defense: 0,
+      physical: 0,
+    },
+    attrFiltersMax: {
+      pace: 100,
+      shooting: 100,
+      passing: 100,
+      dribbling: 100,
+      defense: 100,
+      physical: 100,
+    },
+  });
+  const [filteredPlayers, setFilteredPlayers] = useState<ClubPlayer[]>([]);
+  const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
     if (!isConnected || !account) {
@@ -50,60 +79,101 @@ export default function ClubPlayersPage({ clubId }: ClubPlayersPageProps) {
     }
   };
 
-  // Sort players (no filtering since search is removed)
-  const sortedPlayers = [...players].sort((a, b) => {
-    let aValue: any, bValue: any;
+  // Apply filters, search, and sort players
+  useEffect(() => {
+    // Convert ClubPlayer to MFLPlayer format for filtering
+    const mflPlayers: MFLPlayer[] = players.map(p => ({
+      id: p.id,
+      metadata: p.metadata,
+      activeContract: p.activeContract,
+    } as MFLPlayer));
     
-    switch (sortField) {
-      case 'name':
-        aValue = `${a.metadata.firstName} ${a.metadata.lastName}`;
-        bValue = `${b.metadata.firstName} ${b.metadata.lastName}`;
-        break;
-      case 'overall':
-        aValue = a.metadata.overall;
-        bValue = b.metadata.overall;
-        break;
-      case 'age':
-        aValue = a.metadata.age;
-        bValue = b.metadata.age;
-        break;
-      case 'pace':
-        aValue = a.metadata.pace;
-        bValue = b.metadata.pace;
-        break;
-      case 'shooting':
-        aValue = a.metadata.shooting;
-        bValue = b.metadata.shooting;
-        break;
-      case 'passing':
-        aValue = a.metadata.passing;
-        bValue = b.metadata.passing;
-        break;
-      case 'dribbling':
-        aValue = a.metadata.dribbling;
-        bValue = b.metadata.dribbling;
-        break;
-      case 'defense':
-        aValue = a.metadata.defense;
-        bValue = b.metadata.defense;
-        break;
-      case 'physical':
-        aValue = a.metadata.physical;
-        bValue = b.metadata.physical;
-        break;
-      default:
-        aValue = a.metadata.overall;
-        bValue = b.metadata.overall;
+    // Apply filters
+    let filtered = applyFilters(mflPlayers, filters);
+    
+    // Apply search term filter
+    if (searchTerm.trim()) {
+      filtered = filtered.filter(player => {
+        const fullName = `${player.metadata.firstName} ${player.metadata.lastName}`.toLowerCase();
+        const positions = player.metadata.positions?.join(', ').toLowerCase() || '';
+        const search = searchTerm.toLowerCase();
+        
+        return fullName.includes(search) || 
+               positions.includes(search) ||
+               player.metadata.overall.toString().includes(search) ||
+               player.metadata.age.toString().includes(search) ||
+               player.metadata.pace.toString().includes(search) ||
+               player.metadata.shooting.toString().includes(search) ||
+               player.metadata.passing.toString().includes(search) ||
+               player.metadata.dribbling.toString().includes(search) ||
+               player.metadata.defense.toString().includes(search) ||
+               player.metadata.physical.toString().includes(search);
+      });
     }
+    
+    // Convert back to ClubPlayer format
+    const filteredClubPlayers = filtered.map(mflPlayer => {
+      const originalPlayer = players.find(p => p.id === mflPlayer.id);
+      return originalPlayer || mflPlayer as ClubPlayer;
+    });
+    
+    // Sort filtered players
+    const sorted = [...filteredClubPlayers].sort((a, b) => {
+      let aValue: any, bValue: any;
+      
+      switch (sortField) {
+        case 'name':
+          aValue = `${a.metadata.firstName} ${a.metadata.lastName}`;
+          bValue = `${b.metadata.firstName} ${b.metadata.lastName}`;
+          break;
+        case 'overall':
+          aValue = a.metadata.overall;
+          bValue = b.metadata.overall;
+          break;
+        case 'age':
+          aValue = a.metadata.age;
+          bValue = b.metadata.age;
+          break;
+        case 'pace':
+          aValue = a.metadata.pace;
+          bValue = b.metadata.pace;
+          break;
+        case 'shooting':
+          aValue = a.metadata.shooting;
+          bValue = b.metadata.shooting;
+          break;
+        case 'passing':
+          aValue = a.metadata.passing;
+          bValue = b.metadata.passing;
+          break;
+        case 'dribbling':
+          aValue = a.metadata.dribbling;
+          bValue = b.metadata.dribbling;
+          break;
+        case 'defense':
+          aValue = a.metadata.defense;
+          bValue = b.metadata.defense;
+          break;
+        case 'physical':
+          aValue = a.metadata.physical;
+          bValue = b.metadata.physical;
+          break;
+        default:
+          aValue = a.metadata.overall;
+          bValue = b.metadata.overall;
+      }
 
-    if (typeof aValue === 'string') {
-      return sortDirection === 'asc' 
-        ? aValue.localeCompare(bValue)
-        : bValue.localeCompare(aValue);
-    }
+      if (typeof aValue === 'string') {
+        return sortDirection === 'asc' 
+          ? aValue.localeCompare(bValue)
+          : bValue.localeCompare(aValue);
+      }
 
-    return sortDirection === 'asc' ? aValue - bValue : bValue - aValue;
-  });
+      return sortDirection === 'asc' ? aValue - bValue : bValue - aValue;
+    });
+    
+    setFilteredPlayers(sorted);
+  }, [players, filters, sortField, sortDirection, searchTerm]);
 
   const handleSort = (field: string) => {
     if (sortField === field) {
@@ -231,7 +301,7 @@ export default function ClubPlayersPage({ clubId }: ClubPlayersPageProps) {
       <div className="mb-8">
         <div className="mb-4">
           <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-            {clubInfo ? `${clubInfo.name} (${sortedPlayers.length} Players)` : `Club ${clubId} (${sortedPlayers.length} Players)`}
+            {clubInfo ? `${clubInfo.name} (${filteredPlayers.length}${filteredPlayers.length !== players.length ? ` of ${players.length}` : ''} Players)` : `Club ${clubId} (${filteredPlayers.length}${filteredPlayers.length !== players.length ? ` of ${players.length}` : ''} Players)`}
           </h1>
           {clubInfo && (
             <p className="text-gray-600 dark:text-gray-400 mt-1">
@@ -252,16 +322,110 @@ export default function ClubPlayersPage({ clubId }: ClubPlayersPageProps) {
       )}
 
       {/* Players Table */}
-      {!isLoadingPlayers && sortedPlayers.length === 0 && (
+      {!isLoadingPlayers && filteredPlayers.length === 0 && (
         <div className="text-center py-12">
           <div className="text-gray-400 dark:text-gray-500 text-lg">
-            No players found for this club.
+            {players.length === 0 ? 'No players found for this club.' : 'No players match the current filters.'}
           </div>
         </div>
       )}
 
-      {!isLoadingPlayers && sortedPlayers.length > 0 && (
+      {!isLoadingPlayers && filteredPlayers.length > 0 && (
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
+          {/* Filters Section */}
+          <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+              {/* Search Input - moved to left */}
+              <div className="relative flex-shrink-0">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                  </svg>
+                </div>
+                <input
+                  type="text"
+                  placeholder="Search players..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="block w-64 pl-10 pr-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md leading-5 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                />
+              </div>
+              
+              {/* Filters Button and Reset Button Row */}
+              <div className="flex items-center gap-4 flex-1 justify-end">
+                {/* Filters Button */}
+                <button
+                  className="text-left px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white hover:bg-gray-50 dark:hover:bg-gray-600 cursor-pointer whitespace-nowrap"
+                  onClick={() => setShowFilters(!showFilters)}
+                >
+                  {showFilters ? 'Hide Filters' : 'Show Filters'}
+                </button>
+                
+                {/* Reset Filters Button - on the right of filters button */}
+                {(() => {
+                  const isFiltersActive = 
+                    filters.filterPosition !== 'all' ||
+                    filters.selectedCardTypes.length > 0 ||
+                    filters.overallMin > 0 ||
+                    filters.overallMax < 100 ||
+                    filters.positionRatingMin > 0 ||
+                    filters.positionRatingMax < 100 ||
+                    Object.values(filters.attrFilters).some(v => v > 0) ||
+                    Object.values(filters.attrFiltersMax).some(v => v < 100);
+                  
+                  if (!isFiltersActive) return null;
+                  
+                  return (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setFilters({
+                          filterPosition: 'all',
+                          selectedCardTypes: [],
+                          overallMin: 0,
+                          overallMax: 100,
+                          positionRatingMin: 0,
+                          positionRatingMax: 100,
+                          attrFilters: {
+                            pace: 0,
+                            shooting: 0,
+                            passing: 0,
+                            dribbling: 0,
+                            defense: 0,
+                            physical: 0,
+                          },
+                          attrFiltersMax: {
+                            pace: 100,
+                            shooting: 100,
+                            passing: 100,
+                            dribbling: 100,
+                            defense: 100,
+                            physical: 100,
+                          },
+                        });
+                      }}
+                      className="text-sm text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
+                      title="Reset filters"
+                    >
+                      Reset Filters
+                    </button>
+                  );
+                })()}
+              </div>
+            </div>
+            
+            {/* Filters Panel */}
+            {showFilters && (
+              <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+                <PlayerFilters
+                  filters={filters}
+                  onFiltersChange={setFilters}
+                  showSidebarFilters={true}
+                />
+              </div>
+            )}
+          </div>
+          
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
               <thead className="bg-gray-50 dark:bg-gray-700">
@@ -391,7 +555,7 @@ export default function ClubPlayersPage({ clubId }: ClubPlayersPageProps) {
                 </tr>
               </thead>
               <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                {sortedPlayers.map((player) => {
+                {filteredPlayers.map((player) => {
                   const tierColors = getTierColor(player.metadata.overall);
                   return (
                     <tr key={player.id} className="hover:bg-gray-50 dark:hover:bg-gray-700">

@@ -728,6 +728,7 @@ export default function SquadBuilderPage() {
     setPositionRatingMax(100);
     setAttrFilters({ pace: 0, shooting: 0, passing: 0, dribbling: 0, defense: 0, physical: 0 });
     setAttrFiltersMax({ pace: 100, shooting: 100, passing: 100, dribbling: 100, defense: 100, physical: 100 });
+    setHideSelectedInSidebar(false);
     setSidebarPage(0);
   };
 
@@ -1361,9 +1362,22 @@ export default function SquadBuilderPage() {
       filtered = filtered.filter(p => selectedCardTypes.includes(getCardTypeFromOverall(p.metadata.overall)));
     }
 
-    // Hide players already selected in the squad (any slot)
+    // Hide players already selected in any squad (current squad and other saved squads)
     if (hideSelectedInSidebar) {
-      const selectedIds = new Set(Object.values(squad.players).map(sp => sp.player.id));
+      const selectedIds = new Set<number>();
+      
+      // Add players from current squad
+      Object.values(squad.players).forEach(sp => {
+        selectedIds.add(sp.player.id);
+      });
+      
+      // Add players from other saved squads
+      savedSquads.forEach(savedSquad => {
+        Object.values(savedSquad.players).forEach(squadPlayer => {
+          selectedIds.add(squadPlayer.player.id);
+        });
+      });
+      
       filtered = filtered.filter(p => !selectedIds.has(p.id));
     }
 
@@ -1376,7 +1390,7 @@ export default function SquadBuilderPage() {
     }
     setFilteredPlayers(filtered);
     setSidebarPage(0);
-  }, [searchTerm, filterPosition, players, debouncedAttr, debouncedAttrMax, debouncedOverallMin, debouncedOverallMax, debouncedPositionRatingMin, debouncedPositionRatingMax, selectedCardTypes, sidebarSortKey, sidebarSortDir, hideSelectedInSidebar, squad.players]);
+  }, [searchTerm, filterPosition, players, debouncedAttr, debouncedAttrMax, debouncedOverallMin, debouncedOverallMax, debouncedPositionRatingMin, debouncedPositionRatingMax, selectedCardTypes, sidebarSortKey, sidebarSortDir, hideSelectedInSidebar, squad.players, savedSquads]);
 
   // Handle formation change
   const handleFormationChange = (formation: Formation) => {
@@ -1673,38 +1687,32 @@ export default function SquadBuilderPage() {
               </div>
             )}
             
-            {/* Search */}
+            {/* Search and Filters */}
             <div className="mb-4">
-              <input
-                type="text"
-                placeholder="Search players..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              />
+              <div className="flex items-center gap-2 mb-2">
+                {/* Search Input - moved to left */}
+                <input
+                  type="text"
+                  placeholder="Search players..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-64 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+                
+                {/* Filters Button */}
+                <div className="flex items-center gap-2 flex-1 justify-end">
+                  <button
+                    className="text-left px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white hover:bg-gray-50 dark:hover:bg-gray-600 cursor-pointer whitespace-nowrap"
+                    onClick={() => setShowSidebarFilters(v => !v)}
+                  >
+                    {showSidebarFilters ? 'Hide Filters' : 'Show Filters'}
+                  </button>
+                </div>
+              </div>
             </div>
 
             {/* Filters */}
             <div className="space-y-3 mb-2">
-              {/* Rating Sliders (Overall first, Position rating second) */}
-              <div className="flex items-center justify-between gap-2">
-                <button
-                  className="text-left px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white hover:bg-gray-50 dark:hover:bg-gray-600 cursor-pointer"
-                  onClick={() => setShowSidebarFilters(v => !v)}
-                >
-                  {showSidebarFilters ? 'Hide Filters' : 'Show Filters'}
-                </button>
-                {isFiltersActive && (
-                  <button
-                    type="button"
-                    onClick={resetFilters}
-                    className="text-sm text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
-                    title="Reset filters"
-                  >
-                    Reset
-                  </button>
-                )}
-              </div>
               <div className={`grid grid-cols-2 gap-3 ${showSidebarFilters ? '' : 'hidden'}`}>
                 {/* Card Type Filter */}
                 <div className="col-span-2">
@@ -1844,6 +1852,16 @@ export default function SquadBuilderPage() {
                   <label htmlFor="hide-selected" className="text-sm text-gray-700 dark:text-gray-300 select-none">
                     Hide selected players
                   </label>
+                  {isFiltersActive && (
+                    <button
+                      type="button"
+                      onClick={resetFilters}
+                      className="ml-auto text-sm text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
+                      title="Reset filters"
+                    >
+                      Reset Filters
+                    </button>
+                  )}
                 </div>
               </div>
 
