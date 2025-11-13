@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { mflApi } from '../services/mflApi';
 import { getPlayerMarketValue, type MarketValueCalculationResult } from '../services/marketValueService';
@@ -77,6 +77,43 @@ const PlayerResultsPage: React.FC<PlayerResultsPageProps> = ({ propPlayerId, ini
   });
   const { setIsLoading: setGlobalLoading } = useLoading();
   const hasFetchedRef = useRef<string | null>(null); // Track which playerId we've fetched
+  
+  // Track modified attributes for training simulation
+  const [modifiedAttributes, setModifiedAttributes] = useState<{
+    pace?: number;
+    shooting?: number;
+    passing?: number;
+    dribbling?: number;
+    defense?: number;
+    physical?: number;
+  }>({});
+  
+  // Reset modified attributes when player changes
+  useEffect(() => {
+    setModifiedAttributes({});
+  }, [player?.id]);
+  
+  // Create modified player object for position ratings
+  const modifiedPlayer = useMemo(() => {
+    if (!player) return null;
+    
+    if (Object.keys(modifiedAttributes).length === 0) {
+      return player;
+    }
+    
+    return {
+      ...player,
+      metadata: {
+        ...player.metadata,
+        pace: modifiedAttributes.pace ?? player.metadata.pace,
+        shooting: modifiedAttributes.shooting ?? player.metadata.shooting,
+        passing: modifiedAttributes.passing ?? player.metadata.passing,
+        dribbling: modifiedAttributes.dribbling ?? player.metadata.dribbling,
+        defense: modifiedAttributes.defense ?? player.metadata.defense,
+        physical: modifiedAttributes.physical ?? player.metadata.physical,
+      }
+    };
+  }, [player, modifiedAttributes]);
 
 
   const calculateMarketValueForPlayer = useCallback(async (player: MFLPlayer) => {
@@ -88,11 +125,12 @@ const PlayerResultsPage: React.FC<PlayerResultsPageProps> = ({ propPlayerId, ini
     }
 
     // Set a timeout to ensure we don't hang forever
+    // Increased to 95 seconds to match the Promise.race timeout (90s) with a small buffer
     const timeoutId = setTimeout(() => {
       console.warn('⚠️ Market value calculation timeout - forcing state to false');
       setIsCalculatingMarketValue(false);
       setLoadingStates(prev => ({ ...prev, marketValue: false, matches: false }));
-    }, 60000); // 60 second timeout
+    }, 95000); // 95 second timeout (matches Promise.race timeout with buffer)
 
     try {
       console.log('🔍 Checking market value for player:', player.id);
@@ -105,8 +143,9 @@ const PlayerResultsPage: React.FC<PlayerResultsPageProps> = ({ propPlayerId, ini
       );
 
       // Race the calculation against a timeout
+      // Increased to 90 seconds to allow for slow API calls and database queries
       const timeoutPromise = new Promise<MarketValueCalculationResult>((_, reject) => {
-        setTimeout(() => reject(new Error('Market value calculation timeout')), 45000); // 45 second timeout
+        setTimeout(() => reject(new Error('Market value calculation timeout')), 90000); // 90 second timeout
       });
 
       // Check if result comes back quickly (likely from cache) - only show "Calculating..." if it takes longer
@@ -136,7 +175,10 @@ const PlayerResultsPage: React.FC<PlayerResultsPageProps> = ({ propPlayerId, ini
           result = await Promise.race([calculationPromise, timeoutPromise]);
         } catch (timeoutError) {
           console.error('⏰ Market value calculation timed out:', timeoutError);
-          result = { success: false, error: 'Calculation timed out' };
+          result = { success: false, error: 'Calculation timed out. The calculation may still be running in the background.' };
+          // Ensure state is cleaned up on timeout
+          setIsCalculatingMarketValue(false);
+          setLoadingStates(prev => ({ ...prev, marketValue: false }));
         }
       } else {
         // Got an error result quickly
@@ -395,7 +437,10 @@ const PlayerResultsPage: React.FC<PlayerResultsPageProps> = ({ propPlayerId, ini
                   <PlayerImage player={player!} />
                   {/* Player Stats Grid */}
                   <div className="w-full mt-4">
-                    <PlayerStatsGrid player={player!} />
+                    <PlayerStatsGrid 
+                      player={player!} 
+                      onAttributesChange={setModifiedAttributes}
+                    />
                   </div>
                 </div>
               </div>
@@ -404,7 +449,7 @@ const PlayerResultsPage: React.FC<PlayerResultsPageProps> = ({ propPlayerId, ini
               <div className="w-full lg:w-[350px] lg:flex-shrink-0 order-2 lg:order-3">
                 <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-[5px] p-[5px]">Position Ratings</h2>
                 <div className="w-full p-[5px]">
-                  <PositionRatingsDisplay player={player} />
+                  <PositionRatingsDisplay player={modifiedPlayer || player} />
                 </div>
               </div>
 
@@ -429,10 +474,10 @@ const PlayerResultsPage: React.FC<PlayerResultsPageProps> = ({ propPlayerId, ini
             {player!.id && (
               <div className="w-full mb-6">
                 <div className="w-full p-[5px]">
-                  <div className="flex gap-2 max-w-lg mx-auto">
+                  <div className="flex gap-2 max-w-2xl mx-auto flex-wrap">
                     <button
                       onClick={() => window.open(`https://app.playmfl.com/players/${player!.id}`, '_blank')}
-                      className="flex-1 px-3 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg border border-gray-200 dark:border-gray-600 hover:bg-gray-200 dark:hover:bg-gray-600 hover:text-gray-900 dark:hover:text-white transition-all duration-200 font-medium text-sm flex items-center justify-center space-x-2 cursor-pointer"
+                      className="flex-1 min-w-[120px] px-3 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg border border-gray-200 dark:border-gray-600 hover:bg-gray-200 dark:hover:bg-gray-600 hover:text-gray-900 dark:hover:text-white transition-all duration-200 font-medium text-sm flex items-center justify-center space-x-2 cursor-pointer whitespace-nowrap"
                     >
                       <span>mfl.com</span>
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -441,7 +486,7 @@ const PlayerResultsPage: React.FC<PlayerResultsPageProps> = ({ propPlayerId, ini
                     </button>
                     <button
                       onClick={() => window.open(`https://mflplayer.info/player/${player!.id}`, '_blank')}
-                      className="flex-1 px-3 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg border border-gray-200 dark:border-gray-600 hover:bg-gray-200 dark:hover:bg-gray-600 hover:text-gray-900 dark:hover:text-white transition-all duration-200 font-medium text-sm flex items-center justify-center space-x-2 cursor-pointer"
+                      className="flex-1 min-w-[140px] px-3 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg border border-gray-200 dark:border-gray-600 hover:bg-gray-200 dark:hover:bg-gray-600 hover:text-gray-900 dark:hover:text-white transition-all duration-200 font-medium text-sm flex items-center justify-center space-x-2 cursor-pointer whitespace-nowrap"
                     >
                       <span>mflplayer.info</span>
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -450,9 +495,18 @@ const PlayerResultsPage: React.FC<PlayerResultsPageProps> = ({ propPlayerId, ini
                     </button>
                     <button
                       onClick={() => window.open(`https://mfl-assistant.com/search?q=${encodeURIComponent(`${player!.metadata.firstName} ${player!.metadata.lastName}`)}`, '_blank')}
-                      className="flex-1 px-3 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg border border-gray-200 dark:border-gray-600 hover:bg-gray-200 dark:hover:bg-gray-600 hover:text-gray-900 dark:hover:text-white transition-all duration-200 font-medium text-sm flex items-center justify-center space-x-2 cursor-pointer"
+                      className="flex-1 min-w-[160px] px-3 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg border border-gray-200 dark:border-gray-600 hover:bg-gray-200 dark:hover:bg-gray-600 hover:text-gray-900 dark:hover:text-white transition-all duration-200 font-medium text-sm flex items-center justify-center space-x-2 cursor-pointer whitespace-nowrap"
                     >
                       <span>mfl-assistant.com</span>
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                      </svg>
+                    </button>
+                    <button
+                      onClick={() => window.open(`https://mflstats.com/players?player=${player!.id}`, '_blank')}
+                      className="flex-1 min-w-[140px] px-3 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg border border-gray-200 dark:border-gray-600 hover:bg-gray-200 dark:hover:bg-gray-600 hover:text-gray-900 dark:hover:text-white transition-all duration-200 font-medium text-sm flex items-center justify-center space-x-2 cursor-pointer whitespace-nowrap"
+                    >
+                      <span>mflstats.com</span>
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
                       </svg>
