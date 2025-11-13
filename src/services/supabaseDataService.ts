@@ -178,9 +178,7 @@ class SupabaseDataService {
    */
   async getAgencyPlayers(walletAddress: string): Promise<MFLPlayer[]> {
     const cacheKey = `agency_players_${walletAddress}`
-    
-    // Clear cache to ensure fresh data
-    this.clearCache(cacheKey);
+    const AGENCY_PLAYERS_CACHE_TTL = 24 * 60 * 60 * 1000 // 24 hours
     
     return this.getCachedData(cacheKey, async () => {
       console.log(`🔍 Querying agency players for wallet: ${walletAddress}`)
@@ -223,7 +221,7 @@ class SupabaseDataService {
       console.log(`📊 Mapped players data:`, players.length, 'players')
       
       return players
-    })
+    }, AGENCY_PLAYERS_CACHE_TTL)
   }
 
   /**

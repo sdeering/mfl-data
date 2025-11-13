@@ -189,6 +189,8 @@ class HTTPClient {
       timeout = MFL_API_CONFIG.timeout,
       retries = MFL_API_CONFIG.retries,
     } = options;
+    
+    console.log(`📡 HTTP Request: ${method} ${endpoint} (timeout: ${timeout}ms)`)
 
     // Check rate limiting
     if (!this.rateLimiter.canMakeRequest(endpoint)) {
@@ -262,9 +264,16 @@ class HTTPClient {
     const timeoutId = setTimeout(() => controller.abort(), timeout);
 
     // Combine abort signals if both are provided
-    const combinedSignal = signal ? 
-      AbortSignal.any([controller.signal, signal]) : 
-      controller.signal;
+    // Fallback for environments that don't support AbortSignal.any()
+    let combinedSignal: AbortSignal;
+    if (signal) {
+      // Listen to both signals and abort controller if either fires
+      signal.addEventListener('abort', () => controller.abort(), { once: true });
+      controller.signal.addEventListener('abort', () => {}, { once: true }); // Ensure timeout still works
+      combinedSignal = controller.signal;
+    } else {
+      combinedSignal = controller.signal;
+    }
 
     try {
       // Build headers without forcing non-simple headers in the browser to avoid CORS preflight
@@ -303,7 +312,11 @@ class HTTPClient {
         (fetchInit as any).cache = 'no-store';
       }
 
+      console.log(`🚀 Initiating fetch request to: ${url}`)
+      const requestStartTime = Date.now()
       const response = await fetch(url, fetchInit);
+      const requestDuration = Date.now() - requestStartTime
+      console.log(`📥 Response received in ${requestDuration}ms (status: ${response.status})`)
 
       clearTimeout(timeoutId);
 
@@ -429,9 +442,82 @@ export class MFLAPIService {
       params.append('isRetired', isRetired.toString());
     }
 
-    return await this.httpClient.request<MFLOwnerPlayersResponse>(
-      `/players?${params.toString()}`
-    );
+    // Detect environment: use proxy in browser, direct API in Node/test
+    const hasDom = typeof window !== 'undefined' && typeof document !== 'undefined';
+    const isTest = typeof process !== 'undefined' && !!(process.env?.JEST_WORKER_ID || process.env?.NODE_ENV === 'test');
+    const isBrowserRuntime = hasDom && !isTest;
+
+    if (isBrowserRuntime) {
+      // Use proxy API route to avoid CORS issues in browser
+      const proxyUrl = `/api/players?${params.toString()}`
+      console.log(`🌐 Using proxy API route: ${proxyUrl}`)
+      
+      // Use a longer timeout for large player fetches (30 seconds)
+      const timeoutMs = limit > 500 ? 30000 : 10000
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), timeoutMs)
+      
+      try {
+        const startTime = Date.now()
+        const response = await fetch(proxyUrl, {
+          method: 'GET',
+          headers: {
+            'Accept': 'application/json',
+          },
+          signal: controller.signal
+        })
+        
+        clearTimeout(timeoutId)
+
+        const duration = Date.now() - startTime
+        console.log(`📥 Proxy response received in ${duration}ms`)
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}))
+          throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`)
+        }
+
+        const result = await response.json()
+        
+        if (!result.success) {
+          throw new Error(result.error || 'Failed to fetch players')
+        }
+
+        console.log(`✅ Received ${Array.isArray(result.data) ? result.data.length : 0} players from proxy`)
+        return (result.data || []) as MFLOwnerPlayersResponse
+      } catch (error) {
+        clearTimeout(timeoutId)
+        console.error(`❌ Proxy API Request failed for ${proxyUrl}:`, error)
+        if (error instanceof Error && (error.name === 'AbortError' || error.message.includes('timeout') || error.message.includes('aborted'))) {
+          console.error(`⏰ Request timed out after ${timeoutMs}ms - API may be slow or unreachable`)
+          throw new Error(`Request timeout after ${timeoutMs}ms`)
+        }
+        throw error
+      }
+    } else {
+      // Use direct MFL API in Node/test environments (no CORS restrictions)
+      const endpoint = `/players?${params.toString()}`
+      console.log(`🌐 Using direct MFL API (Node/test environment): ${endpoint}`)
+      
+      // Use a longer timeout for large player fetches (30 seconds)
+      const customTimeout = limit > 500 ? 30000 : MFL_API_CONFIG.timeout
+      console.log(`⏱️  Using extended timeout: ${customTimeout}ms (${customTimeout / 1000}s) for large fetch`)
+      
+      try {
+        const response = await this.httpClient.request<MFLOwnerPlayersResponse>(
+          endpoint,
+          { timeout: customTimeout }
+        )
+        console.log(`✅ MFL API Response received successfully`)
+        return response
+      } catch (error) {
+        console.error(`❌ MFL API Request failed for ${endpoint}:`, error)
+        if (error instanceof Error && error.message.includes('timeout')) {
+          console.error(`⏰ Request timed out after ${customTimeout}ms - API may be slow or unreachable`)
+        }
+        throw error
+      }
+    }
   }
 
   /**

@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "rm -rf .next && next dev --turbopack",
+    "dev:standard": "rm -rf .next && next dev",
     "dev:turbo": "rm -rf .next && next dev --turbopack",
     "build": "next build --turbopack",
     "start": "next start",

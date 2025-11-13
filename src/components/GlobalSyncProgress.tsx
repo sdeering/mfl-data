@@ -322,7 +322,7 @@ export const GlobalSyncProgress: React.FC<GlobalSyncProgressProps> = ({ isVisibl
                         <div className="flex-1">
                           <div className="flex items-center space-x-2">
                             <span className="text-sm font-medium text-gray-900 dark:text-white capitalize">
-                              {item.dataType.replace(/_/g, ' ')}
+                              {item.dataType.split(':')[0].replace(/_/g, ' ')}
                             </span>
                           </div>
                           <div className="text-xs text-gray-600 dark:text-gray-400">
@@ -361,7 +361,7 @@ export const GlobalSyncProgress: React.FC<GlobalSyncProgressProps> = ({ isVisibl
                       .filter(p => p.status === 'failed')
                       .map((item, index) => (
                         <li key={index} className="text-xs">
-                          • {item.dataType.replace(/_/g, ' ')}: {item.error}
+                          • {item.dataType.split(':')[0].replace(/_/g, ' ')}: {item.error}
                         </li>
                       ))}
                   </ul>

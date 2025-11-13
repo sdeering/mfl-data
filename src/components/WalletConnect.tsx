@@ -63,7 +63,7 @@ const WalletConnect: React.FC<WalletConnectProps> = ({
   const handleSync = async () => {
     console.log('🔄 WalletConnect handleSync called')
     try {
-      await startSync(false, true); // Force refresh = false, show display = true
+      await startSync(true, true); // Force refresh = true (clear all relationships and pull fresh), show display = true
       setShowDropdown(false);
     } catch (error) {
       console.error('Sync failed:', error);

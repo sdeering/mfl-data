@@ -279,8 +279,13 @@ class SupabaseSyncService {
 
   /**
    * Sync upcoming opposition data for tactics analysis (dedicated sync item)
+   * REMOVED: This sync has been removed to make sync faster
    */
   private async syncUpcomingOppositionData(walletAddress: string, options: SyncOptions = {}) {
+    // Method disabled - upcoming opposition sync removed
+    console.log('⚠️ syncUpcomingOppositionData called but is disabled - sync removed to improve performance')
+    return
+    /* DISABLED CODE - Removed to make sync faster
     const dataType = 'upcoming_opposition'
     
     try {
@@ -550,6 +555,7 @@ class SupabaseSyncService {
       this.updateProgress(dataType, SYNC_STATUS.FAILED, 0, 'Failed to sync upcoming opposition data', errorMessage)
       throw error
     }
+    */
   }
 
   /**
@@ -884,8 +890,13 @@ class SupabaseSyncService {
 
   /**
    * Sync matches data
+   * REMOVED: This sync has been removed to make sync faster
    */
   private async syncMatchesData(walletAddress: string, options: SyncOptions = {}) {
+    // Method disabled - matches data sync removed
+    console.log('⚠️ syncMatchesData called but is disabled - sync removed to improve performance')
+    return
+    /* DISABLED CODE - Removed to make sync faster
     const dataType = 'matches_data'
     
     try {
@@ -987,6 +998,7 @@ class SupabaseSyncService {
       this.updateProgress(dataType, SYNC_STATUS.FAILED, 0, 'Failed to sync matches data', errorMessage)
       throw error
     }
+    */
   }
 
   /**
@@ -1493,45 +1505,135 @@ class SupabaseSyncService {
       // If forceRefresh is requested, clear existing agency players for this wallet
       if (options.forceRefresh) {
         console.log('🧹 Force refresh enabled: clearing existing agency players for wallet', walletAddress)
+        
+        // First, check how many players exist before deletion
+        const { count: countBefore } = await supabase
+          .from(TABLES.AGENCY_PLAYERS)
+          .select('*', { count: 'exact', head: true })
+          .eq('wallet_address', walletAddress)
+        
+        console.log(`📊 Found ${countBefore || 0} existing agency players before deletion`)
+        
         const { error: clearError } = await supabase
           .from(TABLES.AGENCY_PLAYERS)
           .delete()
           .eq('wallet_address', walletAddress)
+        
         if (clearError) {
           console.warn('⚠️ Failed to clear existing agency players before sync:', clearError)
         } else {
-          console.log('✅ Cleared existing agency players for wallet before reimport')
+          console.log(`✅ Deleted all existing agency players for wallet (${countBefore || 0} players)`)
+        }
+        
+        // Verify deletion worked
+        const { count: countAfter } = await supabase
+          .from(TABLES.AGENCY_PLAYERS)
+          .select('*', { count: 'exact', head: true })
+          .eq('wallet_address', walletAddress)
+        
+        if (countAfter && countAfter > 0) {
+          console.warn(`⚠️ WARNING: ${countAfter} agency players still exist after deletion - deletion may have failed`)
+        } else {
+          console.log(`✅ Verification: All agency players deleted successfully (0 remaining)`)
         }
       }
       
-      // Check if we need to sync
-      const { data: existingData, error: checkError } = await supabase
-        .from(TABLES.AGENCY_PLAYERS)
-        .select('last_synced')
-        .eq('wallet_address', walletAddress)
-        .order('last_synced', { ascending: false })
-        .limit(1)
-        .maybeSingle()
+      // If forceRefresh is true, skip cache check and always sync
+      // This ensures we get the latest players including new signings
+      if (!options.forceRefresh) {
+        // Check if we need to sync (only when not forcing refresh)
+        const { data: existingData, error: checkError } = await supabase
+          .from(TABLES.AGENCY_PLAYERS)
+          .select('last_synced')
+          .eq('wallet_address', walletAddress)
+          .order('last_synced', { ascending: false })
+          .limit(1)
+          .maybeSingle()
 
-      // If there's an error and it's not "no rows found", log it but continue
-      if (checkError && checkError.code !== 'PGRST116') {
-        console.warn('Warning: Could not check agency players sync status:', checkError.message)
-      }
+        // If there's an error and it's not "no rows found", log it but continue
+        if (checkError && checkError.code !== 'PGRST116') {
+          console.warn('Warning: Could not check agency players sync status:', checkError.message)
+        }
 
-      if (!this.needsSync(dataType, existingData?.last_synced, options.forceRefresh)) {
-        console.log('✅ Agency players are up to date, skipping sync')
-        this.updateProgress(dataType, SYNC_STATUS.COMPLETED, 100, 'Agency players are up to date')
-        return
+        if (!this.needsSync(dataType, existingData?.last_synced, false)) {
+          console.log('✅ Agency players are up to date, skipping sync')
+          this.updateProgress(dataType, SYNC_STATUS.COMPLETED, 100, 'Agency players are up to date')
+          return
+        }
+        
+        console.log('🔄 Agency players need sync, last synced:', existingData?.last_synced)
+      } else {
+        console.log('🔄 Force refresh: syncing agency players regardless of cache status')
       }
-      
-      console.log('🔄 Agency players need sync, last synced:', existingData?.last_synced)
 
       // Fetch agency players from MFL API
-      this.updateProgress(dataType, SYNC_STATUS.IN_PROGRESS, 30, 'Fetching players from MFL API...')
+      this.updateProgress(dataType, SYNC_STATUS.IN_PROGRESS, 10, 'Preparing to fetch players from MFL API...')
       console.log(`🔄 Fetching agency players for wallet: ${walletAddress}`)
-      // Ensure no stale cache is used when syncing agency players
-      try { mflApi.clearCache() } catch {}
-      const ownerPlayersResponse = await mflApi.getOwnerPlayers(walletAddress, 1200)
+      
+      // Always clear MFL API cache to ensure fresh data (especially important for new signings)
+      this.updateProgress(dataType, SYNC_STATUS.IN_PROGRESS, 15, 'Clearing MFL API cache...')
+      console.log('🧹 Clearing MFL API cache to ensure fresh player data...')
+      try { 
+        mflApi.clearCache()
+        console.log('✅ MFL API cache cleared')
+      } catch (error) {
+        console.warn('⚠️ Failed to clear MFL API cache:', error)
+      }
+      
+      // Fetch fresh data from MFL API (cache already cleared above)
+      this.updateProgress(dataType, SYNC_STATUS.IN_PROGRESS, 20, 'Requesting player list from MFL API...')
+      console.log(`📡 Starting MFL API request for wallet: ${walletAddress}`)
+      console.log(`📡 API endpoint: /players?ownerWalletAddress=${walletAddress}&limit=1200`)
+      const startTime = Date.now()
+      
+      // Set up a progress update interval to show the request is still in progress
+      // Show different messages to indicate we're waiting for the API response
+      let progressMessageIndex = 0
+      const progressMessages = [
+        'Waiting for MFL API response...',
+        'MFL API is processing your request...',
+        'Still waiting for player data from MFL API...',
+        'MFL API may be slow, please wait...'
+      ]
+      
+      const progressInterval = setInterval(() => {
+        const elapsed = Math.floor((Date.now() - startTime) / 1000)
+        const message = progressMessages[progressMessageIndex % progressMessages.length]
+        this.updateProgress(dataType, SYNC_STATUS.IN_PROGRESS, 20, `${message} (${elapsed}s)`)
+        progressMessageIndex++
+      }, 3000) // Update every 3 seconds and rotate messages
+      
+      let ownerPlayersResponse
+      try {
+        ownerPlayersResponse = await mflApi.getOwnerPlayers(walletAddress, 1200)
+        clearInterval(progressInterval)
+        const elapsed = ((Date.now() - startTime) / 1000).toFixed(1)
+        console.log(`✅ MFL API request completed in ${elapsed}s`)
+        
+        // Show player count and sample names immediately
+        const playerCount = ownerPlayersResponse?.length || 0
+        if (playerCount > 0) {
+          const samplePlayers = ownerPlayersResponse.slice(0, 3).map(p => 
+            `${p.metadata.firstName} ${p.metadata.lastName}`
+          ).join(', ')
+          const moreText = playerCount > 3 ? ` and ${playerCount - 3} more` : ''
+          this.updateProgress(
+            dataType, 
+            SYNC_STATUS.IN_PROGRESS, 
+            25, 
+            `Received ${playerCount} players: ${samplePlayers}${moreText}`
+          )
+        } else {
+          this.updateProgress(dataType, SYNC_STATUS.IN_PROGRESS, 25, `Received response from MFL API (${elapsed}s) - No players found`)
+        }
+      } catch (error) {
+        clearInterval(progressInterval)
+        const elapsed = ((Date.now() - startTime) / 1000).toFixed(1)
+        console.error(`❌ MFL API request failed after ${elapsed}s:`, error)
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+        this.updateProgress(dataType, SYNC_STATUS.FAILED, 20, `Failed to fetch players: ${errorMessage}`, errorMessage)
+        throw error
+      }
       
       console.log(`📊 MFL API response:`, {
         hasPlayers: !!ownerPlayersResponse,
@@ -1539,8 +1641,12 @@ class SupabaseSyncService {
         firstPlayer: ownerPlayersResponse?.[0] ? {
           id: ownerPlayersResponse[0].id,
           name: ownerPlayersResponse[0].metadata.firstName + ' ' + ownerPlayersResponse[0].metadata.lastName
-        } : null
+        } : null,
+        playerIds: ownerPlayersResponse?.slice(0, 10).map(p => p.id) || []
       })
+      console.log(`📋 Full player list from MFL API (${ownerPlayersResponse?.length || 0} players):`, 
+        ownerPlayersResponse?.map(p => `${p.id}: ${p.metadata.firstName} ${p.metadata.lastName}`).join(', ') || 'none'
+      )
       
       if (!ownerPlayersResponse || ownerPlayersResponse.length === 0) {
         console.log('⚠️ No agency players found in MFL API response')
@@ -1548,10 +1654,10 @@ class SupabaseSyncService {
         return
       }
 
-      this.updateProgress(dataType, SYNC_STATUS.IN_PROGRESS, 60, `Processing ${ownerPlayersResponse.length} agency players...`)
+      this.updateProgress(dataType, SYNC_STATUS.IN_PROGRESS, 40, `Received ${ownerPlayersResponse.length} players from MFL API`)
 
       // FIRST: Populate the PLAYERS table with agency player data (required for foreign key)
-      this.updateProgress(dataType, SYNC_STATUS.IN_PROGRESS, 60, `Adding ${ownerPlayersResponse.length} players to players table...`)
+      this.updateProgress(dataType, SYNC_STATUS.IN_PROGRESS, 50, `Updating players table with ${ownerPlayersResponse.length} players...`)
 
       const playerData = ownerPlayersResponse.map(player => ({
         mfl_player_id: player.id,
@@ -1575,7 +1681,7 @@ class SupabaseSyncService {
       }
 
       // SECOND: Prepare agency player relationship data for database (no duplicate data storage)
-      this.updateProgress(dataType, SYNC_STATUS.IN_PROGRESS, 80, `Adding ${ownerPlayersResponse.length} agency player relationships...`)
+      this.updateProgress(dataType, SYNC_STATUS.IN_PROGRESS, 70, `Creating ${ownerPlayersResponse.length} agency player relationships...`)
       
       const agencyPlayerData = ownerPlayersResponse.map(player => ({
         wallet_address: walletAddress,
@@ -1598,6 +1704,51 @@ class SupabaseSyncService {
         throw error
       } else {
         console.log(`✅ Successfully upserted ${agencyPlayerData.length} agency players`)
+      }
+
+      // Final cleanup: Remove any orphaned players that aren't in the API response
+      // This ensures a complete refresh even if the initial delete didn't work perfectly
+      this.updateProgress(dataType, SYNC_STATUS.IN_PROGRESS, 85, 'Verifying player list and removing orphaned players...')
+      const apiPlayerIds = new Set(ownerPlayersResponse.map(p => p.id))
+      console.log(`🧹 Performing final cleanup: removing players not in API response...`)
+      
+      const { data: allAgencyPlayers, error: fetchError } = await supabase
+        .from(TABLES.AGENCY_PLAYERS)
+        .select('mfl_player_id')
+        .eq('wallet_address', walletAddress)
+
+      if (!fetchError && allAgencyPlayers) {
+        const orphanedPlayers = allAgencyPlayers
+          .filter(ap => !apiPlayerIds.has(ap.mfl_player_id))
+          .map(ap => ap.mfl_player_id)
+        
+        if (orphanedPlayers.length > 0) {
+          this.updateProgress(dataType, SYNC_STATUS.IN_PROGRESS, 90, `Removing ${orphanedPlayers.length} orphaned players...`)
+          console.log(`🗑️ Removing ${orphanedPlayers.length} orphaned players not in API response...`)
+          const { error: deleteError } = await supabase
+            .from(TABLES.AGENCY_PLAYERS)
+            .delete()
+            .eq('wallet_address', walletAddress)
+            .in('mfl_player_id', orphanedPlayers)
+          
+          if (deleteError) {
+            console.warn('⚠️ Failed to remove orphaned players:', deleteError)
+          } else {
+            console.log(`✅ Removed ${orphanedPlayers.length} orphaned players`)
+          }
+        } else {
+          this.updateProgress(dataType, SYNC_STATUS.IN_PROGRESS, 90, 'All players verified - no orphaned players found')
+          console.log('✅ No orphaned players found - all players match API response')
+        }
+      }
+
+      // Clear data service cache to ensure fresh data is shown immediately
+      console.log('🧹 Clearing data service cache for agency players...')
+      try {
+        supabaseDataService.clearCache(`agency_players_${walletAddress}`)
+        console.log('✅ Data service cache cleared for agency players')
+      } catch (cacheError) {
+        console.warn('⚠️ Failed to clear data service cache:', cacheError)
       }
 
       this.updateProgress(dataType, SYNC_STATUS.COMPLETED, 100, `Agency players synced successfully (${ownerPlayersResponse.length} players)`)
@@ -1652,7 +1803,20 @@ class SupabaseSyncService {
 
       // Fetch clubs for wallet
       this.updateProgress(dataType, SYNC_STATUS.IN_PROGRESS, 30, 'Fetching clubs from MFL API...')
-      const clubs = await clubsService.fetchClubsForWallet(walletAddress)
+      let clubs: any[]
+      try {
+        clubs = await clubsService.fetchClubsForWallet(walletAddress)
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+        console.error('❌ Failed to fetch clubs from MFL API:', errorMessage)
+        // Update progress to failed with clear error message
+        this.updateProgress(dataType, SYNC_STATUS.FAILED, 30, `Failed to fetch clubs: ${errorMessage}`, errorMessage)
+        // Don't throw - allow sync to continue with other data types
+        // Return empty array so we can continue
+        console.warn('⚠️ Continuing sync without club data due to fetch failure')
+        return
+      }
+      
       if (!clubs || clubs.length === 0) {
         this.updateProgress(dataType, SYNC_STATUS.COMPLETED, 100, 'No clubs found for user')
         return
@@ -1787,28 +1951,8 @@ class SupabaseSyncService {
       // This is more efficient than syncing all players at once
       console.log('ℹ️ Player data sync is handled on-demand, skipping in main sync sequence')
       
-      if (!this.syncCancelled && !this.abortController?.signal.aborted) {
-        console.log('🔄 Starting matches data sync')
-        await this.withRetry(
-          () => this.syncMatchesData(walletAddress, options),
-          'Matches data sync',
-          options.maxRetries,
-          options.retryDelay
-        )
-        console.log('✅ Matches data sync completed')
-      }
-      
-      if (!this.syncCancelled && !this.abortController?.signal.aborted) {
-        console.log('🔄 Starting upcoming opposition sync')
-        await this.withRetry(
-          () => this.syncUpcomingOppositionData(walletAddress, options),
-          'Upcoming opposition data sync',
-          options.maxRetries,
-          options.retryDelay
-        )
-        console.log('✅ Upcoming opposition sync completed')
-      }
-      
+      // Removed: matches data sync (removed to make sync faster)
+      // Removed: upcoming opposition sync (removed to make sync faster)
       // Removed: opponent matches sync from main sequence (handled on tactics page only)
 
       // Call completion callback only if not cancelled
@@ -1851,7 +1995,11 @@ class SupabaseSyncService {
    * Get current sync progress
    */
   getCurrentProgress(): SyncProgress[] {
-    return [...this.currentProgress]
+    // Filter out removed sync types
+    return this.currentProgress.filter(p => 
+      p.dataType !== 'upcoming_opposition' && 
+      p.dataType !== 'matches_data'
+    )
   }
 
   /**
@@ -1915,15 +2063,18 @@ class SupabaseSyncService {
 
       if (error) throw error
 
-      return data.map(row => ({
-        dataType: row.data_type,
-        status: row.status as SyncStatus,
-        progress: row.progress_percentage,
-        message: row.status === SYNC_STATUS.COMPLETED ? 'Completed' : 
-                row.status === SYNC_STATUS.FAILED ? `Failed: ${row.error_message}` :
-                row.status === SYNC_STATUS.IN_PROGRESS ? 'In progress...' : 'Pending',
-        error: row.error_message
-      }))
+      // Filter out removed sync types
+      return data
+        .filter(row => row.data_type !== 'upcoming_opposition' && row.data_type !== 'matches_data')
+        .map(row => ({
+          dataType: row.data_type,
+          status: row.status as SyncStatus,
+          progress: row.progress_percentage,
+          message: row.status === SYNC_STATUS.COMPLETED ? 'Completed' : 
+                  row.status === SYNC_STATUS.FAILED ? `Failed: ${row.error_message}` :
+                  row.status === SYNC_STATUS.IN_PROGRESS ? 'In progress...' : 'Pending',
+          error: row.error_message
+        }))
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error'
       console.warn('Warning: Could not fetch sync status:', errorMessage)

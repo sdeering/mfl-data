@@ -8,12 +8,14 @@ import { MFLPlayer } from '../types/mflApi';
 import { useSupabaseSync } from '../hooks/useSupabaseSync';
 import { GlobalSyncProgress } from './GlobalSyncProgress';
 import { OverallRatingTooltip } from './OverallRatingTooltip';
+import { supabaseSyncService, type SyncProgress } from '../services/supabaseSyncService';
 // Removed market value sync UI on agency page
 import * as XLSX from 'xlsx';
 
 const AgencyPage: React.FC = () => {
   const { isConnected, account } = useWallet();
   const { startSync, isSyncing, isVisible: isSyncVisible, closeProgress } = useSupabaseSync();
+  const [syncProgress, setSyncProgress] = useState<SyncProgress[]>([]);
   const [players, setPlayers] = useState<MFLPlayer[]>([]);
   const [filteredPlayers, setFilteredPlayers] = useState<MFLPlayer[]>([]);
   const [displayedPlayers, setDisplayedPlayers] = useState<MFLPlayer[]>([]);
@@ -401,30 +403,25 @@ const AgencyPage: React.FC = () => {
     prevIsSyncingRef.current = isSyncing;
   }, [isSyncing, account, hasAttemptedLoad]);
 
-  // Refresh market values periodically during sync (only if progress not yet at 100%)
+  // Update sync progress messages while syncing
   useEffect(() => {
-    if (!isSyncing || !account) return;
+    if (!isSyncing) {
+      setSyncProgress([]);
+      return;
+    }
 
-    const interval = setInterval(async () => {
-      try {
-        console.log('🔄 Refreshing market values during sync...');
-        const marketValuesData = await supabaseDataService.getAgencyPlayerMarketValues(account);
-        
-        if (marketValuesData && marketValuesData.length > 0) {
-          const marketValuesMap = new Map<number, number>();
-          marketValuesData.forEach((item: any) => {
-            marketValuesMap.set(item.player_id, item.market_value);
-          });
-          setMarketValues(marketValuesMap);
-          console.log(`💰 Updated market values for ${marketValuesData.length} players`);
-        }
-      } catch (error) {
-        console.warn('⚠️ Error refreshing market values during sync:', error);
+    // Poll for sync progress updates
+    const interval = setInterval(() => {
+      const currentProgress = supabaseSyncService.getCurrentProgress();
+      if (currentProgress.length > 0) {
+        setSyncProgress(currentProgress);
       }
-    }, 15000); // Refresh every 15 seconds during sync
+    }, 1000); // Update every second for more responsive feedback
 
     return () => clearInterval(interval);
-  }, [isSyncing, account]);
+  }, [isSyncing]);
+
+  // Removed: Market values refresh during sync (market values no longer displayed on agency page)
 
 
   // Filter and sort players based on search term and sort settings
@@ -565,9 +562,51 @@ const AgencyPage: React.FC = () => {
           <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
             Syncing Your Players
           </h3>
-          <p className="text-gray-600 dark:text-gray-400">
-            Syncing your MFL data...
-          </p>
+          
+          {/* Show detailed sync progress */}
+          {syncProgress.length > 0 ? (
+            <div className="mt-4 space-y-3 max-w-2xl mx-auto">
+              {syncProgress
+                .filter(p => p.status === 'in_progress' || p.status === 'pending')
+                .sort((a, b) => {
+                  const statusOrder = { 'in_progress': 0, 'pending': 1 }
+                  return (statusOrder[a.status as keyof typeof statusOrder] ?? 2) - 
+                         (statusOrder[b.status as keyof typeof statusOrder] ?? 2)
+                })
+                .map((item, index) => (
+                  <div key={`${item.dataType}-${index}`} className="text-left">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-sm font-medium text-gray-900 dark:text-white capitalize">
+                        {item.dataType.split(':')[0].replace(/_/g, ' ')}
+                      </span>
+                      <span className="text-xs text-gray-500 dark:text-gray-400">
+                        {item.progress}%
+                      </span>
+                    </div>
+                    <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 mb-1">
+                      <div 
+                        className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                        style={{ width: `${item.progress}%` }}
+                      />
+                    </div>
+                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                      {item.message || 'Processing...'}
+                    </p>
+                  </div>
+                ))}
+              
+              {syncProgress.filter(p => p.status === 'in_progress' || p.status === 'pending').length === 0 && (
+                <p className="text-gray-600 dark:text-gray-400">
+                  Preparing sync...
+                </p>
+              )}
+            </div>
+          ) : (
+            <p className="text-gray-600 dark:text-gray-400">
+              Initializing sync...
+            </p>
+          )}
+          
           <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
             <p className="text-sm text-blue-800 dark:text-white">
               💡 You can navigate to other pages while data syncs in the background

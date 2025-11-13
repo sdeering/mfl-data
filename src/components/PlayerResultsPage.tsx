@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { mflApi } from '../services/mflApi';
 import { getPlayerMarketValue } from '../services/marketValueService';
@@ -64,9 +64,12 @@ const PlayerResultsPage: React.FC<PlayerResultsPageProps> = ({ propPlayerId, ini
   const [isCalculatingMarketValue, setIsCalculatingMarketValue] = useState(false);
   const [progressionData, setProgressionData] = useState<any[] | null>(null);
   const [matchCount, setMatchCount] = useState<number | undefined>(undefined);
-  const [isLoading, setIsLoading] = useState(false);
+  // Start with loading=true if we have a propPlayerId but no initial data
+  // (searchParams will be checked in useEffect)
+  const [isLoading, setIsLoading] = useState(!!propPlayerId && !initialPlayer);
   const [error, setError] = useState<string | null>(initialError || null);
   const { setIsLoading: setGlobalLoading } = useLoading();
+  const hasFetchedRef = useRef<string | null>(null); // Track which playerId we've fetched
 
 
   const calculateMarketValueForPlayer = useCallback(async (player: MFLPlayer) => {
@@ -126,15 +129,37 @@ const PlayerResultsPage: React.FC<PlayerResultsPageProps> = ({ propPlayerId, ini
     setError(null);
     
     try {
+      console.log('🔍 Fetching player data for ID:', playerId);
+      
+      // Create an AbortController for timeout
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => {
+        controller.abort();
+      }, 30000); // 30 second timeout
+      
       // Fetch player data from our API route (server-side)
-      const response = await fetch(`/api/player/${playerId}`);
+      const response = await fetch(`/api/player/${playerId}`, {
+        signal: controller.signal
+      });
+      
+      clearTimeout(timeoutId);
+      
       const data = await response.json();
       
+      console.log('📥 API Response status:', response.status, 'success:', data.success);
+      
       if (!response.ok || !data.success) {
+        console.error('❌ API Error:', data.error);
         throw new Error(data.error || 'Failed to fetch player data');
       }
       
       const player = data.data;
+      console.log('✅ Player data received:', player?.id, player?.metadata?.name);
+      
+      if (!player) {
+        throw new Error('Player data is null or undefined');
+      }
+      
       setPlayer(player);
       
       // Add player to recent searches when successfully loaded
@@ -143,11 +168,16 @@ const PlayerResultsPage: React.FC<PlayerResultsPageProps> = ({ propPlayerId, ini
       // Calculate market value
       await calculateMarketValueForPlayer(player);
     } catch (err) {
+      console.error('❌ Error in fetchPlayerData:', err);
       let errorMessage = 'Failed to fetch player data';
       
       if (err instanceof Error) {
+        // Check if it's an AbortError (timeout)
+        if (err.name === 'AbortError') {
+          errorMessage = 'Request timed out. The server may be slow or the player ID may not exist. Please try again.';
+        } 
         // Check if it's an HTTP 400 error (likely a name search)
-        if (err.message.includes('HTTP 400')) {
+        else if (err.message.includes('HTTP 400')) {
           // Check if the search query looks like a name (contains letters) vs an ID (numbers only)
           const isLikelyName = /[a-zA-Z]/.test(playerId);
           if (isLikelyName) {
@@ -165,16 +195,22 @@ const PlayerResultsPage: React.FC<PlayerResultsPageProps> = ({ propPlayerId, ini
       setIsLoading(false);
       setGlobalLoading(false);
     }
-  }, [setGlobalLoading]);
+  }, [setGlobalLoading, calculateMarketValueForPlayer]);
 
-  // Initialize player data on component mount
+  // Initialize player data on component mount - only run once per playerId
   useEffect(() => {
     const currentPlayerId = propPlayerId || searchParams.get('playerId');
     
-    if (currentPlayerId) {
+    // Only fetch if we have a playerId and haven't fetched it yet
+    if (currentPlayerId && currentPlayerId !== hasFetchedRef.current) {
+      console.log('🎯 Initializing player page with ID:', currentPlayerId);
+      hasFetchedRef.current = currentPlayerId;
+      setIsLoading(true);
       fetchPlayerData(currentPlayerId);
     }
-  }, [propPlayerId, searchParams]);
+    // Only re-run if propPlayerId changes - we ignore searchParams to avoid infinite loops
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [propPlayerId]);
 
 
   // Loading state

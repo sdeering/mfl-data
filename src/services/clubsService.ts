@@ -45,22 +45,55 @@ class ClubsService {
     }
 
     try {
-      const response = await axios.get<MFLClubData[]>(
-        `https://z519wdyajg.execute-api.us-east-1.amazonaws.com/prod/clubs?walletAddress=${walletAddress}`
+      console.log(`🚀 Fetching clubs from MFL API for wallet: ${walletAddress}`);
+      
+      // Use server-side API route to avoid CORS issues
+      const baseUrl = typeof window !== 'undefined' 
+        ? '' // Frontend context - use relative URL
+        : process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'; // Backend context
+      
+      const apiUrl = `${baseUrl}/api/clubs?walletAddress=${walletAddress}`;
+      const startTime = Date.now();
+      
+      const response = await axios.get<{ success: boolean; data: MFLClubData[]; error?: string }>(
+        apiUrl,
+        {
+          timeout: 10000 // 10 second timeout
+        }
       );
 
-      try { await incrementUsage('mfl', '/clubs'); } catch {}
+      const elapsed = Date.now() - startTime;
+      
+      if (!response.data.success) {
+        throw new Error(response.data.error || 'Failed to fetch clubs from API');
+      }
 
-      const clubs = response.data;
+      console.log(`✅ API response received after ${elapsed}ms`);
+      const clubs = response.data.data || [];
       
       // Cache the result with timestamp
       this.cache.set(cacheKey, { data: clubs, timestamp: Date.now() });
-      console.log(`🚀 CACHE MISS: Fetched clubs data from API for ${cacheKey}`);
+      console.log(`✅ Successfully fetched ${clubs.length} clubs from API for ${cacheKey}`);
 
       return clubs;
     } catch (error) {
-      console.error('Error fetching clubs:', error);
-      throw new Error('Failed to fetch clubs data');
+      if (axios.isAxiosError(error)) {
+        if (error.code === 'ECONNABORTED') {
+          console.error('❌ Timeout fetching clubs from API route');
+          throw new Error('Request timeout - API is slow or unreachable');
+        } else if (error.response) {
+          const errorData = error.response.data as any;
+          const errorMessage = errorData?.error || `HTTP ${error.response.status}: ${error.response.statusText}`;
+          console.error('❌ Error response from API route:', error.response.status, errorMessage);
+          throw new Error(errorMessage);
+        } else if (error.request) {
+          console.error('❌ No response from API route (network error)');
+          throw new Error('Network error - unable to reach API');
+        }
+      }
+      console.error('❌ Error fetching clubs:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      throw new Error(`Failed to fetch clubs data: ${errorMessage}`);
     }
   }
 
