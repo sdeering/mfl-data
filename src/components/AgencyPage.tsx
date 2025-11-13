@@ -11,6 +11,7 @@ import { OverallRatingTooltip } from './OverallRatingTooltip';
 import { supabaseSyncService, type SyncProgress } from '../services/supabaseSyncService';
 // Removed market value sync UI on agency page
 import * as XLSX from 'xlsx';
+import { PlayerFilters, FilterState, applyFilters } from './PlayerFilters';
 
 const AgencyPage: React.FC = () => {
   const { isConnected, account } = useWallet();
@@ -34,6 +35,31 @@ const AgencyPage: React.FC = () => {
   const router = useRouter();
   const prevIsSyncingRef = useRef(false);
   const hasAutoSyncedRef = useRef(false);
+  const [showFilters, setShowFilters] = useState(false);
+  const [filters, setFilters] = useState<FilterState>({
+    filterPosition: 'all',
+    selectedCardTypes: [],
+    overallMin: 0,
+    overallMax: 100,
+    positionRatingMin: 0,
+    positionRatingMax: 100,
+    attrFilters: {
+      pace: 0,
+      shooting: 0,
+      passing: 0,
+      dribbling: 0,
+      defense: 0,
+      physical: 0,
+    },
+    attrFiltersMax: {
+      pace: 100,
+      shooting: 100,
+      passing: 100,
+      dribbling: 100,
+      defense: 100,
+      physical: 100,
+    },
+  });
 
   // Helper functions for formatting player data
   const formatPlayerName = (player: MFLPlayer): string => {
@@ -424,12 +450,16 @@ const AgencyPage: React.FC = () => {
   // Removed: Market values refresh during sync (market values no longer displayed on agency page)
 
 
-  // Filter and sort players based on search term and sort settings
+  // Filter and sort players based on search term, filters, and sort settings
   useEffect(() => {
     let filtered = players;
     
+    // Apply filters first
+    filtered = applyFilters(filtered, filters);
+    
+    // Apply search term filter
     if (searchTerm.trim()) {
-      filtered = players.filter(player => {
+      filtered = filtered.filter(player => {
         const fullName = formatPlayerName(player).toLowerCase();
         const positions = formatPositions(player).toLowerCase();
         const club = getClubName(player).toLowerCase();
@@ -453,9 +483,9 @@ const AgencyPage: React.FC = () => {
     const sortedFiltered = sortPlayers(filtered);
     setFilteredPlayers(sortedFiltered);
     
-    // Reset to first page when search term changes
+    // Reset to first page when search term or filters change
     setCurrentPage(1);
-  }, [searchTerm, players, sortField, sortDirection]);
+  }, [searchTerm, players, sortField, sortDirection, filters]);
 
   // Update displayed players based on current page
   useEffect(() => {
@@ -619,6 +649,7 @@ const AgencyPage: React.FC = () => {
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden">
               <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
                 <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+                  {/* Search Input - moved to left */}
                   <div className="relative flex-shrink-0">
                     <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                       <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -633,7 +664,80 @@ const AgencyPage: React.FC = () => {
                       className="block w-64 pl-10 pr-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md leading-5 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                     />
                   </div>
+                  
+                  {/* Filters Button and Reset Button Row */}
+                  <div className="flex items-center gap-4 flex-1 justify-end">
+                    {/* Filters Button */}
+                    <button
+                      className="text-left px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white hover:bg-gray-50 dark:hover:bg-gray-600 cursor-pointer whitespace-nowrap"
+                      onClick={() => setShowFilters(!showFilters)}
+                    >
+                      {showFilters ? 'Hide Filters' : 'Show Filters'}
+                    </button>
+                    
+                    {/* Reset Filters Button - on the right of filters button */}
+                    {(() => {
+                      const isFiltersActive = 
+                        filters.filterPosition !== 'all' ||
+                        filters.selectedCardTypes.length > 0 ||
+                        filters.overallMin > 0 ||
+                        filters.overallMax < 100 ||
+                        filters.positionRatingMin > 0 ||
+                        filters.positionRatingMax < 100 ||
+                        Object.values(filters.attrFilters).some(v => v > 0) ||
+                        Object.values(filters.attrFiltersMax).some(v => v < 100);
+                      
+                      if (!isFiltersActive) return null;
+                      
+                      return (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setFilters({
+                              filterPosition: 'all',
+                              selectedCardTypes: [],
+                              overallMin: 0,
+                              overallMax: 100,
+                              positionRatingMin: 0,
+                              positionRatingMax: 100,
+                              attrFilters: {
+                                pace: 0,
+                                shooting: 0,
+                                passing: 0,
+                                dribbling: 0,
+                                defense: 0,
+                                physical: 0,
+                              },
+                              attrFiltersMax: {
+                                pace: 100,
+                                shooting: 100,
+                                passing: 100,
+                                dribbling: 100,
+                                defense: 100,
+                                physical: 100,
+                              },
+                            });
+                          }}
+                          className="text-sm text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
+                          title="Reset filters"
+                        >
+                          Reset Filters
+                        </button>
+                      );
+                    })()}
+                  </div>
                 </div>
+                
+                {/* Filters Panel */}
+                {showFilters && (
+                  <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+                    <PlayerFilters
+                      filters={filters}
+                      onFiltersChange={setFilters}
+                      showSidebarFilters={true}
+                    />
+                  </div>
+                )}
               </div>
           {displayedPlayers.length === 0 && searchTerm ? (
             <div className="text-center py-8">
