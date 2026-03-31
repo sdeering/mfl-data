@@ -2,9 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { useWallet } from '../contexts/WalletContext';
-import { supabaseSyncService } from '../services/supabaseSyncService';
-import { supabaseDataService } from '../services/supabaseDataService';
-import { supabase } from '../lib/supabase';
+import { supabaseSyncService } from '../services/clientSyncService';
+import { supabaseDataService } from '../services/clientDataService';
 import Link from 'next/link';
 
 export default function SyncDebugTest() {
@@ -64,34 +63,27 @@ export default function SyncDebugTest() {
       const agencyPlayersAfter = await supabaseDataService.getAgencyPlayers(walletToTest);
       console.log('Agency players count after sync:', agencyPlayersAfter.length);
       
-      // 4. Check players table directly
-      const { data: playersData, error: playersError } = await supabase
-        .from('players')
-        .select('*')
-        .limit(5);
-      
-      console.log('Players table sample:', playersData);
-      if (playersError) console.error('Players table error:', playersError);
-      
-      // 5. Check agency players table directly
-      const { data: agencyPlayersData, error: agencyPlayersError } = await supabase
-        .from('agency_players')
-        .select('*')
-        .eq('wallet_address', walletToTest)
-        .limit(5);
-      
-      console.log('Agency players table sample:', agencyPlayersData);
-      if (agencyPlayersError) console.error('Agency players table error:', agencyPlayersError);
-      
+      // 4. Check database stats via API
+      let dbStats = null;
+      let dbStatsError = null;
+      try {
+        const statsRes = await fetch('/api/data/db-stats');
+        if (statsRes.ok) dbStats = await statsRes.json();
+        else dbStatsError = 'Failed to fetch db stats';
+      } catch (e: any) {
+        dbStatsError = e.message;
+      }
+
+      console.log('Database stats:', dbStats);
+      if (dbStatsError) console.error('Database stats error:', dbStatsError);
+
       setSyncStatus({ message: 'Sync completed successfully!', progress: 100 });
-      
+
       setResults({
         before: agencyPlayers.length,
         after: agencyPlayersAfter.length,
-        playersTableSample: playersData,
-        playersTableError: playersError,
-        agencyPlayersTableSample: agencyPlayersData,
-        agencyPlayersTableError: agencyPlayersError,
+        dbStats,
+        dbStatsError,
         success: true
       });
       

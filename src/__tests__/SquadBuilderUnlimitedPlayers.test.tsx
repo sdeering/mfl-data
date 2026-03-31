@@ -19,8 +19,11 @@ jest.mock('../../src/contexts/WalletContext', () => ({
 jest.mock('next/navigation', () => ({
   useRouter: () => ({ push: jest.fn(), replace: jest.fn(), prefetch: jest.fn() })
 }))
-jest.mock('../../src/services/supabaseDataService', () => ({
+jest.mock('../../src/services/dataService', () => ({
   supabaseDataService: {
+    getAgencyPlayers: jest.fn().mockResolvedValue([])
+  },
+  dataService: {
     getAgencyPlayers: jest.fn().mockResolvedValue([])
   }
 }))

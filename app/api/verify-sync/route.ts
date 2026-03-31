@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { supabase, TABLES } from '../../../src/lib/supabase'
+import { TABLES } from '../../../src/lib/database'
+import { selectAll, selectOne } from '../../../src/lib/db-helpers'
 
 const TEST_WALLET = '0x95dc70d7d39f6f76'
 
@@ -17,12 +18,10 @@ export async function GET(request: NextRequest) {
     
     // Check User Info
     try {
-      const { data: userInfo, error } = await supabase
-        .from(TABLES.USERS)
-        .select('*')
-        .eq('wallet_address', TEST_WALLET)
-        .single()
-      
+      const { data: userInfo, error } = await selectOne(TABLES.USERS, {
+        where: { wallet_address: TEST_WALLET }
+      })
+
       if (error && error.code !== 'PGRST116') {
         results.userInfo.error = error.message
       } else if (userInfo) {
@@ -35,11 +34,8 @@ export async function GET(request: NextRequest) {
     
     // Check Clubs
     try {
-      const { data: clubs, error } = await supabase
-        .from(TABLES.CLUBS)
-        .select('*')
-        .limit(10)
-      
+      const { data: clubs, error } = await selectAll(TABLES.CLUBS, { limit: 10 })
+
       if (error && error.code !== 'PGRST116') {
         results.clubs.error = error.message
       } else if (clubs) {
@@ -52,11 +48,10 @@ export async function GET(request: NextRequest) {
     
     // Check Agency Players
     try {
-      const { data: agencyPlayers, error } = await supabase
-        .from(TABLES.AGENCY_PLAYERS)
-        .select('*')
-        .eq('wallet_address', TEST_WALLET)
-      
+      const { data: agencyPlayers, error } = await selectAll(TABLES.AGENCY_PLAYERS, {
+        where: { wallet_address: TEST_WALLET }
+      })
+
       if (error && error.code !== 'PGRST116') {
         results.agencyPlayers.error = error.message
       } else if (agencyPlayers) {
@@ -69,11 +64,8 @@ export async function GET(request: NextRequest) {
     
     // Check Players Table
     try {
-      const { data: players, error } = await supabase
-        .from(TABLES.PLAYERS)
-        .select('*')
-        .limit(10)
-      
+      const { data: players, error } = await selectAll(TABLES.PLAYERS, { limit: 10 })
+
       if (error && error.code !== 'PGRST116') {
         results.players.error = error.message
       } else if (players) {
@@ -86,11 +78,10 @@ export async function GET(request: NextRequest) {
     
     // Check Market Values
     try {
-      const { data: marketValues, error } = await supabase
-        .from(TABLES.MARKET_VALUES)
-        .select('*')
-        .eq('wallet_address', TEST_WALLET)
-      
+      const { data: marketValues, error } = await selectAll(TABLES.MARKET_VALUES, {
+        where: { wallet_address: TEST_WALLET }
+      })
+
       if (error && error.code !== 'PGRST116') {
         results.marketValues.error = error.message
       } else if (marketValues) {

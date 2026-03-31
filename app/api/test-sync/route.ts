@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { supabaseSyncService } from '../../../src/services/supabaseSyncService'
+import { syncService } from '../../../src/services/syncService'
 
 const TEST_WALLET = '0x95dc70d7d39f6f76'
 
@@ -12,7 +12,7 @@ export async function POST(request: NextRequest) {
     let fullSyncResult = { success: false, error: null }
     
     try {
-      await supabaseSyncService.syncAllData(TEST_WALLET, { forceRefresh: true })
+      await syncService.syncAllData(TEST_WALLET, { forceRefresh: true })
       fullSyncResult = { success: true, error: null }
       console.log('✅ Full sync: PASSED')
     } catch (error) {

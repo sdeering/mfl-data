@@ -1,14 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
-
-function getSupabase() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY;
-  if (!url || !key) {
-    throw new Error('Supabase environment variables are not set');
-  }
-  return createClient(url, key, { auth: { persistSession: false } });
-}
+import { selectOne, selectMaybeOne, updateWhere, deleteWhere } from '../../../../src/lib/db-helpers';
 
 // GET /api/squads/[id] - Get a specific squad
 export async function GET(
@@ -16,12 +7,9 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   try {
-    const supabase = getSupabase();
-    const { data: squad, error } = await supabase
-      .from('squads')
-      .select('*')
-      .eq('id', params.id)
-      .single();
+    const { data: squad, error } = await selectOne('squads', {
+      where: { id: params.id }
+    });
 
     if (error) {
       console.error('Error fetching squad:', error);
@@ -47,7 +35,6 @@ export async function PUT(
   { params }: { params: { id: string } }
 ) {
   try {
-    const supabase = getSupabase();
     const body = await request.json();
     const { walletAddress, squadName, formationId, players } = body;
 
@@ -60,12 +47,9 @@ export async function PUT(
     }
 
     // Check if squad exists and belongs to the wallet
-    const { data: existingSquad, error: fetchError } = await supabase
-      .from('squads')
-      .select('*')
-      .eq('id', params.id)
-      .eq('wallet_address', walletAddress)
-      .single();
+    const { data: existingSquad, error: fetchError } = await selectOne('squads', {
+      where: { id: params.id, wallet_address: walletAddress }
+    });
 
     if (fetchError || !existingSquad) {
       return NextResponse.json(
@@ -75,13 +59,9 @@ export async function PUT(
     }
 
     // Check if new squad name conflicts with existing squads (excluding current one)
-    const { data: nameConflict } = await supabase
-      .from('squads')
-      .select('id')
-      .eq('wallet_address', walletAddress)
-      .eq('squad_name', squadName)
-      .neq('id', params.id)
-      .single();
+    const { data: nameConflict } = await selectMaybeOne('squads', {
+      where: { wallet_address: walletAddress, squad_name: squadName, id: { neq: params.id } }
+    });
 
     if (nameConflict) {
       return NextResponse.json(
@@ -91,16 +71,11 @@ export async function PUT(
     }
 
     // Update squad
-    const { data: squad, error } = await supabase
-      .from('squads')
-      .update({
-        squad_name: squadName,
-        formation_id: formationId,
-        players: players
-      })
-      .eq('id', params.id)
-      .select()
-      .single();
+    const { data: squad, error } = await updateWhere('squads', {
+      squad_name: squadName,
+      formation_id: formationId,
+      players: players
+    }, { id: params.id });
 
     if (error) {
       console.error('Error updating squad:', error);
@@ -126,7 +101,6 @@ export async function DELETE(
   { params }: { params: { id: string } }
 ) {
   try {
-    const supabase = getSupabase();
     const { searchParams } = new URL(request.url);
     const walletAddress = searchParams.get('walletAddress');
 
@@ -138,12 +112,9 @@ export async function DELETE(
     }
 
     // Check if squad exists and belongs to the wallet
-    const { data: existingSquad, error: fetchError } = await supabase
-      .from('squads')
-      .select('*')
-      .eq('id', params.id)
-      .eq('wallet_address', walletAddress)
-      .single();
+    const { data: existingSquad, error: fetchError } = await selectOne('squads', {
+      where: { id: params.id, wallet_address: walletAddress }
+    });
 
     if (fetchError || !existingSquad) {
       return NextResponse.json(
@@ -153,10 +124,7 @@ export async function DELETE(
     }
 
     // Delete squad
-    const { error } = await supabase
-      .from('squads')
-      .delete()
-      .eq('id', params.id);
+    const { error } = await deleteWhere('squads', { id: params.id });
 
     if (error) {
       console.error('Error deleting squad:', error);

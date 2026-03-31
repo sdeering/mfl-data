@@ -1,14 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
-
-function getSupabase() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY;
-  if (!url || !key) {
-    throw new Error('Supabase environment variables are not set');
-  }
-  return createClient(url, key, { auth: { persistSession: false } });
-}
+import { selectAll, selectMaybeOne, updateWhere, upsertOne } from '../../../src/lib/db-helpers';
 
 // GET /api/squads - Get all squads for a wallet
 export async function GET(request: NextRequest) {
@@ -23,12 +14,10 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const supabase = getSupabase();
-    const { data: squads, error } = await supabase
-      .from('squads')
-      .select('*')
-      .eq('wallet_address', walletAddress)
-      .order('updated_at', { ascending: false });
+    const { data: squads, error } = await selectAll('squads', {
+      where: { wallet_address: walletAddress },
+      orderBy: { column: 'updated_at', ascending: false }
+    });
 
     if (error) {
       console.error('Error fetching squads:', error);
@@ -51,7 +40,6 @@ export async function GET(request: NextRequest) {
 // POST /api/squads - Create a new squad
 export async function POST(request: NextRequest) {
   try {
-    const supabase = getSupabase();
     const body = await request.json();
     const { walletAddress, squadName, formationId, players } = body;
 
@@ -63,51 +51,16 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Check if squad name already exists for this wallet (overwrite on duplicate)
-    const { data: existingSquad } = await supabase
-      .from('squads')
-      .select('id')
-      .eq('wallet_address', walletAddress)
-      .eq('squad_name', squadName)
-      .maybeSingle();
-
-    if (existingSquad?.id) {
-      const { data: updated, error: updateError } = await supabase
-        .from('squads')
-        .update({
-          squad_name: squadName,
-          formation_id: formationId,
-          players: players
-        })
-        .eq('id', existingSquad.id)
-        .select()
-        .single();
-
-      if (updateError) {
-        console.error('Error overwriting existing squad:', updateError);
-        return NextResponse.json(
-          { error: 'Failed to overwrite existing squad' },
-          { status: 500 }
-        );
-      }
-
-      return NextResponse.json({ squad: updated }, { status: 200 });
-    }
-
-    // Create new squad
-    const { data: squad, error } = await supabase
-      .from('squads')
-      .insert({
-        wallet_address: walletAddress,
-        squad_name: squadName,
-        formation_id: formationId,
-        players: players
-      })
-      .select()
-      .single();
+    // Upsert: insert or overwrite on duplicate (wallet_address, squad_name)
+    const { data: squad, error } = await upsertOne('squads', {
+      wallet_address: walletAddress,
+      squad_name: squadName,
+      formation_id: formationId,
+      players: players
+    }, 'wallet_address, squad_name');
 
     if (error) {
-      console.error('Error creating squad:', error);
+      console.error('Error creating/updating squad:', error);
       return NextResponse.json(
         { error: 'Failed to create squad' },
         { status: 500 }

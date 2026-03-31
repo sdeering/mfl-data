@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import type { MFLPosition } from '../../src/types/positionOvr';
 import { calculateAllPositionOVRs as rbCalculateAllPositionOVRs, calculatePositionOVR as rbCalculatePositionOVR } from '../../src/utils/ruleBasedPositionCalculator';
 import { useWallet } from '../../src/contexts/WalletContext';
-import { supabaseDataService } from '../../src/services/supabaseDataService';
+import { supabaseDataService } from '../../src/services/clientDataService';
 import { MFLPlayer } from '../../src/types/mflApi';
 import { getSquads, saveSquad, updateSquad, deleteSquad, loadSquad, SavedSquad } from '../../src/services/squadService';
 import { useToast, ToastContainer } from '../../src/components/Toast';

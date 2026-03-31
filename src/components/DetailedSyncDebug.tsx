@@ -2,8 +2,7 @@
 
 import { useState } from 'react';
 import { useWallet } from '../contexts/WalletContext';
-import { supabase, TABLES } from '../lib/supabase';
-import { supabaseSyncService } from '../services/supabaseSyncService';
+import { supabaseSyncService } from '../services/clientSyncService';
 
 export default function DetailedSyncDebug() {
   const { isConnected, account } = useWallet();
@@ -19,36 +18,19 @@ export default function DetailedSyncDebug() {
 
   const checkTablesBeforeSync = async () => {
     addLog('=== CHECKING TABLES BEFORE SYNC ===');
-    
+
     try {
-      // Check agency players
-      const { data: agencyPlayers, error: agencyError } = await supabase
-        .from(TABLES.AGENCY_PLAYERS)
-        .select('*')
-        .eq('wallet_address', account)
-        .limit(5);
-      
-      addLog(`Agency players count: ${agencyPlayers?.length || 0}`);
-      if (agencyError) addLog(`Agency players error: ${agencyError.message}`);
-      
-      // Check players table
-      const { data: players, error: playersError } = await supabase
-        .from(TABLES.PLAYERS)
-        .select('*')
-        .limit(5);
-      
-      addLog(`Players table count: ${players?.length || 0}`);
-      if (playersError) addLog(`Players table error: ${playersError.message}`);
-      
-      // Check sync status
-      const { data: syncStatus, error: syncError } = await supabase
-        .from(TABLES.SYNC_STATUS)
-        .select('*')
-        .order('updated_at', { ascending: false });
-      
-      addLog(`Sync status entries: ${syncStatus?.length || 0}`);
-      if (syncError) addLog(`Sync status error: ${syncError.message}`);
-      
+      const res = await fetch(`/api/data/db-stats?walletAddress=${encodeURIComponent(account || '')}`);
+      if (!res.ok) {
+        addLog(`Error checking tables: HTTP ${res.status}`);
+        return;
+      }
+      const dbStats = await res.json();
+
+      addLog(`Agency players count: ${dbStats.tables?.agency_players?.count || 0}`);
+      addLog(`Players table count: ${dbStats.tables?.players?.count || 0}`);
+      addLog(`Sync status entries: ${dbStats.tables?.sync_status?.count || 0}`);
+
     } catch (error: any) {
       addLog(`Error checking tables: ${error.message}`);
     }
@@ -56,40 +38,19 @@ export default function DetailedSyncDebug() {
 
   const testDirectPlayerInsert = async () => {
     addLog('=== TESTING DIRECT PLAYER INSERT ===');
-    
+    addLog('Direct insert test is not available in client mode (server-only operation)');
+    addLog('Skipping direct insert test - use sync instead');
+
+    // Simulate the old behavior by just checking connectivity
     try {
-      const testPlayer = {
-        mfl_player_id: 999999,
-        data: {
-          id: 999999,
-          name: 'Test Player',
-          position: 'ST',
-          club: { id: 1, name: 'Test Club' }
-        },
-        last_synced: new Date().toISOString()
-      };
-
-      const { data, error } = await supabase
-        .from(TABLES.PLAYERS)
-        .upsert(testPlayer, {
-          onConflict: 'mfl_player_id'
-        });
-
-      if (error) {
-        addLog(`Direct insert error: ${error.message}`);
-        addLog(`Error details: ${JSON.stringify(error)}`);
+      const res = await fetch('/api/data/db-stats');
+      if (!res.ok) {
+        addLog(`Database connectivity error: HTTP ${res.status}`);
       } else {
-        addLog('Direct insert successful');
-        
-        // Clean up test data
-        await supabase
-          .from(TABLES.PLAYERS)
-          .delete()
-          .eq('mfl_player_id', 999999);
-        addLog('Test data cleaned up');
+        addLog('Database connection verified successfully');
       }
     } catch (error: any) {
-      addLog(`Direct insert exception: ${error.message}`);
+      addLog(`Database connectivity check exception: ${error.message}`);
     }
   };
 
@@ -139,34 +100,29 @@ export default function DetailedSyncDebug() {
 
   const checkTablesAfterSync = async () => {
     addLog('=== CHECKING TABLES AFTER SYNC ===');
-    
+
     try {
-      // Check agency players
-      const { data: agencyPlayers, error: agencyError } = await supabase
-        .from(TABLES.AGENCY_PLAYERS)
-        .select('*')
-        .eq('wallet_address', account);
-      
-      addLog(`Agency players count after sync: ${agencyPlayers?.length || 0}`);
-      if (agencyError) addLog(`Agency players error: ${agencyError.message}`);
-      
-      // Check players table
-      const { data: players, error: playersError } = await supabase
-        .from(TABLES.PLAYERS)
-        .select('*');
-      
-      addLog(`Players table count after sync: ${players?.length || 0}`);
-      if (playersError) addLog(`Players table error: ${playersError.message}`);
-      
+      const res = await fetch(`/api/data/db-stats?walletAddress=${encodeURIComponent(account || '')}`);
+      if (!res.ok) {
+        addLog(`Error checking tables after sync: HTTP ${res.status}`);
+        return;
+      }
+      const dbStats = await res.json();
+
+      addLog(`Agency players count after sync: ${dbStats.tables?.agency_players?.count || 0}`);
+      addLog(`Players table count after sync: ${dbStats.tables?.players?.count || 0}`);
+
       // Show sample data
-      if (agencyPlayers && agencyPlayers.length > 0) {
-        addLog(`Sample agency player: ${JSON.stringify(agencyPlayers[0], null, 2)}`);
+      const agencySample = dbStats.tables?.agency_players?.sample;
+      if (agencySample && agencySample.length > 0) {
+        addLog(`Sample agency player: ${JSON.stringify(agencySample[0], null, 2)}`);
       }
-      
-      if (players && players.length > 0) {
-        addLog(`Sample player: ${JSON.stringify(players[0], null, 2)}`);
+
+      const playersSample = dbStats.tables?.players?.sample;
+      if (playersSample && playersSample.length > 0) {
+        addLog(`Sample player: ${JSON.stringify(playersSample[0], null, 2)}`);
       }
-      
+
     } catch (error: any) {
       addLog(`Error checking tables after sync: ${error.message}`);
     } finally {

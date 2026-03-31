@@ -61,6 +61,11 @@ dev-debug.log
 *.sw?
 # OS specific
 
+# SQLite (local dev)
+*.db
+*.db-wal
+*.db-shm
+
 # Cache
 .cache/
 

@@ -7,7 +7,7 @@ jest.mock('../services/playerExperienceService');
 jest.mock('../services/playerMatchesService');
 jest.mock('../services/marketDataService');
 jest.mock('../utils/ruleBasedPositionCalculator');
-jest.mock('../lib/supabase');
+jest.mock('../lib/db-helpers');
 
 describe('Market Value Consistency Tests', () => {
   beforeEach(() => {
@@ -59,10 +59,9 @@ describe('Market Value Consistency Tests', () => {
       }
     });
 
-    const { supabase } = require('../lib/supabase');
-    supabase.from.mockReturnValue({
-      upsert: jest.fn().mockResolvedValue({ error: null })
-    });
+    const { upsertOne, selectMaybeOne } = require('../lib/db-helpers');
+    upsertOne.mockResolvedValue({ data: null, error: null });
+    selectMaybeOne.mockResolvedValue({ data: null, error: null });
 
     // Calculate market value multiple times
     const result1 = await calculatePlayerMarketValue('116267', '0x123');
@@ -132,10 +131,9 @@ describe('Market Value Consistency Tests', () => {
       }
     });
 
-    const { supabase } = require('../lib/supabase');
-    supabase.from.mockReturnValue({
-      upsert: jest.fn().mockResolvedValue({ error: null })
-    });
+    const { upsertOne, selectMaybeOne } = require('../lib/db-helpers');
+    upsertOne.mockResolvedValue({ data: null, error: null });
+    selectMaybeOne.mockResolvedValue({ data: null, error: null });
 
     const result = await calculatePlayerMarketValue('116267', '0x123');
 
@@ -187,10 +185,9 @@ describe('Market Value Consistency Tests', () => {
       }
     });
 
-    const { supabase } = require('../lib/supabase');
-    supabase.from.mockReturnValue({
-      upsert: jest.fn().mockResolvedValue({ error: null })
-    });
+    const { upsertOne, selectMaybeOne } = require('../lib/db-helpers');
+    upsertOne.mockResolvedValue({ data: null, error: null });
+    selectMaybeOne.mockResolvedValue({ data: null, error: null });
 
     const result = await calculatePlayerMarketValue('116267', '0x123');
 
@@ -243,10 +240,9 @@ describe('Market Value Consistency Tests', () => {
       }
     });
 
-    const { supabase } = require('../lib/supabase');
-    supabase.from.mockReturnValue({
-      upsert: jest.fn().mockResolvedValue({ error: null })
-    });
+    const { upsertOne, selectMaybeOne } = require('../lib/db-helpers');
+    upsertOne.mockResolvedValue({ data: null, error: null });
+    selectMaybeOne.mockResolvedValue({ data: null, error: null });
 
     const result = await calculatePlayerMarketValue('116267', '0x123');
 
@@ -299,10 +295,9 @@ describe('Market Value Consistency Tests', () => {
       }
     });
 
-    const { supabase } = require('../lib/supabase');
-    supabase.from.mockReturnValue({
-      upsert: jest.fn().mockResolvedValue({ error: null })
-    });
+    const { upsertOne, selectMaybeOne } = require('../lib/db-helpers');
+    upsertOne.mockResolvedValue({ data: null, error: null });
+    selectMaybeOne.mockResolvedValue({ data: null, error: null });
 
     // Calculate for different wallet addresses
     const result1 = await calculatePlayerMarketValue('116267', '0x123');

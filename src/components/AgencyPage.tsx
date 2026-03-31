@@ -3,12 +3,12 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useWallet } from '../contexts/WalletContext';
 import { useRouter } from 'next/navigation';
-import { supabaseDataService } from '../services/supabaseDataService';
+import { supabaseDataService } from '../services/clientDataService';
 import { MFLPlayer } from '../types/mflApi';
 import { useSupabaseSync } from '../hooks/useSupabaseSync';
 import { GlobalSyncProgress } from './GlobalSyncProgress';
 import { OverallRatingTooltip } from './OverallRatingTooltip';
-import { supabaseSyncService, type SyncProgress } from '../services/supabaseSyncService';
+import { supabaseSyncService, type SyncProgress } from '../services/clientSyncService';
 // Removed market value sync UI on agency page
 import * as XLSX from 'xlsx';
 import { PlayerFilters, FilterState, applyFilters } from './PlayerFilters';

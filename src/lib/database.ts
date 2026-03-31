@@ -1,21 +1,20 @@
-import { createClient, type SupabaseClient } from '@supabase/supabase-js'
+import { createClient, type Client } from '@libsql/client'
 
-const supabaseUrl = 'https://zafwdjrvzqpqqlcowluf.supabase.co'
-const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InphZndkanJ2enFwcXFsY293bHVmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTc4MjQ0ODcsImV4cCI6MjA3MzQwMDQ4N30.7D5sFwc5qinRY5RaNfSLnGpaF_LqwQqLNoWYrgQPBIg'
+// Turso/libSQL client singleton
+let _db: Client | undefined
 
-declare global {
-  // eslint-disable-next-line no-var
-  var __mfldata_supabase__: SupabaseClient | undefined
+export function getDb(): Client {
+  if (!_db) {
+    const url = process.env.TURSO_DATABASE_URL
+    const authToken = process.env.TURSO_AUTH_TOKEN
+    if (!url) throw new Error('TURSO_DATABASE_URL environment variable is required')
+    _db = createClient({ url, authToken: authToken || undefined })
+  }
+  return _db
 }
 
-export const supabase: SupabaseClient =
-  globalThis.__mfldata_supabase__ ||
-  (globalThis.__mfldata_supabase__ = createClient(supabaseUrl, supabaseAnonKey, {
-    auth: {
-      persistSession: false,
-      storageKey: 'mfldata-supabase'
-    }
-  }))
+// Re-export the singleton for convenience
+export { type Client } from '@libsql/client'
 
 // Database table names
 export const TABLES = {

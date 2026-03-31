@@ -1,12 +1,12 @@
-import { supabase, TABLES } from '../lib/supabase';
+import { TABLES } from '../lib/database';
+import { selectAll, selectOne, insertOne, deleteWhere } from '../lib/db-helpers';
 
-describe('Supabase Integration Tests', () => {
-  it('should connect to Supabase successfully', async () => {
+describe('Database Integration Tests', () => {
+  it('should connect to database successfully', async () => {
     // Test basic connection by querying a simple table
-    const { data, error } = await supabase
-      .from(TABLES.SYNC_STATUS)
-      .select('*')
-      .limit(1);
+    const { data, error } = await selectAll(TABLES.SYNC_STATUS, {
+      limit: 1,
+    });
 
     // Should not have an error (even if table is empty)
     expect(error).toBeNull();
@@ -16,7 +16,7 @@ describe('Supabase Integration Tests', () => {
   it('should have all required tables defined', () => {
     const requiredTables = [
       'USERS',
-      'PLAYERS', 
+      'PLAYERS',
       'AGENCY_PLAYERS',
       'CLUBS',
       'MATCHES',
@@ -49,29 +49,22 @@ describe('Supabase Integration Tests', () => {
     };
 
     // Insert test data
-    const { error: insertError } = await supabase
-      .from(TABLES.SYNC_STATUS)
-      .insert(testData);
+    const { error: insertError } = await insertOne(TABLES.SYNC_STATUS, testData);
 
     expect(insertError).toBeNull();
 
     // Query the data back
-    const { data, error: selectError } = await supabase
-      .from(TABLES.SYNC_STATUS)
-      .select('*')
-      .eq('data_type', 'test_sync')
-      .single();
+    const { data, error: selectError } = await selectOne(TABLES.SYNC_STATUS, {
+      where: { data_type: 'test_sync' },
+    });
 
     expect(selectError).toBeNull();
     expect(data).toBeDefined();
-    expect(data.data_type).toBe('test_sync');
-    expect(data.status).toBe('completed');
+    expect(data!.data_type).toBe('test_sync');
+    expect(data!.status).toBe('completed');
 
     // Clean up test data
-    await supabase
-      .from(TABLES.SYNC_STATUS)
-      .delete()
-      .eq('data_type', 'test_sync');
+    await deleteWhere(TABLES.SYNC_STATUS, { data_type: 'test_sync' });
   });
 });
 

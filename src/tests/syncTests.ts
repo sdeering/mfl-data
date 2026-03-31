@@ -3,8 +3,9 @@
  * Tests the sync functionality using real wallet data from 0x95dc70d7d39f6f76
  */
 
-import { supabase, TABLES } from '../lib/supabase'
-import { supabaseSyncService } from '../services/supabaseSyncService'
+import { TABLES } from '../lib/database'
+import { selectAll, selectOne, deleteWhere } from '../lib/db-helpers'
+import { syncService as supabaseSyncService } from '../services/syncService'
 
 const TEST_WALLET = '0x95dc70d7d39f6f76'
 const SYNC_SERVICE = supabaseSyncService
@@ -41,17 +42,11 @@ class SyncTestRunner {
     console.log('🧹 Cleaning up test data...')
     try {
       // Clear market values for test wallet
-      await supabase
-        .from(TABLES.MARKET_VALUES)
-        .delete()
-        .eq('wallet_address', TEST_WALLET)
-      
+      await deleteWhere(TABLES.MARKET_VALUES, { wallet_address: TEST_WALLET })
+
       // Clear agency players for test wallet
-      await supabase
-        .from(TABLES.AGENCY_PLAYERS)
-        .delete()
-        .eq('wallet_address', TEST_WALLET)
-      
+      await deleteWhere(TABLES.AGENCY_PLAYERS, { wallet_address: TEST_WALLET })
+
       console.log('✅ Test data cleanup completed')
     } catch (error) {
       console.warn('⚠️ Test data cleanup failed:', error)
@@ -66,11 +61,9 @@ class SyncTestRunner {
       
       if (result.success) {
         // Verify user info was stored
-        const { data: userInfo, error } = await supabase
-          .from(TABLES.USER_INFO)
-          .select('*')
-          .eq('wallet_address', TEST_WALLET)
-          .single()
+        const { data: userInfo, error } = await selectOne(TABLES.USERS, {
+          where: { wallet_address: TEST_WALLET }
+        })
         
         if (error) {
           this.addResult('User Info Sync - Database Check', false, error.message)
@@ -95,10 +88,9 @@ class SyncTestRunner {
       
       if (result.success) {
         // Verify clubs were stored
-        const { data: clubs, error } = await supabase
-          .from(TABLES.CLUBS)
-          .select('*')
-          .eq('wallet_address', TEST_WALLET)
+        const { data: clubs, error } = await selectAll(TABLES.CLUBS, {
+          where: { wallet_address: TEST_WALLET }
+        })
         
         if (error) {
           this.addResult('Club Data Sync - Database Check', false, error.message)
@@ -123,10 +115,9 @@ class SyncTestRunner {
       
       if (result.success) {
         // Verify agency players were stored
-        const { data: agencyPlayers, error } = await supabase
-          .from(TABLES.AGENCY_PLAYERS)
-          .select('*')
-          .eq('wallet_address', TEST_WALLET)
+        const { data: agencyPlayers, error } = await selectAll(TABLES.AGENCY_PLAYERS, {
+          where: { wallet_address: TEST_WALLET }
+        })
         
         if (error) {
           this.addResult('Agency Players Sync - Database Check', false, error.message)
@@ -134,10 +125,9 @@ class SyncTestRunner {
           this.addResult('Agency Players Sync', true, `Synced ${agencyPlayers.length} agency players successfully`, agencyPlayers.slice(0, 3))
           
           // Verify players table was populated
-          const { data: players, error: playersError } = await supabase
-            .from(TABLES.PLAYERS)
-            .select('*')
-            .limit(5)
+          const { data: players, error: playersError } = await selectAll(TABLES.PLAYERS, {
+            limit: 5
+          })
           
           if (playersError) {
             this.addResult('Agency Players Sync - Players Table Check', false, playersError.message)
@@ -165,11 +155,10 @@ class SyncTestRunner {
       
       if (result.success) {
         // Verify market values were stored
-        const { data: marketValues, error } = await supabase
-          .from(TABLES.MARKET_VALUES)
-          .select('*')
-          .eq('wallet_address', TEST_WALLET)
-          .order('market_value', { ascending: false })
+        const { data: marketValues, error } = await selectAll(TABLES.MARKET_VALUES, {
+          where: { wallet_address: TEST_WALLET },
+          orderBy: { column: 'market_value', ascending: false }
+        })
         
         if (error) {
           this.addResult('Market Values Sync - Database Check', false, error.message)
@@ -204,26 +193,21 @@ class SyncTestRunner {
         this.addResult('Full Sync Flow', true, 'Complete sync flow executed successfully')
         
         // Verify all data is present
-        const { data: userInfo } = await supabase
-          .from(TABLES.USER_INFO)
-          .select('*')
-          .eq('wallet_address', TEST_WALLET)
-          .single()
-        
-        const { data: clubs } = await supabase
-          .from(TABLES.CLUBS)
-          .select('*')
-          .eq('wallet_address', TEST_WALLET)
-        
-        const { data: agencyPlayers } = await supabase
-          .from(TABLES.AGENCY_PLAYERS)
-          .select('*')
-          .eq('wallet_address', TEST_WALLET)
-        
-        const { data: marketValues } = await supabase
-          .from(TABLES.MARKET_VALUES)
-          .select('*')
-          .eq('wallet_address', TEST_WALLET)
+        const { data: userInfo } = await selectOne(TABLES.USERS, {
+          where: { wallet_address: TEST_WALLET }
+        })
+
+        const { data: clubs } = await selectAll(TABLES.CLUBS, {
+          where: { wallet_address: TEST_WALLET }
+        })
+
+        const { data: agencyPlayers } = await selectAll(TABLES.AGENCY_PLAYERS, {
+          where: { wallet_address: TEST_WALLET }
+        })
+
+        const { data: marketValues } = await selectAll(TABLES.MARKET_VALUES, {
+          where: { wallet_address: TEST_WALLET }
+        })
         
         const allDataPresent = userInfo && clubs && clubs.length > 0 && agencyPlayers && agencyPlayers.length > 0 && marketValues && marketValues.length > 0
         

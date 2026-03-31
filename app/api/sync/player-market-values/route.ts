@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js'
+import { upsertOne } from '../../../../src/lib/db-helpers';
+import { TABLES } from '../../../../src/lib/database';
 import { getPlayerMarketValue } from '@/src/services/marketValueService';
 
 // In-memory job queue (in production, use Redis with Bull/BullMQ)
@@ -227,24 +228,14 @@ async function processMarketValueSync(
 
     // Write wallet-scoped SYNC_STATUS gate so front-end will not resync for 7 days
     try {
-      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-      const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-      if (supabaseUrl && supabaseAnonKey) {
-        const supabase = createClient(supabaseUrl, supabaseAnonKey, { auth: { persistSession: false } })
-        const dataType = `agency_player_market_values:${walletAddress}`
-        await supabase
-          .from('sync_status')
-          .upsert({
-            data_type: dataType,
-            status: 'completed',
-            progress_percentage: 100,
-            last_synced: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-            error_message: null
-          }, { onConflict: 'data_type' })
-      } else {
-        console.warn('Skipping SYNC_STATUS write: Supabase env vars not set')
-      }
+      const dataType = `agency_player_market_values:${walletAddress}`
+      await upsertOne(TABLES.SYNC_STATUS, {
+        data_type: dataType,
+        status: 'completed',
+        progress_percentage: 100,
+        last_synced: new Date().toISOString(),
+        error_message: null
+      }, 'data_type')
     } catch (e) {
       console.warn('Warning: could not update SYNC_STATUS for market values gate:', e)
     }

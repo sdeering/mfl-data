@@ -728,7 +728,7 @@ class MatchesService {
     try {
       console.log(`🔍 DB: Fetching ${matchType} matches from database for wallet: ${walletAddress}`);
       
-      const { supabaseDataService } = await import('./supabaseDataService');
+      const { supabaseDataService } = await import('./dataService');
       const dbService = supabaseDataService;
       
       const matchesData = await dbService.getMatchesData(walletAddress, matchType === 'all' ? undefined : matchType);
@@ -750,7 +750,7 @@ class MatchesService {
     try {
       console.log(`🔍 DB: Fetching previous matches from database for wallet: ${walletAddress}`);
       
-      const { supabaseDataService } = await import('./supabaseDataService');
+      const { supabaseDataService } = await import('./dataService');
       const dbService = supabaseDataService;
       
       const matches = await dbService.getPreviousMatches(walletAddress);
@@ -772,7 +772,7 @@ class MatchesService {
     try {
       console.log(`🔍 DB: Fetching upcoming matches from database for wallet: ${walletAddress}`);
       
-      const { supabaseDataService } = await import('./supabaseDataService');
+      const { supabaseDataService } = await import('./dataService');
       const dbService = supabaseDataService;
       
       const matches = await dbService.getUpcomingMatches(walletAddress);

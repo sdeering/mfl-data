@@ -37,27 +37,24 @@ jest.mock('../services/playerMatchesService', () => ({
   fetchPlayerMatches: jest.fn(() => Promise.resolve({ success: true, data: [] }))
 }));
 
-jest.mock('../services/supabaseDataService', () => ({
+jest.mock('../services/dataService', () => ({
   supabaseDataService: {
+    storePlayerMarketData: jest.fn(() => Promise.resolve())
+  },
+  dataService: {
     storePlayerMarketData: jest.fn(() => Promise.resolve())
   }
 }));
 
-jest.mock('../lib/supabase', () => ({
-  supabase: {
-    from: jest.fn(() => ({
-      select: jest.fn(() => ({
-        eq: jest.fn(() => ({
-          eq: jest.fn(() => ({
-            single: jest.fn(() => Promise.resolve({ data: null, error: null }))
-          }))
-        }))
-      }))
-    }))
-  },
-  TABLES: {
-    MARKET_VALUES: 'market_values'
-  }
+jest.mock('../lib/db-helpers', () => ({
+  selectAll: jest.fn(() => Promise.resolve({ data: [], error: null })),
+  selectOne: jest.fn(() => Promise.resolve({ data: null, error: null })),
+  selectMaybeOne: jest.fn(() => Promise.resolve({ data: null, error: null })),
+  upsertOne: jest.fn(() => Promise.resolve({ data: null, error: null })),
+  upsertMany: jest.fn(() => Promise.resolve({ data: null, error: null })),
+  insertOne: jest.fn(() => Promise.resolve({ data: null, error: null })),
+  deleteWhere: jest.fn(() => Promise.resolve({ data: null, error: null })),
+  executeRaw: jest.fn(() => Promise.resolve({ data: null, error: null })),
 }));
 
 // Mock Next.js router
@@ -320,23 +317,15 @@ describe('Market Value Consistency Tests', () => {
     });
 
     it('should not show cached values that cause inconsistency', async () => {
-      // Mock supabase to return a cached value
-      const { supabase } = require('../lib/supabase');
-      supabase.from.mockReturnValue({
-        select: jest.fn().mockReturnValue({
-          eq: jest.fn().mockReturnValue({
-            eq: jest.fn().mockReturnValue({
-              single: jest.fn().mockResolvedValue({
-                data: {
-                  market_value: 457,
-                  position_ratings: {},
-                  last_calculated: new Date().toISOString()
-                },
-                error: null
-              })
-            })
-          })
-        })
+      // Mock db-helpers to return a cached value
+      const { selectMaybeOne } = require('../lib/db-helpers');
+      selectMaybeOne.mockResolvedValue({
+        data: {
+          market_value: 457,
+          position_ratings: {},
+          last_calculated: new Date().toISOString()
+        },
+        error: null
       });
 
       render(

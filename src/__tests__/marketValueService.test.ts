@@ -1,5 +1,5 @@
 import { calculatePlayerMarketValue, getCachedMarketValue, getPlayerMarketValue, clearMarketValueCache } from '../services/marketValueService';
-import { supabase, TABLES } from '../lib/supabase';
+import * as dbHelpers from '../lib/db-helpers';
 
 // Mock the dependencies
 jest.mock('../services/mflApi');
@@ -8,9 +8,9 @@ jest.mock('../services/playerExperienceService');
 jest.mock('../services/playerMatchesService');
 jest.mock('../services/marketDataService');
 jest.mock('../utils/ruleBasedPositionCalculator');
-jest.mock('../lib/supabase');
+jest.mock('../lib/db-helpers');
 
-const mockSupabase = supabase as jest.Mocked<typeof supabase>;
+const mockDbHelpers = dbHelpers as jest.Mocked<typeof dbHelpers>;
 
 describe('MarketValueService', () => {
   beforeEach(() => {
@@ -64,10 +64,9 @@ describe('MarketValueService', () => {
         }
       });
 
-      // Mock Supabase upsert
-      mockSupabase.from.mockReturnValue({
-        upsert: jest.fn().mockResolvedValue({ error: null })
-      } as any);
+      // Mock db-helpers upsert
+      mockDbHelpers.upsertOne.mockResolvedValue({ data: null, error: null });
+      mockDbHelpers.selectMaybeOne.mockResolvedValue({ data: null, error: null });
 
       const result = await calculatePlayerMarketValue('116267', '0x123');
 
@@ -108,13 +107,10 @@ describe('MarketValueService', () => {
         calculated_at: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString() // 1 day ago
       };
 
-      mockSupabase.from.mockReturnValue({
-        select: jest.fn().mockReturnValue({
-          eq: jest.fn().mockReturnValue({
-            maybeSingle: jest.fn().mockResolvedValue({ data: { data: mockData }, error: null })
-          })
-        })
-      } as any);
+      mockDbHelpers.selectMaybeOne.mockResolvedValue({
+        data: { data: mockData },
+        error: null
+      });
 
       const result = await getCachedMarketValue('116267', '0x123', 168); // 7 days
 
@@ -133,13 +129,10 @@ describe('MarketValueService', () => {
         calculated_at: new Date(Date.now() - 8 * 24 * 60 * 60 * 1000).toISOString() // 8 days ago
       };
 
-      mockSupabase.from.mockReturnValue({
-        select: jest.fn().mockReturnValue({
-          eq: jest.fn().mockReturnValue({
-            maybeSingle: jest.fn().mockResolvedValue({ data: { data: mockData }, error: null })
-          })
-        })
-      } as any);
+      mockDbHelpers.selectMaybeOne.mockResolvedValue({
+        data: { data: mockData },
+        error: null
+      });
 
       const result = await getCachedMarketValue('116267', '0x123', 168); // 7 days
 
@@ -147,13 +140,10 @@ describe('MarketValueService', () => {
     });
 
     it('should return null if no cached value exists', async () => {
-      mockSupabase.from.mockReturnValue({
-        select: jest.fn().mockReturnValue({
-          eq: jest.fn().mockReturnValue({
-            maybeSingle: jest.fn().mockResolvedValue({ data: null, error: null })
-          })
-        })
-      } as any);
+      mockDbHelpers.selectMaybeOne.mockResolvedValue({
+        data: null,
+        error: null
+      });
 
       const result = await getCachedMarketValue('116267', '0x123');
 
@@ -171,13 +161,10 @@ describe('MarketValueService', () => {
         calculated_at: new Date(Date.now() - 30 * 60 * 1000).toISOString() // 30 minutes old (within 1 hour cache)
       };
 
-      mockSupabase.from.mockReturnValue({
-        select: jest.fn().mockReturnValue({
-          eq: jest.fn().mockReturnValue({
-            maybeSingle: jest.fn().mockResolvedValue({ data: { data: mockCachedData }, error: null })
-          })
-        })
-      } as any);
+      mockDbHelpers.selectMaybeOne.mockResolvedValue({
+        data: { data: mockCachedData },
+        error: null
+      });
 
       // Mock mflApi.getPlayer in case cache check fails (shouldn't happen, but prevents errors)
       const { mflApi } = require('../services/mflApi');
@@ -203,14 +190,11 @@ describe('MarketValueService', () => {
         calculated_at: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
       };
 
-      mockSupabase.from.mockReturnValue({
-        select: jest.fn().mockReturnValue({
-          eq: jest.fn().mockReturnValue({
-            maybeSingle: jest.fn().mockResolvedValue({ data: { data: mockCachedData }, error: null })
-          })
-        }),
-        upsert: jest.fn().mockResolvedValue({ error: null })
-      } as any);
+      mockDbHelpers.selectMaybeOne.mockResolvedValue({
+        data: { data: mockCachedData },
+        error: null
+      });
+      mockDbHelpers.upsertOne.mockResolvedValue({ data: null, error: null });
 
       // Mock fresh calculation
       const mockPlayer = {
@@ -264,14 +248,8 @@ describe('MarketValueService', () => {
 
     it('should calculate fresh value if no cached value exists', async () => {
       // Mock no cached value
-      mockSupabase.from.mockReturnValue({
-        select: jest.fn().mockReturnValue({
-          eq: jest.fn().mockReturnValue({
-            maybeSingle: jest.fn().mockResolvedValue({ data: null, error: null })
-          })
-        }),
-        upsert: jest.fn().mockResolvedValue({ error: null })
-      } as any);
+      mockDbHelpers.selectMaybeOne.mockResolvedValue({ data: null, error: null });
+      mockDbHelpers.upsertOne.mockResolvedValue({ data: null, error: null });
 
       // Mock fresh calculation
       const mockPlayer = {
@@ -361,15 +339,12 @@ describe('MarketValueService', () => {
         details: {},
         calculated_at: new Date().toISOString() // Fresh cache
       };
-      
-      mockSupabase.from.mockReturnValue({
-        select: jest.fn().mockReturnValue({
-          eq: jest.fn().mockReturnValue({
-            maybeSingle: jest.fn().mockResolvedValue({ data: { data: mockCachedData }, error: null })
-          })
-        }),
-        upsert: jest.fn().mockResolvedValue({ error: null })
-      } as any);
+
+      mockDbHelpers.selectMaybeOne.mockResolvedValue({
+        data: { data: mockCachedData },
+        error: null
+      });
+      mockDbHelpers.upsertOne.mockResolvedValue({ data: null, error: null });
 
       const result1 = await getPlayerMarketValue(playerId, wallet, false);
       const result2 = await getPlayerMarketValue(playerId, wallet, false);

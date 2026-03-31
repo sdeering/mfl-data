@@ -1,11 +1,12 @@
-import { supabase, TABLES } from '../lib/supabase'
+import { TABLES } from '../lib/database'
+import { selectAll, selectOne, selectMaybeOne, upsertOne, upsertMany } from '../lib/db-helpers'
 import type { MFLMatch, MFLPlayer, MFLClub } from '../types/mflApi'
 
 /**
- * Optimized data service for Supabase operations
- * Implements connection pooling, query optimization, and caching
+ * Optimized data service for database operations
+ * Implements query optimization and caching
  */
-class SupabaseDataService {
+class DataService {
   private queryCache = new Map<string, { data: any; timestamp: number; ttl: number }>()
   private readonly CACHE_TTL = 5 * 60 * 1000 // 5 minutes
 
@@ -45,16 +46,16 @@ class SupabaseDataService {
    */
   async getAgencyPlayerMarketValues(walletAddress: string) {
     const cacheKey = `agency_market_values_${walletAddress}`
-    
+
     return this.getCachedData(cacheKey, async () => {
       try {
         console.log(`🔍 Querying market values for agency players for wallet: ${walletAddress}`)
-        
+
         // First, get the agency players for this wallet
-        const { data: agencyPlayers, error: agencyError } = await supabase
-          .from(TABLES.AGENCY_PLAYERS)
-          .select('mfl_player_id')
-          .eq('wallet_address', walletAddress)
+        const { data: agencyPlayers, error: agencyError } = await selectAll(
+          TABLES.AGENCY_PLAYERS,
+          { columns: ['mfl_player_id'], where: { wallet_address: walletAddress } }
+        )
 
         if (agencyError) {
           console.error('Error fetching agency players:', agencyError)
@@ -66,21 +67,20 @@ class SupabaseDataService {
           return []
         }
 
-        const playerIds = agencyPlayers.map(ap => ap.mfl_player_id)
+        const playerIds = agencyPlayers.map((ap: any) => ap.mfl_player_id)
         console.log(`📊 Found ${playerIds.length} agency players for wallet: ${walletAddress}`)
 
         // Now get market values only for these specific players
-        const { data, error } = await supabase
-          .from(TABLES.MARKET_VALUES)
-          .select('*')
-          .in('mfl_player_id', playerIds)
-          // Order by latest calculation or created_at when available. Some Supabase clients
-          // don’t support JSON path in order reliably; prefer timestamps.
-          .order('created_at', { ascending: false })
+        const { data, error } = await selectAll(
+          TABLES.MARKET_VALUES,
+          {
+            where: { mfl_player_id: { in: playerIds } },
+            orderBy: { column: 'created_at', ascending: false }
+          }
+        )
 
         if (error) {
-          // Check if it's a table not found error
-          if (error.code === 'PGRST116' || error.message?.includes('relation') || error.message?.includes('does not exist')) {
+          if (error.message?.includes('no such table')) {
             console.log('📊 Market values table does not exist yet, returning empty array')
             return []
           }
@@ -90,22 +90,19 @@ class SupabaseDataService {
 
         console.log(`📊 Raw market values query result:`, data)
         console.log(`📊 Fetched market values from database: ${data?.length || 0} players for wallet: ${walletAddress}`)
-        
+
         // Transform the data to match what the agency page expects
-        const transformedData = (data || []).map(item => ({
+        const transformedData = (data || []).map((item: any) => ({
           player_id: item.mfl_player_id,
-          // Align with writer which stores estimatedValue
           market_value: (item.data?.estimatedValue ?? item.data?.market_value ?? 0),
           position_ratings: item.data?.position_ratings || {},
           confidence: item.data?.confidence || 'medium',
           created_at: item.created_at,
-          // Align with writer which stores last_calculated
           last_calculated: (item.data?.last_calculated ?? item.data?.calculated_at ?? null)
         }));
 
         return transformedData
       } catch (error) {
-        // If there's any other error (like network issues), return empty array instead of throwing
         console.warn('Warning: Could not fetch market values, returning empty array:', error)
         return []
       }
@@ -117,15 +114,14 @@ class SupabaseDataService {
    */
   async getUserInfo(walletAddress: string) {
     const cacheKey = `user_${walletAddress}`
-    
-    return this.getCachedData(cacheKey, async () => {
-      const { data, error } = await supabase
-        .from(TABLES.USERS)
-        .select('*')
-        .eq('wallet_address', walletAddress)
-        .single()
 
-      if (error && error.code !== 'PGRST116') { // PGRST116 = no rows returned
+    return this.getCachedData(cacheKey, async () => {
+      const { data, error } = await selectOne(
+        TABLES.USERS,
+        { where: { wallet_address: walletAddress } }
+      )
+
+      if (error && error.code !== 'PGRST116') {
         throw error
       }
 
@@ -138,28 +134,17 @@ class SupabaseDataService {
    */
   async getClubsForWallet(walletAddress: string): Promise<any[]> {
     const cacheKey = `clubs_${walletAddress}`
-    
+
     return this.getCachedData(cacheKey, async () => {
       console.log('🔍 Querying clubs table for wallet:', walletAddress);
-      
-      // Try to query with wallet_address filter first (new schema)
-      let { data, error } = await supabase
-        .from(TABLES.CLUBS)
-        .select('*')
-        .eq('wallet_address', walletAddress)
-        .order('last_synced', { ascending: false })
 
-      // If wallet_address column doesn't exist, fall back to getting all clubs (old schema)
-      if (error && (error.message?.includes('column clubs.wallet_address does not exist') || error.message?.includes('column "wallet_address" does not exist'))) {
-        console.log('⚠️ wallet_address column not found, falling back to old schema');
-        const fallbackResult = await supabase
-          .from(TABLES.CLUBS)
-          .select('*')
-          .order('last_synced', { ascending: false })
-        
-        data = fallbackResult.data;
-        error = fallbackResult.error;
-      }
+      const { data, error } = await selectAll(
+        TABLES.CLUBS,
+        {
+          where: { wallet_address: walletAddress },
+          orderBy: { column: 'last_synced', ascending: false }
+        }
+      )
 
       if (error) {
         console.error('❌ Error querying clubs table:', error);
@@ -179,16 +164,19 @@ class SupabaseDataService {
   async getAgencyPlayers(walletAddress: string): Promise<MFLPlayer[]> {
     const cacheKey = `agency_players_${walletAddress}`
     const AGENCY_PLAYERS_CACHE_TTL = 24 * 60 * 60 * 1000 // 24 hours
-    
+
     return this.getCachedData(cacheKey, async () => {
       console.log(`🔍 Querying agency players for wallet: ${walletAddress}`)
-      
+
       // First get the agency player IDs
-      const { data: agencyData, error: agencyError } = await supabase
-        .from(TABLES.AGENCY_PLAYERS)
-        .select('mfl_player_id, last_synced')
-        .eq('wallet_address', walletAddress)
-        .order('last_synced', { ascending: false })
+      const { data: agencyData, error: agencyError } = await selectAll(
+        TABLES.AGENCY_PLAYERS,
+        {
+          columns: ['mfl_player_id', 'last_synced'],
+          where: { wallet_address: walletAddress },
+          orderBy: { column: 'last_synced', ascending: false }
+        }
+      )
 
       if (agencyError) {
         console.error('❌ Error querying agency players:', agencyError)
@@ -201,13 +189,13 @@ class SupabaseDataService {
       }
 
       // Get the player IDs
-      const playerIds = agencyData.map(item => item.mfl_player_id)
-      
+      const playerIds = agencyData.map((item: any) => item.mfl_player_id)
+
       // Then get the player data
-      const { data: playersData, error: playersError } = await supabase
-        .from(TABLES.PLAYERS)
-        .select('*')
-        .in('mfl_player_id', playerIds)
+      const { data: playersData, error: playersError } = await selectAll(
+        TABLES.PLAYERS,
+        { where: { mfl_player_id: { in: playerIds } } }
+      )
 
       if (playersError) {
         console.error('❌ Error querying players data:', playersError)
@@ -216,10 +204,10 @@ class SupabaseDataService {
 
       console.log(`📊 Fetched agency players from database: ${agencyData?.length || 0} players`)
       console.log(`📊 Fetched player data: ${playersData?.length || 0} players`)
-      
-      const players = playersData?.map(player => player.data) || []
+
+      const players = playersData?.map((player: any) => player.data) || []
       console.log(`📊 Mapped players data:`, players.length, 'players')
-      
+
       return players
     }, AGENCY_PLAYERS_CACHE_TTL)
   }
@@ -229,21 +217,22 @@ class SupabaseDataService {
    */
   async getMatchesData(walletAddress: string, matchType?: 'upcoming' | 'previous') {
     const cacheKey = `matches_${walletAddress}_${matchType || 'all'}`
-    
-    return this.getCachedData(cacheKey, async () => {
-      // Filter matches by wallet address directly
-      console.log('🔍 Querying matches table for wallet:', walletAddress);
-      let query = supabase
-        .from(TABLES.MATCHES)
-        .select('*')
-        .eq('wallet_address', walletAddress)
-        .order('last_synced', { ascending: false })
 
+    return this.getCachedData(cacheKey, async () => {
+      console.log('🔍 Querying matches table for wallet:', walletAddress);
+
+      const where: Record<string, any> = { wallet_address: walletAddress }
       if (matchType) {
-        query = query.eq('match_type', matchType)
+        where.match_type = matchType
       }
 
-      const { data, error } = await query
+      const { data, error } = await selectAll(
+        TABLES.MATCHES,
+        {
+          where,
+          orderBy: { column: 'last_synced', ascending: false }
+        }
+      )
 
       if (error) {
         console.error('❌ Error querying matches table:', error);
@@ -253,9 +242,9 @@ class SupabaseDataService {
       const matches = data || []
       console.log('📊 Found', matches.length, 'matches in database for wallet:', walletAddress);
 
-      const upcoming = matches.filter(item => item.match_type === 'upcoming').map(item => item.data) || [];
-      const previous = matches.filter(item => item.match_type === 'previous').map(item => item.data) || [];
-      
+      const upcoming = matches.filter((item: any) => item.match_type === 'upcoming').map((item: any) => item.data) || [];
+      const previous = matches.filter((item: any) => item.match_type === 'previous').map((item: any) => item.data) || [];
+
       console.log('📊 Upcoming matches:', upcoming.length, 'Previous matches:', previous.length);
 
       return {
@@ -287,13 +276,12 @@ class SupabaseDataService {
   async getPlayer(playerId: string): Promise<MFLPlayer | null> {
     const cacheKey = `player_${playerId}`
     const PLAYER_CACHE_TTL = 6 * 60 * 60 * 1000 // 6 hours
-    
+
     return this.getCachedData(cacheKey, async () => {
-      const { data, error } = await supabase
-        .from(TABLES.PLAYERS)
-        .select('data')
-        .eq('mfl_player_id', playerId)
-        .single()
+      const { data, error } = await selectOne(
+        TABLES.PLAYERS,
+        { columns: ['data'], where: { mfl_player_id: playerId } }
+      )
 
       if (error && error.code !== 'PGRST116') {
         throw error
@@ -307,13 +295,15 @@ class SupabaseDataService {
    * Upsert player data
    */
   async upsertPlayer(playerId: string, playerData: MFLPlayer) {
-    const { error } = await supabase
-      .from(TABLES.PLAYERS)
-      .upsert({
+    const { error } = await upsertOne(
+      TABLES.PLAYERS,
+      {
         mfl_player_id: playerId,
         data: playerData,
         last_synced: new Date().toISOString()
-      })
+      },
+      'mfl_player_id'
+    )
 
     if (error) throw error
 
@@ -327,13 +317,15 @@ class SupabaseDataService {
   async upsertPlayers(players: Array<{ id: string; data: MFLPlayer }>) {
     if (players.length === 0) return
 
-    const { error } = await supabase
-      .from(TABLES.PLAYERS)
-      .upsert(players.map(player => ({
+    const { error } = await upsertMany(
+      TABLES.PLAYERS,
+      players.map(player => ({
         mfl_player_id: player.id,
         data: player.data,
         last_synced: new Date().toISOString()
-      })))
+      })),
+      'mfl_player_id'
+    )
 
     if (error) throw error
 
@@ -349,15 +341,17 @@ class SupabaseDataService {
   async getPlayerProgression(playerId: string) {
     const cacheKey = `player_progression_${playerId}`
     const PROGRESSION_CACHE_TTL = 60 * 60 * 1000 // 1 hour
-    
+
     return this.getCachedData(cacheKey, async () => {
-      const { data, error } = await supabase
-        .from(TABLES.PLAYER_PROGRESSION)
-        .select('data')
-        .eq('mfl_player_id', playerId)
-        .order('last_synced', { ascending: false })
-        .limit(1)
-        .single()
+      const { data, error } = await selectOne(
+        TABLES.PLAYER_PROGRESSION,
+        {
+          columns: ['data'],
+          where: { mfl_player_id: playerId },
+          orderBy: { column: 'last_synced', ascending: false },
+          limit: 1
+        }
+      )
 
       if (error && error.code !== 'PGRST116') {
         throw error
@@ -373,18 +367,21 @@ class SupabaseDataService {
   async getPlayerSaleHistory(playerId: string, limit: number = 25) {
     const cacheKey = `player_sales_${playerId}_${limit}`
     const SALE_HISTORY_CACHE_TTL = 60 * 60 * 1000 // 1 hour
-    
+
     return this.getCachedData(cacheKey, async () => {
-      const { data, error } = await supabase
-        .from(TABLES.PLAYER_SALE_HISTORY)
-        .select('data')
-        .eq('mfl_player_id', playerId)
-        .order('last_synced', { ascending: false })
-        .limit(limit)
+      const { data, error } = await selectAll(
+        TABLES.PLAYER_SALE_HISTORY,
+        {
+          columns: ['data'],
+          where: { mfl_player_id: playerId },
+          orderBy: { column: 'last_synced', ascending: false },
+          limit
+        }
+      )
 
       if (error) throw error
 
-      return data?.map(item => item.data) || []
+      return data?.map((item: any) => item.data) || []
     }, SALE_HISTORY_CACHE_TTL)
   }
 
@@ -394,10 +391,19 @@ class SupabaseDataService {
   async batchUpsert(tableName: string, records: any[]) {
     if (records.length === 0) return
 
-    const { error } = await supabase
-      .from(tableName)
-      .upsert(records)
+    // Determine conflict column based on table
+    const conflictMap: Record<string, string> = {
+      players: 'mfl_player_id',
+      users: 'wallet_address',
+      clubs: 'mfl_club_id',
+      matches: 'mfl_match_id',
+      agency_players: 'wallet_address, mfl_player_id',
+      market_values: 'mfl_player_id',
+      sync_status: 'data_type',
+    }
+    const onConflict = conflictMap[tableName] || 'id'
 
+    const { error } = await upsertMany(tableName, records, onConflict)
     if (error) throw error
   }
 
@@ -406,56 +412,29 @@ class SupabaseDataService {
    */
   async getSyncStatus(walletAddress: string) {
     const cacheKey = `sync_status_${walletAddress}`
-    
+
     return this.getCachedData(cacheKey, async () => {
-      const statusPromises = [
-        // Users table has wallet_address
-        supabase
-          .from(TABLES.USERS)
-          .select('last_synced')
-          .eq('wallet_address', walletAddress)
-          .order('last_synced', { ascending: false })
-          .limit(1)
-          .maybeSingle(),
-        
-        // Agency players table has wallet_address
-        supabase
-          .from(TABLES.AGENCY_PLAYERS)
-          .select('last_synced')
-          .eq('wallet_address', walletAddress)
-          .order('last_synced', { ascending: false })
-          .limit(1)
-          .maybeSingle(),
-        
-        // Get latest clubs sync for this wallet
-        supabase
-          .from(TABLES.CLUBS)
-          .select('last_synced')
-          .eq('wallet_address', walletAddress)
-          .order('last_synced', { ascending: false })
-          .limit(1)
-          .maybeSingle(),
-        
-        // Matches table doesn't have wallet_address, get latest
-        supabase
-          .from(TABLES.MATCHES)
-          .select('last_synced')
-          .order('last_synced', { ascending: false })
-          .limit(1)
-          .maybeSingle(),
-        
-        // Players table doesn't have wallet_address, get latest
-        supabase
-          .from(TABLES.PLAYERS)
-          .select('last_synced')
-          .order('last_synced', { ascending: false })
-          .limit(1)
-          .maybeSingle()
+      const tables = [
+        { table: TABLES.USERS, where: { wallet_address: walletAddress } },
+        { table: TABLES.AGENCY_PLAYERS, where: { wallet_address: walletAddress } },
+        { table: TABLES.CLUBS, where: { wallet_address: walletAddress } },
+        { table: TABLES.MATCHES, where: undefined },
+        { table: TABLES.PLAYERS, where: undefined },
       ]
 
-      const results = await Promise.all(statusPromises)
-      const tableNames = [TABLES.USERS, TABLES.AGENCY_PLAYERS, TABLES.CLUBS, TABLES.MATCHES, TABLES.PLAYERS]
-      
+      const results = await Promise.all(
+        tables.map(({ table, where }) =>
+          selectMaybeOne(table, {
+            columns: ['last_synced'],
+            where,
+            orderBy: { column: 'last_synced', ascending: false },
+            limit: 1
+          })
+        )
+      )
+
+      const tableNames = tables.map(t => t.table)
+
       return results.reduce((acc, result, index) => {
         const tableName = tableNames[index]
         acc[tableName] = {
@@ -472,9 +451,8 @@ class SupabaseDataService {
    */
   async getTacticsPageData(walletAddress: string) {
     const cacheKey = `tactics_data_${walletAddress}`
-    
+
     return this.getCachedData(cacheKey, async () => {
-      // Fetch all required data in parallel
       const [clubs, upcomingMatches, previousMatches] = await Promise.all([
         this.getClubsForWallet(walletAddress),
         this.getUpcomingMatches(walletAddress),
@@ -494,9 +472,8 @@ class SupabaseDataService {
    */
   async getPlayerPageData(playerId: string) {
     const cacheKey = `player_page_${playerId}`
-    
+
     return this.getCachedData(cacheKey, async () => {
-      // Fetch player data and related information in parallel
       const [player, progression, saleHistory] = await Promise.all([
         this.getPlayer(playerId),
         this.getPlayerProgression(playerId),
@@ -513,4 +490,7 @@ class SupabaseDataService {
 }
 
 // Export singleton instance
-export const supabaseDataService = new SupabaseDataService()
+export const dataService = new DataService()
+
+// Backward-compatible alias
+export const supabaseDataService = dataService

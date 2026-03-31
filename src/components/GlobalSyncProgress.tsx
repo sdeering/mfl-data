@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react'
 import { useWallet } from '../contexts/WalletContext'
-import { supabaseSyncService, type SyncProgress } from '../services/supabaseSyncService'
+import { supabaseSyncService, type SyncProgress } from '../services/clientSyncService'
 
 interface GlobalSyncProgressProps {
   isVisible: boolean

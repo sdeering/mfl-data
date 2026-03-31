@@ -65,7 +65,7 @@ const MatchesTacticsPage: React.FC = () => {
     try {
       // Use database data instead of API calls for instant loading
       console.log('🔍 Fetching clubs from database for wallet:', account);
-      const { supabaseDataService } = await import('../services/supabaseDataService');
+      const { supabaseDataService } = await import('../services/clientDataService');
       
       // Clear cache to ensure we get fresh data
       supabaseDataService.clearCache(`clubs_${account}`);
@@ -104,7 +104,7 @@ const MatchesTacticsPage: React.FC = () => {
       
       // Get all upcoming matches from database (already synced)
       console.log('🔍 Fetching upcoming matches from database for wallet:', account);
-      const { supabaseDataService } = await import('../services/supabaseDataService');
+      const { supabaseDataService } = await import('../services/clientDataService');
       
       // Clear cache to ensure we get fresh data
       supabaseDataService.clearCache(`matches_${account}_all`);

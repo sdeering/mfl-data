@@ -28,8 +28,29 @@ jest.mock('../..//src/components/Toast', () => ({
 }))
 
 // Mock services
-jest.mock('../..//src/services/supabaseDataService', () => ({
+jest.mock('../../src/services/dataService', () => ({
   supabaseDataService: {
+    getAgencyPlayers: jest.fn().mockResolvedValue([
+      {
+        id: 999001,
+        metadata: {
+          firstName: 'Test',
+          lastName: 'Striker',
+          positions: ['ST'],
+          overall: 85,
+          pace: 80,
+          shooting: 85,
+          passing: 70,
+          dribbling: 78,
+          defense: 40,
+          physical: 75,
+          goalkeeping: 0,
+          age: 25,
+        },
+      },
+    ]),
+  },
+  dataService: {
     getAgencyPlayers: jest.fn().mockResolvedValue([
       {
         id: 999001,

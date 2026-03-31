@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { usePathname } from 'next/navigation'
-import { supabaseSyncService, type SyncProgress } from '../services/supabaseSyncService'
+import { supabaseSyncService, type SyncProgress } from '../services/clientSyncService'
 import { useWallet } from '../contexts/WalletContext'
 
 export const useSupabaseSync = () => {

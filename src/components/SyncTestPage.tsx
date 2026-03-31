@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useWallet } from '../contexts/WalletContext';
-import { supabaseSyncService } from '../services/supabaseSyncService';
+import { supabaseSyncService } from '../services/clientSyncService';
 
 export default function SyncTestPage() {
   const { isConnected, account } = useWallet();

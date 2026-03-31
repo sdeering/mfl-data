@@ -3,7 +3,7 @@
 import { useParams } from 'next/navigation';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { supabaseDataService } from '../../../src/services/supabaseDataService';
+import { supabaseDataService } from '../../../src/services/clientDataService';
 import { MFLPlayer } from '../../../src/types/mflApi';
 import { OverallRatingTooltip } from '../../../src/components/OverallRatingTooltip';
 import * as XLSX from 'xlsx';

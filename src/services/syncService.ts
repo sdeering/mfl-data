@@ -1,8 +1,9 @@
-import { supabase, TABLES, CACHE_DURATIONS, SYNC_STATUS, type SyncStatus } from '../lib/supabase'
+import { TABLES, CACHE_DURATIONS, SYNC_STATUS, type SyncStatus } from '../lib/database'
+import { selectAll, selectMaybeOne, upsertOne, upsertMany, countWhere, deleteWhere, selectWithJoin, executeRaw } from '../lib/db-helpers'
 import { matchesService } from './matchesService'
 import { clubsService } from './clubsService'
 import { mflApi } from './mflApi'
-import { supabaseDataService } from './supabaseDataService'
+import { dataService } from './dataService'
 import { calculateAllPositionOVRs } from '../utils/ruleBasedPositionCalculator'
 import { marketValueCache } from './marketValueCache'
 import { calculateMarketValue } from '../utils/marketValueCalculator'
@@ -28,7 +29,7 @@ export interface SyncOptions {
   retryDelay?: number
 }
 
-class SupabaseSyncService {
+class SyncService {
   private isSyncing = false
   private currentProgress: SyncProgress[] = []
   private defaultMaxRetries = 3
@@ -49,30 +50,30 @@ class SupabaseSyncService {
   ): Promise<T> {
     const retries = maxRetries ?? this.defaultMaxRetries
     const delay = retryDelay ?? this.defaultRetryDelay
-    
+
     for (let attempt = 1; attempt <= retries; attempt++) {
       // Check for cancellation before each attempt
       if (this.syncCancelled || this.abortController?.signal.aborted) {
         throw new Error(`${operationName} cancelled by user`)
       }
-      
+
       try {
         return await operation()
       } catch (error) {
         const isLastAttempt = attempt === retries
         const errorMessage = error instanceof Error ? error.message : 'Unknown error'
-        
+
         // Don't retry if cancelled
         if (this.syncCancelled || this.abortController?.signal.aborted) {
           throw new Error(`${operationName} cancelled by user`)
         }
-        
+
         console.warn(`${operationName} failed (attempt ${attempt}/${retries}):`, errorMessage)
-        
+
         if (isLastAttempt) {
           throw error
         }
-        
+
         // Wait before retrying (but check for cancellation during wait)
         await new Promise(resolve => {
           const timeoutId = setTimeout(resolve, delay * attempt)
@@ -85,7 +86,7 @@ class SupabaseSyncService {
         })
       }
     }
-    
+
     throw new Error(`${operationName} failed after ${retries} attempts`)
   }
 
@@ -97,30 +98,30 @@ class SupabaseSyncService {
       console.log(`🔄 Force refresh requested for ${dataType}`)
       return true
     }
-    
+
     if (!lastSynced) {
       console.log(`🔄 No previous sync found for ${dataType}`)
       return true
     }
-    
+
     const cacheDuration = CACHE_DURATIONS[dataType as keyof typeof CACHE_DURATIONS]
     if (!cacheDuration) {
       console.log(`🔄 No cache duration set for ${dataType}`)
       return true
     }
-    
+
     const lastSyncTime = new Date(lastSynced).getTime()
     const now = Date.now()
     const timeSinceSync = now - lastSyncTime
     const needsSync = timeSinceSync > cacheDuration
-    
+
     console.log(`🔍 Cache check for ${dataType}:`, {
       lastSynced,
       cacheDuration: `${cacheDuration / (1000 * 60 * 60)} hours`,
       timeSinceSync: `${timeSinceSync / (1000 * 60 * 60)} hours`,
       needsSync
     })
-    
+
     return needsSync
   }
 
@@ -128,24 +129,20 @@ class SupabaseSyncService {
    * Update sync status in database
    */
   private async updateSyncStatus(
-    dataType: string, 
-    status: SyncStatus, 
-    progress = 0, 
+    dataType: string,
+    status: SyncStatus,
+    progress = 0,
     errorMessage?: string
   ) {
     try {
-      const { error } = await supabase
-        .from(TABLES.SYNC_STATUS)
-        .upsert({
-          data_type: dataType,
-          status,
-          progress_percentage: progress,
-          last_synced: status === SYNC_STATUS.COMPLETED ? new Date().toISOString() : null,
-          error_message: errorMessage || null,
-          updated_at: new Date().toISOString()
-        }, {
-          onConflict: 'data_type'
-        })
+      const { error } = await upsertOne(TABLES.SYNC_STATUS, {
+        data_type: dataType,
+        status,
+        progress_percentage: progress,
+        last_synced: status === SYNC_STATUS.COMPLETED ? new Date().toISOString() : null,
+        error_message: errorMessage || null,
+        updated_at: new Date().toISOString()
+      }, 'data_type')
 
       if (error) {
         console.warn(`Warning: Could not update sync status for ${dataType}:`, error.message || 'Unknown error')
@@ -191,16 +188,15 @@ class SupabaseSyncService {
    */
   private async syncUserInfo(walletAddress: string, options: SyncOptions = {}) {
     const dataType = 'user_info'
-    
+
     try {
       this.updateProgress(dataType, SYNC_STATUS.IN_PROGRESS, 0, 'Fetching user information...')
-      
+
       // Check if we need to sync
-      const { data: existingUser, error: checkError } = await supabase
-        .from(TABLES.USERS)
-        .select('last_synced')
-        .eq('wallet_address', walletAddress)
-        .maybeSingle()
+      const { data: existingUser, error: checkError } = await selectMaybeOne(TABLES.USERS, {
+        columns: ['last_synced'],
+        where: { wallet_address: walletAddress }
+      })
 
       // If there's an error and it's not "no rows found", log it but continue
       if (checkError && checkError.code !== 'PGRST116') {
@@ -215,7 +211,7 @@ class SupabaseSyncService {
       // Fetch user data from MFL API
       const { userService } = await import('./userService')
       const mflUser = await userService.fetchUserByWallet(walletAddress)
-      
+
       const userData = {
         wallet_address: walletAddress,
         data: mflUser || {},
@@ -223,11 +219,7 @@ class SupabaseSyncService {
       }
 
       // Upsert user data
-      const { error } = await supabase
-        .from(TABLES.USERS)
-        .upsert(userData, {
-          onConflict: 'wallet_address'
-        })
+      const { error } = await upsertOne(TABLES.USERS, userData, 'wallet_address')
 
       if (error) throw error
 
@@ -245,17 +237,16 @@ class SupabaseSyncService {
    */
   private async syncPlayerData(options: SyncOptions = {}) {
     const dataType = 'player_data'
-    
+
     try {
       this.updateProgress(dataType, SYNC_STATUS.IN_PROGRESS, 0, 'Fetching player data...')
-      
+
       // Check if we need to sync
-      const { data: existingData, error: checkError } = await supabase
-        .from(TABLES.PLAYERS)
-        .select('last_synced')
-        .order('last_synced', { ascending: false })
-        .limit(1)
-        .maybeSingle()
+      const { data: existingData, error: checkError } = await selectMaybeOne(TABLES.PLAYERS, {
+        columns: ['last_synced'],
+        orderBy: { column: 'last_synced', ascending: false },
+        limit: 1
+      })
 
       // If there's an error and it's not "no rows found", log it but continue
       if (checkError && checkError.code !== 'PGRST116') {
@@ -287,18 +278,17 @@ class SupabaseSyncService {
     return
     /* DISABLED CODE - Removed to make sync faster
     const dataType = 'upcoming_opposition'
-    
+
     try {
       console.log('🔄 Starting upcoming opposition sync for wallet:', walletAddress)
       this.updateProgress(dataType, SYNC_STATUS.IN_PROGRESS, 0, 'Loading upcoming opposition data...')
-      
+
       // Check if we need to sync
       console.log('🔍 Checking upcoming opposition sync status...')
-      const { data: existingData, error: checkError } = await supabase
-        .from(TABLES.SYNC_STATUS)
-        .select('last_synced')
-        .eq('data_type', dataType)
-        .maybeSingle()
+      const { data: existingData, error: checkError } = await selectMaybeOne(TABLES.SYNC_STATUS, {
+        columns: ['last_synced'],
+        where: { data_type: dataType }
+      })
 
       // If there's an error and it's not "no rows found", log it but continue
       if (checkError && checkError.code !== 'PGRST116') {
@@ -327,14 +317,14 @@ class SupabaseSyncService {
 
       const allOpponentData: any[] = []
       let processedClubs = 0
-      
+
       // First pass: count total opponents across all clubs (limited to 7 per club, next 24 hours only)
       let totalOpponents = 0
       const clubOpponentCounts: number[] = []
       for (const clubData of clubs) {
         const clubId = clubData.club.id.toString()
         const upcomingMatches = await matchesService.fetchUpcomingMatches(clubId)
-        
+
         if (!upcomingMatches || upcomingMatches.length === 0) {
           console.log(`⚠️ No upcoming matches found for ${clubData.club.name}`)
           clubOpponentCounts.push(0)
@@ -344,40 +334,40 @@ class SupabaseSyncService {
         // Filter to matches in next 24 hours only
         const now = new Date()
         const twentyFourHoursFromNow = new Date(now.getTime() + (24 * 60 * 60 * 1000))
-        
+
         const matchesInNext24Hours = upcomingMatches.filter(match => {
           if (!match.startDate) return false
           const matchDate = new Date(match.startDate)
           return matchDate >= now && matchDate <= twentyFourHoursFromNow
         })
-        
+
         const uniqueOpponents = new Set<number>()
         matchesInNext24Hours.forEach(match => {
           const opponentSquadId = match.homeTeamName === clubData.club.name ? match.awaySquad.id : match.homeSquad.id
           uniqueOpponents.add(opponentSquadId)
         })
-        
+
         // Limit to 7 opponents per club
         const limitedOpponents = Math.min(uniqueOpponents.size, 7)
         clubOpponentCounts.push(limitedOpponents)
         totalOpponents += limitedOpponents
       }
-      
+
       console.log(`📊 Total upcoming opponents across all clubs (max 7 per club): ${totalOpponents}`)
-      
+
       // If no opponents to process, skip upcoming opposition sync
       if (totalOpponents === 0) {
         console.log(`⚠️ No upcoming opponents with matches in next 24 hours, skipping upcoming opposition sync`)
         this.updateProgress(dataType, SYNC_STATUS.COMPLETED, 100, 'No upcoming opponents with matches in next 24 hours')
         return
       }
-      
+
       let totalProcessedOpponents = 0
 
       for (const clubData of clubs) {
         const clubId = clubData.club.id.toString()
         const upcomingMatches = await matchesService.fetchUpcomingMatches(clubId)
-        
+
         if (!upcomingMatches || upcomingMatches.length === 0) {
           console.log(`⚠️ No upcoming matches found for ${clubData.club.name}`)
           processedClubs++
@@ -387,15 +377,15 @@ class SupabaseSyncService {
         // Filter to matches in next 24 hours only
         const now = new Date()
         const twentyFourHoursFromNow = new Date(now.getTime() + (24 * 60 * 60 * 1000))
-        
+
         const matchesInNext24Hours = upcomingMatches.filter(match => {
           if (!match.startDate) return false
           const matchDate = new Date(match.startDate)
           return matchDate >= now && matchDate <= twentyFourHoursFromNow
         })
-        
+
         console.log(`📅 Found ${matchesInNext24Hours.length} matches in next 24 hours for ${clubData.club.name} (out of ${upcomingMatches.length} total upcoming matches)`)
-        
+
         // Get unique opponents from matches in next 24 hours only
         const uniqueOpponents = new Set<number>()
         matchesInNext24Hours.forEach(match => {
@@ -409,26 +399,26 @@ class SupabaseSyncService {
 
         // Fetch opponent data for each unique opponent
         let processedOpponents = 0
-        
+
         for (const opponentSquadId of limitedOpponents) {
           try {
             console.log(`🔍 Processing upcoming opponent ${totalProcessedOpponents + 1}/${totalOpponents}: squad ${opponentSquadId}`)
-            
+
             // Update progress for each opponent using total count
             this.updateProgress(dataType, SYNC_STATUS.IN_PROGRESS, Math.round(20 + ((totalProcessedOpponents / totalOpponents) * 60)), `Loading opponent ${totalProcessedOpponents + 1}/${totalOpponents} (next 24h matches) for ${clubData.club.name}...`)
-            
+
             // Check database first, then cache, then API
             const { opponentMatchesService } = await import('./opponentMatchesService')
             let opponentMatches: any[] = []
             let formations: string[] = []
-            
+
             // 1. Check if data exists in database and is recent (within 12 hours)
             const dbOpponentData = await opponentMatchesService.getOpponentMatchesData(opponentSquadId, 7)
             if (dbOpponentData) {
               const lastSynced = new Date(dbOpponentData.last_synced)
               const now = new Date()
               const twelveHoursAgo = new Date(now.getTime() - (12 * 60 * 60 * 1000))
-              
+
               if (lastSynced > twelveHoursAgo) {
                 console.log(`🎯 Using database upcoming opponent data for squad ${opponentSquadId} (${dbOpponentData.matches_data?.length || 0} matches)`)
                 opponentMatches = dbOpponentData.matches_data || []
@@ -437,7 +427,7 @@ class SupabaseSyncService {
                 console.log(`⚠️ Database data for upcoming opponent squad ${opponentSquadId} is stale, will fetch fresh data`)
               }
             }
-            
+
             // 2. If no recent database data, check cache
             if (opponentMatches.length === 0) {
               const cachedOpponentData = matchesService.getCachedOpponentData(opponentSquadId, 7)
@@ -446,14 +436,14 @@ class SupabaseSyncService {
                 opponentMatches = cachedOpponentData
               }
             }
-            
+
             // 3. If no cache data, fetch from API
             if (opponentMatches.length === 0) {
               console.log(`🚀 Fetching fresh upcoming opponent data for squad ${opponentSquadId}`)
               try {
                 opponentMatches = await Promise.race([
                   matchesService.fetchOpponentPastMatches(opponentSquadId, 7),
-                  new Promise((_, reject) => 
+                  new Promise((_, reject) =>
                     setTimeout(() => reject(new Error('Timeout after 10 seconds')), 10000)
                   )
                 ]) as any[]
@@ -462,9 +452,9 @@ class SupabaseSyncService {
                 opponentMatches = []
               }
             }
-            
+
             console.log(`📊 Found ${opponentMatches.length} matches for upcoming opponent ${opponentSquadId}`)
-            
+
             // Only fetch formations if we don't already have them from database
             if (formations.length === 0 && opponentMatches.length > 0) {
               console.log(`🔍 Fetching formations for ${opponentMatches.length} upcoming opponent matches...`)
@@ -498,23 +488,23 @@ class SupabaseSyncService {
                 last_synced: new Date().toISOString()
               })
             }
-            
+
             processedOpponents++
             totalProcessedOpponents++
-            
+
             // Update progress after processing this opponent
             this.updateProgress(dataType, SYNC_STATUS.IN_PROGRESS, Math.round(20 + ((totalProcessedOpponents / totalOpponents) * 60)), `Completed upcoming opponent ${totalProcessedOpponents}/${totalOpponents} (next 24h matches) for ${clubData.club.name}...`)
-            
+
             // Add a small delay to prevent rate limiting
             await new Promise(resolve => setTimeout(resolve, 500))
           } catch (error) {
             console.warn(`❌ Failed to fetch data for upcoming opponent squad ${opponentSquadId}:`, error)
             processedOpponents++
             totalProcessedOpponents++
-            
+
             // Update progress even on error
             this.updateProgress(dataType, SYNC_STATUS.IN_PROGRESS, Math.round(20 + ((totalProcessedOpponents / totalOpponents) * 60)), `Failed upcoming opponent ${totalProcessedOpponents}/${totalOpponents} (next 24h matches) for ${clubData.club.name}...`)
-            
+
             // Add delay even on error to prevent rapid retries
             await new Promise(resolve => setTimeout(resolve, 1000))
           }
@@ -529,11 +519,7 @@ class SupabaseSyncService {
 
       // Batch upsert opponent matches data
       if (allOpponentData.length > 0) {
-        const { error } = await supabase
-          .from(TABLES.OPPONENT_MATCHES)
-          .upsert(allOpponentData, {
-            onConflict: 'opponent_squad_id,match_limit'
-          })
+        const { error } = await upsertMany(TABLES.OPPONENT_MATCHES, allOpponentData, 'opponent_squad_id,match_limit')
 
         if (error) {
           console.error('❌ Error saving upcoming opponent data:', error)
@@ -563,19 +549,18 @@ class SupabaseSyncService {
    */
   private async syncOpponentMatchesData(walletAddress: string, options: SyncOptions = {}) {
     const dataType = 'opponent_matches'
-    
+
     try {
       console.log('🔄 Starting opponent matches sync for wallet:', walletAddress)
       this.updateProgress(dataType, SYNC_STATUS.IN_PROGRESS, 0, 'Fetching opponent matches data...')
-      
+
       // Check if we need to sync
       console.log('🔍 Checking opponent matches sync status...')
-      const { data: existingData, error: checkError } = await supabase
-        .from(TABLES.OPPONENT_MATCHES)
-        .select('last_synced')
-        .order('last_synced', { ascending: false })
-        .limit(1)
-        .maybeSingle()
+      const { data: existingData, error: checkError } = await selectMaybeOne(TABLES.OPPONENT_MATCHES, {
+        columns: ['last_synced'],
+        orderBy: { column: 'last_synced', ascending: false },
+        limit: 1
+      })
 
       // If there's an error and it's not "no rows found", log it but continue
       if (checkError && checkError.code !== 'PGRST116') {
@@ -605,24 +590,24 @@ class SupabaseSyncService {
 
       const allOpponentData: any[] = []
       let processedClubs = 0
-      
+
       // First pass: count total opponents across all clubs (limited to 7 per club, next 24 hours only)
       let totalOpponents = 0
       const clubOpponentCounts: number[] = []
       for (const clubData of clubs) {
         const clubId = clubData.club.id.toString()
         const upcomingMatches = await matchesService.fetchUpcomingMatches(clubId)
-        
+
         // Filter to only matches in the next 24 hours
         const now = new Date()
         const next24Hours = new Date(now.getTime() + 24 * 60 * 60 * 1000)
-        
+
         const matchesInNext24Hours = upcomingMatches.filter(match => {
           if (!match.matchDate) return false
           const matchDate = new Date(match.matchDate)
           return !isNaN(matchDate.getTime()) && matchDate >= now && matchDate <= next24Hours
         })
-        
+
         // Debug: Show some match dates to understand the timing
         if (upcomingMatches.length > 0) {
           const firstMatch = upcomingMatches[0]
@@ -643,46 +628,46 @@ class SupabaseSyncService {
             console.log(`⚠️ No match date found for ${clubData.club.name}`)
           }
         }
-        
+
         const uniqueOpponents = new Set<number>()
         matchesInNext24Hours.forEach(match => {
           const opponentSquadId = match.homeTeamName === clubData.club.name ? match.awaySquad.id : match.homeSquad.id
           uniqueOpponents.add(opponentSquadId)
         })
-        
+
         // Limit to 7 opponents per club
         const limitedOpponents = Math.min(uniqueOpponents.size, 7)
         clubOpponentCounts.push(limitedOpponents)
         totalOpponents += limitedOpponents
       }
-      
+
       console.log(`📊 Total opponents across all clubs (max 7 per club): ${totalOpponents}`)
-      
+
       // If no opponents to process, skip opponent sync
       if (totalOpponents === 0) {
         console.log(`⚠️ No opponents with matches in next 24 hours, skipping opponent sync`)
         this.updateProgress(dataType, SYNC_STATUS.COMPLETED, 100, 'No opponents with matches in next 24 hours')
         return
       }
-      
+
       let totalProcessedOpponents = 0
 
       for (const clubData of clubs) {
         const clubId = clubData.club.id.toString()
-        
+
         // Fetch upcoming matches for this club
         const upcomingMatches = await matchesService.fetchUpcomingMatches(clubId)
-        
+
         // Filter to only matches in the next 24 hours
         const now = new Date()
         const next24Hours = new Date(now.getTime() + 24 * 60 * 60 * 1000)
-        
+
         const matchesInNext24Hours = upcomingMatches.filter(match => {
           if (!match.matchDate) return false
           const matchDate = new Date(match.matchDate)
           return !isNaN(matchDate.getTime()) && matchDate >= now && matchDate <= next24Hours
         })
-        
+
         // Debug: Show some match dates to understand the timing
         if (upcomingMatches.length > 0) {
           const firstMatch = upcomingMatches[0]
@@ -703,9 +688,9 @@ class SupabaseSyncService {
             console.log(`⚠️ No match date found for ${clubData.club.name}`)
           }
         }
-        
+
         console.log(`📅 Found ${matchesInNext24Hours.length} matches in next 24 hours for ${clubData.club.name} (out of ${upcomingMatches.length} total upcoming matches)`)
-        
+
         // Get unique opponents from matches in next 24 hours only
         const uniqueOpponents = new Set<number>()
         matchesInNext24Hours.forEach(match => {
@@ -719,26 +704,26 @@ class SupabaseSyncService {
 
         // Fetch opponent data for each unique opponent
         let processedOpponents = 0
-        
+
         for (const opponentSquadId of limitedOpponents) {
           try {
             console.log(`🔍 Processing opponent ${totalProcessedOpponents + 1}/${totalOpponents}: squad ${opponentSquadId}`)
-            
+
             // Update progress for each opponent using total count
             this.updateProgress(dataType, SYNC_STATUS.IN_PROGRESS, Math.round(20 + ((totalProcessedOpponents / totalOpponents) * 60)), `Processing opponent ${totalProcessedOpponents + 1}/${totalOpponents} (next 24h matches) for ${clubData.club.name}...`)
-            
+
             // Check database first, then cache, then API
             const { opponentMatchesService } = await import('./opponentMatchesService')
             let opponentMatches: any[] = []
             let formations: string[] = []
-            
+
             // 1. Check if data exists in database and is recent (within 12 hours)
             const dbOpponentData = await opponentMatchesService.getOpponentMatchesData(opponentSquadId, 7)
             if (dbOpponentData) {
               const lastSynced = new Date(dbOpponentData.last_synced)
               const now = new Date()
               const twelveHoursAgo = new Date(now.getTime() - (12 * 60 * 60 * 1000))
-              
+
               if (lastSynced > twelveHoursAgo) {
                 console.log(`🎯 Using database opponent data for squad ${opponentSquadId} (${dbOpponentData.matches_data?.length || 0} matches)`)
                 opponentMatches = dbOpponentData.matches_data || []
@@ -747,7 +732,7 @@ class SupabaseSyncService {
                 console.log(`⚠️ Database data for squad ${opponentSquadId} is stale, will fetch fresh data`)
               }
             }
-            
+
             // 2. If no recent database data, check cache
             if (opponentMatches.length === 0) {
               const cachedOpponentData = matchesService.getCachedOpponentData(opponentSquadId, 7)
@@ -756,14 +741,14 @@ class SupabaseSyncService {
                 opponentMatches = cachedOpponentData
               }
             }
-            
+
             // 3. If no cache data, fetch from API
             if (opponentMatches.length === 0) {
               console.log(`🚀 Fetching fresh opponent data for squad ${opponentSquadId}`)
               try {
                 opponentMatches = await Promise.race([
                   matchesService.fetchOpponentPastMatches(opponentSquadId, 7),
-                  new Promise((_, reject) => 
+                  new Promise((_, reject) =>
                     setTimeout(() => reject(new Error('Timeout after 10 seconds')), 10000)
                   )
                 ]) as any[]
@@ -772,9 +757,9 @@ class SupabaseSyncService {
                 opponentMatches = []
               }
             }
-            
+
             console.log(`📊 Found ${opponentMatches.length} matches for opponent ${opponentSquadId}`)
-            
+
             // Only fetch formations if we don't already have them from database
             if (formations.length === 0 && opponentMatches.length > 0) {
               console.log(`🔍 Fetching formations for ${opponentMatches.length} matches...`)
@@ -789,7 +774,7 @@ class SupabaseSyncService {
                     // Fetch formation with shorter timeout
                     const formation = await Promise.race([
                       matchesService.fetchMatchFormation(match.id.toString()),
-                      new Promise((_, reject) => 
+                      new Promise((_, reject) =>
                         setTimeout(() => reject(new Error('Formation timeout after 5 seconds')), 5000)
                       )
                     ]) as string
@@ -815,23 +800,23 @@ class SupabaseSyncService {
                 last_synced: new Date().toISOString()
               })
             }
-            
+
             processedOpponents++
             totalProcessedOpponents++
-            
+
             // Update progress after processing this opponent
             this.updateProgress(dataType, SYNC_STATUS.IN_PROGRESS, Math.round(20 + ((totalProcessedOpponents / totalOpponents) * 60)), `Completed opponent ${totalProcessedOpponents}/${totalOpponents} (next 24h matches) for ${clubData.club.name}...`)
-            
+
             // Add a small delay to prevent rate limiting
             await new Promise(resolve => setTimeout(resolve, 500))
           } catch (error) {
             console.warn(`❌ Failed to fetch data for opponent squad ${opponentSquadId}:`, error)
             processedOpponents++
             totalProcessedOpponents++
-            
+
             // Update progress even on error
             this.updateProgress(dataType, SYNC_STATUS.IN_PROGRESS, Math.round(20 + ((totalProcessedOpponents / totalOpponents) * 60)), `Failed opponent ${totalProcessedOpponents}/${totalOpponents} (next 24h matches) for ${clubData.club.name}...`)
-            
+
             // Add delay even on error to prevent rapid retries
             await new Promise(resolve => setTimeout(resolve, 1000))
           }
@@ -846,19 +831,12 @@ class SupabaseSyncService {
       if (allOpponentData.length > 0) {
         console.log('💾 Saving opponent data to database:', allOpponentData.length, 'records')
         try {
-          const { error } = await supabase
-            .from(TABLES.OPPONENT_MATCHES)
-            .upsert(allOpponentData, {
-              onConflict: 'opponent_squad_id,match_limit'
-            })
+          const { error } = await upsertMany(TABLES.OPPONENT_MATCHES, allOpponentData, 'opponent_squad_id,match_limit')
 
           if (error) {
             console.error('❌ Failed to save opponent data:', error)
             console.error('Error details:', {
               message: error.message,
-              details: error.details,
-              hint: error.hint,
-              code: error.code
             })
             throw error
           }
@@ -898,18 +876,17 @@ class SupabaseSyncService {
     return
     /* DISABLED CODE - Removed to make sync faster
     const dataType = 'matches_data'
-    
+
     try {
       this.updateProgress(dataType, SYNC_STATUS.IN_PROGRESS, 0, 'Fetching matches data...')
-      
+
       // Check if we need to sync
       console.log(`🔍 Checking sync status for dataType: ${dataType}`)
-      const { data: existingData, error: checkError } = await supabase
-        .from(TABLES.SYNC_STATUS)
-        .select('*')
-        .eq('data_type', dataType)
-        .maybeSingle()
-      
+      const { data: existingData, error: checkError } = await selectMaybeOne(TABLES.SYNC_STATUS, {
+        columns: ['*'],
+        where: { data_type: dataType }
+      })
+
       console.log('Sync status query result:', { existingData, checkError })
 
       if (checkError) {
@@ -917,9 +894,6 @@ class SupabaseSyncService {
         console.error('Error details:', {
           message: checkError?.message || 'No message',
           code: checkError?.code || 'No code',
-          details: checkError?.details || 'No details',
-          hint: checkError?.hint || 'No hint',
-          fullError: JSON.stringify(checkError)
         })
         // Don't throw error, just log and continue with sync
         console.log('⚠️ Continuing with sync despite status check error')
@@ -932,7 +906,7 @@ class SupabaseSyncService {
         this.updateProgress(dataType, SYNC_STATUS.COMPLETED, 100, 'Matches data is up to date')
         return
       }
-      
+
       // Get user's clubs first
       const clubs = await clubsService.fetchClubsForWallet(walletAddress)
       if (!clubs || clubs.length === 0) {
@@ -947,7 +921,7 @@ class SupabaseSyncService {
 
       for (const clubData of clubs) {
         const clubId = clubData.club.id.toString()
-        
+
         // Fetch upcoming matches
         const upcomingMatches = await matchesService.fetchUpcomingMatches(clubId)
         upcomingMatches.forEach(match => {
@@ -983,11 +957,7 @@ class SupabaseSyncService {
 
       // Batch upsert matches
       if (allMatches.length > 0) {
-        const { error } = await supabase
-          .from(TABLES.MATCHES)
-          .upsert(allMatches, {
-            onConflict: 'mfl_match_id'
-          })
+        const { error } = await upsertMany(TABLES.MATCHES, allMatches, 'mfl_match_id')
 
         if (error) throw error
       }
@@ -1010,17 +980,16 @@ class SupabaseSyncService {
     const dataTypeKey = `${dataType}:${walletAddress}`
     const updateMV = (status: SyncStatus, progress: number, message: string, error?: string) =>
       this.updateProgress(dataTypeKey, status, progress, message, error)
-    
+
     // NEW BACKEND SYNC IMPLEMENTATION
     try {
       // Respect 7-day cache before starting/resuming any backend job
       // Check central sync status timestamp (acts as a coarse-grained gate)
       try {
-        const { data: existingStatus } = await supabase
-          .from(TABLES.SYNC_STATUS)
-          .select('last_synced')
-          .eq('data_type', dataTypeKey)
-          .maybeSingle()
+        const { data: existingStatus } = await selectMaybeOne(TABLES.SYNC_STATUS, {
+          columns: ['last_synced'],
+          where: { data_type: dataTypeKey }
+        })
 
         if (!this.needsSync(dataType, existingStatus?.last_synced ?? null, options.forceRefresh)) {
           updateMV(SYNC_STATUS.COMPLETED, 100, 'Agency player market values are up to date (≤ 7 days)')
@@ -1033,16 +1002,14 @@ class SupabaseSyncService {
 
       console.log('🔄 Starting agency player market values sync for wallet:', walletAddress)
       updateMV(SYNC_STATUS.IN_PROGRESS, 0, 'Loading agency players...')
-      
+
       // Step 1: Get all agency players
       console.log('🔍 Fetching agency players for market value calculation...')
-      const { data: agencyPlayers, error: agencyError } = await supabase
-        .from(TABLES.AGENCY_PLAYERS)
-        .select(`
-          *,
-          player:players(*)
-        `)
-        .eq('wallet_address', walletAddress)
+      const { data: agencyPlayers, error: agencyError } = await selectWithJoin({
+        from: TABLES.AGENCY_PLAYERS,
+        join: { table: 'players', as: 'player', on: 'mfl_player_id' },
+        where: { wallet_address: walletAddress }
+      })
 
       if (agencyError) {
         console.error('❌ Error fetching agency players:', agencyError)
@@ -1060,17 +1027,17 @@ class SupabaseSyncService {
 
       // Step 2: Check for existing sync jobs first
       updateMV(SYNC_STATUS.IN_PROGRESS, 30, 'Checking for existing sync jobs...')
-      
+
       const playerIds = agencyPlayers.map(p => p.mfl_player_id.toString())
       const syncLimit = limit // No default limit for production
-      
+
       // Check if there's already a sync in progress for this wallet
       const existingJobsResponse = await fetch(`/api/sync/player-market-values?walletAddress=${walletAddress}`)
       const existingJobsData = await existingJobsResponse.json()
-      
+
       let jobId: string
       let isResumed = false
-      
+
       if (existingJobsData.success && existingJobsData.activeJobs.length > 0) {
         // Resume existing job
         const existingJob = existingJobsData.activeJobs[0]
@@ -1082,7 +1049,7 @@ class SupabaseSyncService {
         // Start new sync job
         updateMV(SYNC_STATUS.IN_PROGRESS, 40, 'Starting backend market value sync...')
         console.log(`🚀 Starting new backend sync for ${playerIds.length} players${syncLimit ? ` (limited to ${syncLimit})` : ' (no limit)'}`)
-        
+
         const response = await fetch('/api/sync/player-market-values', {
           method: 'POST',
           headers: {
@@ -1104,26 +1071,26 @@ class SupabaseSyncService {
         jobId = responseData.jobId
         console.log(`✅ Backend sync job started: ${jobId}`)
       }
-      
+
       updateMV(SYNC_STATUS.IN_PROGRESS, 60, `Backend sync ${isResumed ? 'resumed' : 'started'} for ${playerIds.length} players`)
 
       // Step 3: Poll for completion
       let completed = false
       let attempts = 0
       const maxAttempts = 600 // 5 minutes max (500ms intervals)
-      
+
       while (!completed && attempts < maxAttempts) {
         await new Promise(resolve => setTimeout(resolve, 500)) // Wait 500ms for faster updates
         attempts++
-        
+
         try {
           const statusResponse = await fetch(`/api/sync/player-market-values?jobId=${jobId}`)
           if (statusResponse.ok) {
             const status = await statusResponse.json()
-            
+
             const progress = 60 + (status.percentage * 0.4) // 60-100% range
             updateMV(SYNC_STATUS.IN_PROGRESS, Math.round(progress), status.currentPlayer || `Processing ${status.progress}/${status.total} players`)
-            
+
             if (status.status === 'completed') {
               console.log('✅ Backend market value sync completed:', status.results)
               updateMV(SYNC_STATUS.COMPLETED, 100, `Market value sync completed for ${status.results.filter((r: any) => r.success).length} players`)
@@ -1136,7 +1103,7 @@ class SupabaseSyncService {
           console.warn('⚠️ Error polling sync status:', error)
         }
       }
-      
+
       if (!completed) {
         throw new Error('Backend sync timed out')
       }
@@ -1147,23 +1114,21 @@ class SupabaseSyncService {
       updateMV(SYNC_STATUS.FAILED, 0, 'Failed to sync agency player market values', errorMessage)
       throw error
     }
-    
+
     // OLD FRONTEND SYNC IMPLEMENTATION - COMMENTED OUT
     /*
-    
+
     try {
       console.log('🔄 Starting agency player market values sync for wallet:', walletAddress)
       this.updateProgress(dataType, SYNC_STATUS.IN_PROGRESS, 0, 'Loading agency players...')
-      
+
       // Step 1: Get all agency players and ensure they're in the players table
       console.log('🔍 Fetching agency players for market value calculation...')
-      const { data: agencyPlayers, error: agencyError } = await supabase
-        .from(TABLES.AGENCY_PLAYERS)
-        .select(`
-          *,
-          player:players(*)
-        `)
-        .eq('wallet_address', walletAddress)
+      const { data: agencyPlayers, error: agencyError } = await selectWithJoin({
+        from: TABLES.AGENCY_PLAYERS,
+        join: { table: 'players', as: 'player', on: 'mfl_player_id' },
+        where: { wallet_address: walletAddress }
+      })
 
       if (agencyError) {
         console.error('❌ Error fetching agency players:', agencyError)
@@ -1185,15 +1150,15 @@ class SupabaseSyncService {
         const bOverall = b.player?.data?.metadata?.overall || 0;
         return bOverall - aOverall; // Descending order (highest first)
       });
-      
+
       // Apply limit if specified (to protect API from being overwhelmed)
       const playersToProcess = limit ? sortedAgencyPlayers.slice(0, limit) : sortedAgencyPlayers;
-      
+
       console.log(`📊 Sorted ${sortedAgencyPlayers.length} players by overall rating (highest first)`)
       if (limit) {
         console.log(`🔒 LIMITED TO ${limit} players to protect API (from ${sortedAgencyPlayers.length} total)`)
       }
-      const topPlayers = playersToProcess.slice(0, 5).map(p => 
+      const topPlayers = playersToProcess.slice(0, 5).map(p =>
         `${p.player?.data?.metadata?.firstName} ${p.player?.data?.metadata?.lastName} (${p.player?.data?.metadata?.overall})`
       );
       console.log(`🏆 Top 5 players by rating: ${topPlayers.join(', ')}`);
@@ -1205,7 +1170,7 @@ class SupabaseSyncService {
       // Step 2: Calculate position ratings for all players
       this.updateProgress(dataType, SYNC_STATUS.IN_PROGRESS, 20, 'Calculating player position ratings...')
       const positionRatingsMap = new Map<number, any>()
-      
+
       for (let i = 0; i < playersToProcess.length; i++) {
         const player = playersToProcess[i]
         const progress = 20 + (i / playersToProcess.length) * 30
@@ -1218,10 +1183,10 @@ class SupabaseSyncService {
         const playerData = player.player.data
         const playerMetadata = playerData.metadata
         this.updateProgress(dataType, SYNC_STATUS.IN_PROGRESS, Math.round(progress), `Calculating position ratings for ${playerMetadata.firstName} ${playerMetadata.lastName}...`)
-        
+
         try {
           console.log(`📊 Calculating position ratings for ${playerMetadata.firstName} ${playerMetadata.lastName}...`)
-          
+
           const playerForOVR = {
             id: player.mfl_player_id,
             name: `${playerMetadata.firstName} ${playerMetadata.lastName}`,
@@ -1239,7 +1204,7 @@ class SupabaseSyncService {
           }
 
           const positionRatingsResult = calculateAllPositionOVRs(playerForOVR)
-          
+
           if (positionRatingsResult.success) {
             positionRatingsMap.set(player.mfl_player_id, positionRatingsResult.results)
             console.log(`✅ Position ratings calculated for ${playerMetadata.firstName} ${playerMetadata.lastName}`)
@@ -1257,19 +1222,19 @@ class SupabaseSyncService {
 
       // Step 3: Calculate and store market values one by one (highest rated players first)
       this.updateProgress(dataType, SYNC_STATUS.IN_PROGRESS, 50, 'Calculating market values...')
-      
+
       let processedPlayers = 0
       console.log(`🔍 Starting market value calculation loop for ${playersToProcess.length} players (highest rated first)`)
 
       // Check for existing market values to determine starting point
       const sevenDaysAgo = new Date();
       sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-      
+
       // Get all existing market values for this wallet to see which players are already processed
-      const { data: existingMarketValues, error: existingError } = await supabase
-        .from(TABLES.MARKET_VALUES)
-        .select('mfl_player_id, created_at')
-        .gte('created_at', sevenDaysAgo.toISOString());
+      const { data: existingMarketValues, error: existingError } = await selectAll(TABLES.MARKET_VALUES, {
+        columns: ['mfl_player_id', 'created_at'],
+        where: { created_at: { gte: sevenDaysAgo.toISOString() } }
+      })
 
       const existingPlayerIds = new Set<number>();
       if (existingMarketValues && !existingError) {
@@ -1296,9 +1261,9 @@ class SupabaseSyncService {
       for (let i = startIndex; i < playersToProcess.length; i++) {
         const player = playersToProcess[i]
         const progress = 50 + (i / playersToProcess.length) * 45
-        
+
         console.log(`🔍 Processing player ${i + 1}/${playersToProcess.length}: ${player.mfl_player_id}`)
-        
+
         // Check if player data exists and has metadata
         if (!player.player || !player.player.data) {
           console.warn(`⚠️ Skipping market value calculation for player ${player.mfl_player_id} - no player data found`)
@@ -1309,17 +1274,17 @@ class SupabaseSyncService {
         const playerData = player.player.data
         const playerMetadata = playerData.metadata
         this.updateProgress(dataType, SYNC_STATUS.IN_PROGRESS, Math.round(progress), `Calculating market value for ${playerMetadata.firstName} ${playerMetadata.lastName} (${i + 1}/${playersToProcess.length})...`)
-        
+
         try {
           console.log(`💰 Calculating market value for ${playerMetadata.firstName} ${playerMetadata.lastName} (${i + 1}/${playersToProcess.length})`)
           const positionRatings = positionRatingsMap.get(player.mfl_player_id)
 
           // Check cache as fallback
           let marketValue = marketValueCache.get(player.mfl_player_id)
-          
+
           if (marketValue === null) {
             console.log(`🔍 Market value not in cache for ${playerMetadata.firstName} ${playerMetadata.lastName}, calculating...`)
-            
+
             // Fetch market data for comparison (same parameters as player page)
             const searchParams = {
               positions: playerMetadata.positions,
@@ -1329,15 +1294,15 @@ class SupabaseSyncService {
               overallMax: Math.min(99, playerMetadata.overall + 1),
               limit: 50
             }
-            
+
             let marketData;
             if (marketDataApiFailures < maxMarketDataFailures) {
               marketData = await fetchMarketData(searchParams)
-              
+
               if (!marketData.success) {
                 marketDataApiFailures++;
                 console.warn(`⚠️ Market data fetch failed for ${playerMetadata.firstName} ${playerMetadata.lastName} (${marketDataApiFailures}/${maxMarketDataFailures}): ${marketData.error}`);
-                
+
                 if (marketDataApiFailures >= maxMarketDataFailures) {
                   console.warn(`⚠️ Market data API has failed ${maxMarketDataFailures} times, skipping market data for remaining players`);
                 }
@@ -1346,17 +1311,17 @@ class SupabaseSyncService {
               // Skip market data fetch after too many failures
               marketData = { success: false, data: [], error: 'Market data API unavailable' };
             }
-            
+
             if (marketData.success && marketData.data.length > 0) {
               // Use the comprehensive market value calculator
-              
+
               // Fetch additional data for accurate calculation (same as player page)
               const [historyResponse, progressionResponse, matchesResponse] = await Promise.all([
                 fetchPlayerSaleHistory(player.mfl_player_id.toString()),
                 fetchPlayerExperienceHistory(player.mfl_player_id.toString()),
                 fetchPlayerMatches(player.mfl_player_id.toString())
               ]);
-              
+
               // Convert position ratings to the format expected by the calculator
               const positionRatingsForMarketValue = positionRatings
                 ? Object.entries(positionRatings).reduce((acc, [position, result]) => {
@@ -1390,7 +1355,7 @@ class SupabaseSyncService {
               // Enhanced fallback calculation based on multiple factors
               // More sophisticated than simple overall * 5
               let baseValue = 0;
-              
+
               // Base value by overall rating tiers (more realistic curve)
               if (playerMetadata.overall >= 90) {
                 baseValue = 800 + (playerMetadata.overall - 90) * 100; // $800-$1300 for 90+
@@ -1405,22 +1370,22 @@ class SupabaseSyncService {
               } else {
                 baseValue = Math.max(25, playerMetadata.overall * 3); // $25-$210 for <70
               }
-              
+
               // Age adjustment (younger players more valuable)
-              const ageAdjustment = playerMetadata.age <= 25 ? baseValue * 0.2 : 
-                                   playerMetadata.age <= 30 ? 0 : 
+              const ageAdjustment = playerMetadata.age <= 25 ? baseValue * 0.2 :
+                                   playerMetadata.age <= 30 ? 0 :
                                    playerMetadata.age <= 35 ? baseValue * -0.1 : baseValue * -0.3;
-              
+
               // Position premium (attacking positions more valuable)
-              const positionPremium = playerMetadata.positions.some(pos => ['ST', 'CF', 'CAM', 'LW', 'RW'].includes(pos)) ? 
+              const positionPremium = playerMetadata.positions.some(pos => ['ST', 'CF', 'CAM', 'LW', 'RW'].includes(pos)) ?
                                      baseValue * 0.15 : 0;
-              
+
               // Multiple positions bonus
               const multiPositionBonus = playerMetadata.positions.length > 1 ? baseValue * 0.1 : 0;
-              
+
               // Market volatility (random variation)
               const volatility = baseValue * (Math.random() * 0.2 - 0.1); // ±10% variation
-              
+
               marketValue = Math.round(baseValue + ageAdjustment + positionPremium + multiPositionBonus + volatility)
               marketValueCache.set(player.mfl_player_id, marketValue)
             }
@@ -1463,11 +1428,7 @@ class SupabaseSyncService {
 
           // Store immediately in database
           console.log(`💾 Storing market value for ${playerMetadata.firstName} ${playerMetadata.lastName} in database...`)
-          const { error: upsertError } = await supabase
-            .from(TABLES.MARKET_VALUES)
-            .upsert(marketValueData, {
-              onConflict: 'mfl_player_id'
-            })
+          const { error: upsertError } = await upsertOne(TABLES.MARKET_VALUES, marketValueData, 'mfl_player_id')
 
           if (upsertError) {
             console.error(`❌ Error storing market value for player ${player.mfl_player_id}:`, upsertError)
@@ -1475,7 +1436,7 @@ class SupabaseSyncService {
             console.log(`✅ Market value stored for ${playerMetadata.firstName} ${playerMetadata.lastName}: $${marketValue.toLocaleString()}`)
             processedPlayers++
           }
-          
+
         } catch (error) {
           console.error(`❌ Error calculating market value for player ${player.mfl_player_id}:`, error)
           // Continue with next player
@@ -1484,7 +1445,7 @@ class SupabaseSyncService {
 
       this.updateProgress(dataType, SYNC_STATUS.COMPLETED, 100, `Market values calculated and stored for ${processedPlayers} players`)
       console.log(`✅ Agency player market values sync completed: ${processedPlayers} players processed`)
-      
+
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error'
       console.error('❌ Error in syncAgencyPlayerMarketValues:', error)
@@ -1499,56 +1460,46 @@ class SupabaseSyncService {
    */
   private async syncAgencyPlayers(walletAddress: string, options: SyncOptions = {}) {
     const dataType = 'agency_players'
-    
+
     try {
       this.updateProgress(dataType, SYNC_STATUS.IN_PROGRESS, 0, 'Fetching agency players...')
       // If forceRefresh is requested, clear existing agency players for this wallet
       if (options.forceRefresh) {
         console.log('🧹 Force refresh enabled: clearing existing agency players for wallet', walletAddress)
-        
+
         // First, check how many players exist before deletion
-        const { count: countBefore } = await supabase
-          .from(TABLES.AGENCY_PLAYERS)
-          .select('*', { count: 'exact', head: true })
-          .eq('wallet_address', walletAddress)
-        
+        const { count: countBefore } = await countWhere(TABLES.AGENCY_PLAYERS, { wallet_address: walletAddress })
+
         console.log(`📊 Found ${countBefore || 0} existing agency players before deletion`)
-        
-        const { error: clearError } = await supabase
-          .from(TABLES.AGENCY_PLAYERS)
-          .delete()
-          .eq('wallet_address', walletAddress)
-        
+
+        const { error: clearError } = await deleteWhere(TABLES.AGENCY_PLAYERS, { wallet_address: walletAddress })
+
         if (clearError) {
           console.warn('⚠️ Failed to clear existing agency players before sync:', clearError)
         } else {
           console.log(`✅ Deleted all existing agency players for wallet (${countBefore || 0} players)`)
         }
-        
+
         // Verify deletion worked
-        const { count: countAfter } = await supabase
-          .from(TABLES.AGENCY_PLAYERS)
-          .select('*', { count: 'exact', head: true })
-          .eq('wallet_address', walletAddress)
-        
+        const { count: countAfter } = await countWhere(TABLES.AGENCY_PLAYERS, { wallet_address: walletAddress })
+
         if (countAfter && countAfter > 0) {
           console.warn(`⚠️ WARNING: ${countAfter} agency players still exist after deletion - deletion may have failed`)
         } else {
           console.log(`✅ Verification: All agency players deleted successfully (0 remaining)`)
         }
       }
-      
+
       // If forceRefresh is true, skip cache check and always sync
       // This ensures we get the latest players including new signings
       if (!options.forceRefresh) {
         // Check if we need to sync (only when not forcing refresh)
-        const { data: existingData, error: checkError } = await supabase
-          .from(TABLES.AGENCY_PLAYERS)
-          .select('last_synced')
-          .eq('wallet_address', walletAddress)
-          .order('last_synced', { ascending: false })
-          .limit(1)
-          .maybeSingle()
+        const { data: existingData, error: checkError } = await selectMaybeOne(TABLES.AGENCY_PLAYERS, {
+          columns: ['last_synced'],
+          where: { wallet_address: walletAddress },
+          orderBy: { column: 'last_synced', ascending: false },
+          limit: 1
+        })
 
         // If there's an error and it's not "no rows found", log it but continue
         if (checkError && checkError.code !== 'PGRST116') {
@@ -1560,7 +1511,7 @@ class SupabaseSyncService {
           this.updateProgress(dataType, SYNC_STATUS.COMPLETED, 100, 'Agency players are up to date')
           return
         }
-        
+
         console.log('🔄 Agency players need sync, last synced:', existingData?.last_synced)
       } else {
         console.log('🔄 Force refresh: syncing agency players regardless of cache status')
@@ -1569,23 +1520,23 @@ class SupabaseSyncService {
       // Fetch agency players from MFL API
       this.updateProgress(dataType, SYNC_STATUS.IN_PROGRESS, 10, 'Preparing to fetch players from MFL API...')
       console.log(`🔄 Fetching agency players for wallet: ${walletAddress}`)
-      
+
       // Always clear MFL API cache to ensure fresh data (especially important for new signings)
       this.updateProgress(dataType, SYNC_STATUS.IN_PROGRESS, 15, 'Clearing MFL API cache...')
       console.log('🧹 Clearing MFL API cache to ensure fresh player data...')
-      try { 
+      try {
         mflApi.clearCache()
         console.log('✅ MFL API cache cleared')
       } catch (error) {
         console.warn('⚠️ Failed to clear MFL API cache:', error)
       }
-      
+
       // Fetch fresh data from MFL API (cache already cleared above)
       this.updateProgress(dataType, SYNC_STATUS.IN_PROGRESS, 20, 'Requesting player list from MFL API...')
       console.log(`📡 Starting MFL API request for wallet: ${walletAddress}`)
       console.log(`📡 API endpoint: /players?ownerWalletAddress=${walletAddress}&limit=1200`)
       const startTime = Date.now()
-      
+
       // Set up a progress update interval to show the request is still in progress
       // Show different messages to indicate we're waiting for the API response
       let progressMessageIndex = 0
@@ -1595,32 +1546,32 @@ class SupabaseSyncService {
         'Still waiting for player data from MFL API...',
         'MFL API may be slow, please wait...'
       ]
-      
+
       const progressInterval = setInterval(() => {
         const elapsed = Math.floor((Date.now() - startTime) / 1000)
         const message = progressMessages[progressMessageIndex % progressMessages.length]
         this.updateProgress(dataType, SYNC_STATUS.IN_PROGRESS, 20, `${message} (${elapsed}s)`)
         progressMessageIndex++
       }, 3000) // Update every 3 seconds and rotate messages
-      
+
       let ownerPlayersResponse
       try {
         ownerPlayersResponse = await mflApi.getOwnerPlayers(walletAddress, 1200)
         clearInterval(progressInterval)
         const elapsed = ((Date.now() - startTime) / 1000).toFixed(1)
         console.log(`✅ MFL API request completed in ${elapsed}s`)
-        
+
         // Show player count and sample names immediately
         const playerCount = ownerPlayersResponse?.length || 0
         if (playerCount > 0) {
-          const samplePlayers = ownerPlayersResponse.slice(0, 3).map(p => 
+          const samplePlayers = ownerPlayersResponse.slice(0, 3).map(p =>
             `${p.metadata.firstName} ${p.metadata.lastName}`
           ).join(', ')
           const moreText = playerCount > 3 ? ` and ${playerCount - 3} more` : ''
           this.updateProgress(
-            dataType, 
-            SYNC_STATUS.IN_PROGRESS, 
-            25, 
+            dataType,
+            SYNC_STATUS.IN_PROGRESS,
+            25,
             `Received ${playerCount} players: ${samplePlayers}${moreText}`
           )
         } else {
@@ -1634,7 +1585,7 @@ class SupabaseSyncService {
         this.updateProgress(dataType, SYNC_STATUS.FAILED, 20, `Failed to fetch players: ${errorMessage}`, errorMessage)
         throw error
       }
-      
+
       console.log(`📊 MFL API response:`, {
         hasPlayers: !!ownerPlayersResponse,
         playerCount: ownerPlayersResponse?.length || 0,
@@ -1644,10 +1595,10 @@ class SupabaseSyncService {
         } : null,
         playerIds: ownerPlayersResponse?.slice(0, 10).map(p => p.id) || []
       })
-      console.log(`📋 Full player list from MFL API (${ownerPlayersResponse?.length || 0} players):`, 
+      console.log(`📋 Full player list from MFL API (${ownerPlayersResponse?.length || 0} players):`,
         ownerPlayersResponse?.map(p => `${p.id}: ${p.metadata.firstName} ${p.metadata.lastName}`).join(', ') || 'none'
       )
-      
+
       if (!ownerPlayersResponse || ownerPlayersResponse.length === 0) {
         console.log('⚠️ No agency players found in MFL API response')
         this.updateProgress(dataType, SYNC_STATUS.COMPLETED, 100, 'No agency players found')
@@ -1666,11 +1617,7 @@ class SupabaseSyncService {
       }))
 
       console.log(`🔄 Upserting ${playerData.length} players to players table...`)
-      const { error: playerError } = await supabase
-        .from(TABLES.PLAYERS)
-        .upsert(playerData, {
-          onConflict: 'mfl_player_id'
-        })
+      const { error: playerError } = await upsertMany(TABLES.PLAYERS, playerData, 'mfl_player_id')
 
       if (playerError) {
         console.error('❌ ERROR: Could not update players table:', playerError.message)
@@ -1682,7 +1629,7 @@ class SupabaseSyncService {
 
       // SECOND: Prepare agency player relationship data for database (no duplicate data storage)
       this.updateProgress(dataType, SYNC_STATUS.IN_PROGRESS, 70, `Creating ${ownerPlayersResponse.length} agency player relationships...`)
-      
+
       const agencyPlayerData = ownerPlayersResponse.map(player => ({
         wallet_address: walletAddress,
         mfl_player_id: player.id,
@@ -1692,12 +1639,8 @@ class SupabaseSyncService {
       // Batch upsert agency player data
       console.log(`🔄 Upserting ${agencyPlayerData.length} agency players to database...`)
       console.log('Sample agency player data:', JSON.stringify(agencyPlayerData[0], null, 2))
-      
-      const { error } = await supabase
-        .from(TABLES.AGENCY_PLAYERS)
-        .upsert(agencyPlayerData, {
-          onConflict: 'wallet_address,mfl_player_id'
-        })
+
+      const { error } = await upsertMany(TABLES.AGENCY_PLAYERS, agencyPlayerData, 'wallet_address,mfl_player_id')
 
       if (error) {
         console.error('❌ ERROR: Failed to upsert agency players:', error)
@@ -1711,26 +1654,25 @@ class SupabaseSyncService {
       this.updateProgress(dataType, SYNC_STATUS.IN_PROGRESS, 85, 'Verifying player list and removing orphaned players...')
       const apiPlayerIds = new Set(ownerPlayersResponse.map(p => p.id))
       console.log(`🧹 Performing final cleanup: removing players not in API response...`)
-      
-      const { data: allAgencyPlayers, error: fetchError } = await supabase
-        .from(TABLES.AGENCY_PLAYERS)
-        .select('mfl_player_id')
-        .eq('wallet_address', walletAddress)
+
+      const { data: allAgencyPlayers, error: fetchError } = await selectAll(TABLES.AGENCY_PLAYERS, {
+        columns: ['mfl_player_id'],
+        where: { wallet_address: walletAddress }
+      })
 
       if (!fetchError && allAgencyPlayers) {
         const orphanedPlayers = allAgencyPlayers
           .filter(ap => !apiPlayerIds.has(ap.mfl_player_id))
           .map(ap => ap.mfl_player_id)
-        
+
         if (orphanedPlayers.length > 0) {
           this.updateProgress(dataType, SYNC_STATUS.IN_PROGRESS, 90, `Removing ${orphanedPlayers.length} orphaned players...`)
           console.log(`🗑️ Removing ${orphanedPlayers.length} orphaned players not in API response...`)
-          const { error: deleteError } = await supabase
-            .from(TABLES.AGENCY_PLAYERS)
-            .delete()
-            .eq('wallet_address', walletAddress)
-            .in('mfl_player_id', orphanedPlayers)
-          
+          const { error: deleteError } = await deleteWhere(TABLES.AGENCY_PLAYERS, {
+            wallet_address: walletAddress,
+            mfl_player_id: { in: orphanedPlayers }
+          })
+
           if (deleteError) {
             console.warn('⚠️ Failed to remove orphaned players:', deleteError)
           } else {
@@ -1745,7 +1687,7 @@ class SupabaseSyncService {
       // Clear data service cache to ensure fresh data is shown immediately
       console.log('🧹 Clearing data service cache for agency players...')
       try {
-        supabaseDataService.clearCache(`agency_players_${walletAddress}`)
+        dataService.clearCache(`agency_players_${walletAddress}`)
         console.log('✅ Data service cache cleared for agency players')
       } catch (cacheError) {
         console.warn('⚠️ Failed to clear data service cache:', cacheError)
@@ -1764,17 +1706,16 @@ class SupabaseSyncService {
    */
   private async syncClubData(walletAddress: string, options: SyncOptions = {}) {
     const dataType = 'club_data'
-    
+
     try {
       this.updateProgress(dataType, SYNC_STATUS.IN_PROGRESS, 0, 'Fetching club data...')
-      
+
       // Check if we need to sync
       console.log(`🔍 Checking sync status for dataType: ${dataType}`)
-      const { data: existingData, error: checkError } = await supabase
-        .from(TABLES.SYNC_STATUS)
-        .select('*')
-        .eq('data_type', dataType)
-        .maybeSingle()
+      const { data: existingData, error: checkError } = await selectMaybeOne(TABLES.SYNC_STATUS, {
+        columns: ['*'],
+        where: { data_type: dataType }
+      })
 
       console.log('Sync status query result:', { existingData, checkError })
 
@@ -1783,9 +1724,6 @@ class SupabaseSyncService {
         console.error('Error details:', {
           message: checkError?.message || 'No message',
           code: checkError?.code || 'No code',
-          details: checkError?.details || 'No details',
-          hint: checkError?.hint || 'No hint',
-          fullError: JSON.stringify(checkError)
         })
         // Don't throw error, just log and continue with sync
         console.log('⚠️ Continuing with sync despite status check error')
@@ -1798,7 +1736,7 @@ class SupabaseSyncService {
         this.updateProgress(dataType, SYNC_STATUS.COMPLETED, 100, 'Club data is up to date')
         return
       }
-      
+
       console.log('🔄 Club data needs sync, proceeding with sync...')
 
       // Fetch clubs for wallet
@@ -1816,7 +1754,7 @@ class SupabaseSyncService {
         console.warn('⚠️ Continuing sync without club data due to fetch failure')
         return
       }
-      
+
       if (!clubs || clubs.length === 0) {
         this.updateProgress(dataType, SYNC_STATUS.COMPLETED, 100, 'No clubs found for user')
         return
@@ -1833,11 +1771,7 @@ class SupabaseSyncService {
       }))
 
       // Batch upsert club data
-      const { error } = await supabase
-        .from(TABLES.CLUBS)
-        .upsert(clubData, {
-          onConflict: 'mfl_club_id,wallet_address'
-        })
+      const { error } = await upsertMany(TABLES.CLUBS, clubData, 'mfl_club_id,wallet_address')
 
       if (error) throw error
 
@@ -1852,14 +1786,11 @@ class SupabaseSyncService {
   }
 
   /**
-   * Test Supabase connection
+   * Test database connection
    */
   async testConnection(): Promise<boolean> {
     try {
-      const { error } = await supabase
-        .from(TABLES.USERS)
-        .select('count')
-        .limit(1)
+      const { error } = await executeRaw('SELECT 1')
 
       if (error) {
         console.error('Database connection test failed:', error.message || 'Unknown error')
@@ -1898,10 +1829,10 @@ class SupabaseSyncService {
     this.syncCancelled = false
     this.currentProgress = []
     this.onProgressCallback = options.onProgress
-    
+
     // Create AbortController for this sync session
     this.abortController = new AbortController()
-    
+
     // Set abort signal on mflApi for all HTTP requests
     mflApi.setAbortSignal(this.abortController.signal)
 
@@ -1922,7 +1853,7 @@ class SupabaseSyncService {
         )
         console.log('✅ User info sync completed')
       }
-      
+
       if (!this.syncCancelled && !this.abortController?.signal.aborted) {
         console.log('🔄 Starting club data sync')
         await this.withRetry(
@@ -1933,7 +1864,7 @@ class SupabaseSyncService {
         )
         console.log('✅ Club data sync completed')
       }
-      
+
       if (!this.syncCancelled && !this.abortController?.signal.aborted) {
         console.log('🔄 Starting agency players sync')
         await this.withRetry(
@@ -1944,13 +1875,13 @@ class SupabaseSyncService {
         )
         console.log('✅ Agency players sync completed')
       }
-      
+
       // Removed: agency player market values background sync
-      
+
       // Player data sync is handled on-demand when specific players are requested
       // This is more efficient than syncing all players at once
       console.log('ℹ️ Player data sync is handled on-demand, skipping in main sync sequence')
-      
+
       // Removed: matches data sync (removed to make sync faster)
       // Removed: upcoming opposition sync (removed to make sync faster)
       // Removed: opponent matches sync from main sequence (handled on tactics page only)
@@ -1970,22 +1901,22 @@ class SupabaseSyncService {
         errorString: String(error),
         errorJSON: JSON.stringify(error, null, 2)
       })
-      
+
       // Update progress with error
       this.updateProgress('sync_error', SYNC_STATUS.FAILED, 0, `Sync failed: ${errorMessage}`)
-      
+
       if (options.onError) {
         options.onError(error instanceof Error ? error : new Error(errorMessage))
       }
     } finally {
       this.isSyncing = false
       this.onProgressCallback = undefined
-      
+
       // Clean up abort controller
       if (this.abortController) {
         this.abortController = undefined
       }
-      
+
       // Clear abort signal from mflApi
       mflApi.setAbortSignal(undefined)
     }
@@ -1996,8 +1927,8 @@ class SupabaseSyncService {
    */
   getCurrentProgress(): SyncProgress[] {
     // Filter out removed sync types
-    return this.currentProgress.filter(p => 
-      p.dataType !== 'upcoming_opposition' && 
+    return this.currentProgress.filter(p =>
+      p.dataType !== 'upcoming_opposition' &&
       p.dataType !== 'matches_data'
     )
   }
@@ -2010,7 +1941,7 @@ class SupabaseSyncService {
   }
 
   /**
-   * Check if Supabase connection is available
+   * Check if database connection is available
    */
   isConnectionAvailable(): boolean {
     return this.connectionAvailable
@@ -2031,15 +1962,15 @@ class SupabaseSyncService {
     this.syncCancelled = true
     this.isSyncing = false
     this.currentProgress = []
-    
+
     // Abort all ongoing HTTP requests
     if (this.abortController) {
       this.abortController.abort()
       this.abortController = undefined
     }
-    
+
     console.log('🛑 Sync stopped by user')
-    
+
     // Notify any progress callbacks that sync was cancelled
     if (this.onProgressCallback) {
       this.onProgressCallback({
@@ -2056,21 +1987,20 @@ class SupabaseSyncService {
    */
   async getSyncStatus(): Promise<SyncProgress[]> {
     try {
-      const { data, error } = await supabase
-        .from(TABLES.SYNC_STATUS)
-        .select('*')
-        .order('updated_at', { ascending: false })
+      const { data, error } = await selectAll(TABLES.SYNC_STATUS, {
+        orderBy: { column: 'updated_at', ascending: false }
+      })
 
       if (error) throw error
 
       // Filter out removed sync types
-      return data
+      return (data || [])
         .filter(row => row.data_type !== 'upcoming_opposition' && row.data_type !== 'matches_data')
         .map(row => ({
           dataType: row.data_type,
           status: row.status as SyncStatus,
           progress: row.progress_percentage,
-          message: row.status === SYNC_STATUS.COMPLETED ? 'Completed' : 
+          message: row.status === SYNC_STATUS.COMPLETED ? 'Completed' :
                   row.status === SYNC_STATUS.FAILED ? `Failed: ${row.error_message}` :
                   row.status === SYNC_STATUS.IN_PROGRESS ? 'In progress...' : 'Pending',
           error: row.error_message
@@ -2083,4 +2013,6 @@ class SupabaseSyncService {
   }
 }
 
-export const supabaseSyncService = new SupabaseSyncService()
+const syncServiceInstance = new SyncService()
+export const syncService = syncServiceInstance
+export const supabaseSyncService = syncServiceInstance

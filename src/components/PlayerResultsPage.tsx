@@ -18,7 +18,7 @@ import PlayerSaleHistory from './PlayerSaleHistory';
 import PlayerPositionSummary from './PlayerPositionSummary';
 import PlayerRecentMatches from './PlayerRecentMatches';
 import { useLoading } from '../contexts/LoadingContext';
-import { supabase, TABLES } from '../lib/supabase';
+// Direct supabase import removed - using API routes instead
 import { useWallet } from '../contexts/WalletContext';
 
 interface PlayerResultsPageProps {

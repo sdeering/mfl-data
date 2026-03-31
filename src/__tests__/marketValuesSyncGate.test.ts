@@ -1,5 +1,9 @@
-import { supabase } from '../lib/supabase'
-import { supabaseSyncService } from '../services/supabaseSyncService'
+import * as dbHelpers from '../lib/db-helpers'
+import { syncService as supabaseSyncService } from '../services/syncService'
+
+// Mock db-helpers
+jest.mock('../lib/db-helpers')
+const mockDbHelpers = dbHelpers as jest.Mocked<typeof dbHelpers>
 
 // These tests validate that agency player market values do not trigger more than once per 7 days
 
@@ -12,17 +16,10 @@ describe('Agency Market Values 7-day Gate', () => {
 
   test('does not start backend sync when last_synced is fresh', async () => {
     const now = new Date().toISOString()
-    // Mock supabase to return fresh last_synced for sync_status
-    jest.spyOn(supabase as any, 'from').mockImplementation((table: string) => {
-      return {
-        select: jest.fn().mockReturnThis(),
-        eq: jest.fn().mockReturnThis(),
-        order: jest.fn().mockReturnThis(),
-        limit: jest.fn().mockReturnThis(),
-        maybeSingle: jest.fn().mockResolvedValue({ data: table === 'sync_status' ? { last_synced: now } : null, error: null }),
-        upsert: jest.fn().mockResolvedValue({ data: null, error: null })
-      }
-    })
+    // Mock db-helpers to return fresh last_synced for sync_status
+    mockDbHelpers.selectMaybeOne.mockResolvedValue({ data: { last_synced: now }, error: null })
+    mockDbHelpers.selectAll.mockResolvedValue({ data: [], error: null })
+    mockDbHelpers.upsertOne.mockResolvedValue({ data: null, error: null })
 
     const spyFetch: any = jest.spyOn(global as any, 'fetch')
       .mockResolvedValue({ ok: true, json: async () => ({ success: true, activeJobs: [] }) })
@@ -42,21 +39,14 @@ describe('Agency Market Values 7-day Gate', () => {
   })
 
   test('starts backend sync when forced', async () => {
-    // Mock supabase to return some agency players so flow proceeds to POST job
-    jest.spyOn(supabase as any, 'from').mockImplementation((table: string) => {
-      return {
-        select: jest.fn().mockReturnThis(),
-        eq: jest.fn().mockResolvedValue(
-          table === 'agency_players'
-            ? { data: [{ mfl_player_id: 123, player: { data: { metadata: { firstName: 'A', lastName: 'B', overall: 80, positions: ['ST'], age: 25, pace: 70, shooting: 70, passing: 70, dribbling: 70, defense: 50, physical: 60, goalkeeping: 1 } } } }], error: null }
-            : { data: null, error: null }
-        ),
-        maybeSingle: jest.fn().mockResolvedValue({ data: null, error: null }),
-        upsert: jest.fn().mockResolvedValue({ data: null, error: null }),
-        order: jest.fn().mockReturnThis(),
-        limit: jest.fn().mockReturnThis()
-      }
+    // Mock db-helpers to return some agency players so flow proceeds to POST job
+    mockDbHelpers.selectMaybeOne.mockResolvedValue({ data: null, error: null })
+    mockDbHelpers.selectAll.mockResolvedValue({
+      data: [{ mfl_player_id: 123, data: { metadata: { firstName: 'A', lastName: 'B', overall: 80, positions: ['ST'], age: 25, pace: 70, shooting: 70, passing: 70, dribbling: 70, defense: 50, physical: 60, goalkeeping: 1 } } }],
+      error: null
     })
+    mockDbHelpers.upsertOne.mockResolvedValue({ data: null, error: null })
+    mockDbHelpers.upsertMany.mockResolvedValue({ data: null, error: null })
 
     const started = { posted: false }
     const spyFetch: any = jest.spyOn(global as any, 'fetch')

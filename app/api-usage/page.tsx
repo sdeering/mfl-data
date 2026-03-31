@@ -37,30 +37,11 @@ export default function ApiUsagePage() {
       try {
         setLoading(true)
         setError(null)
-        // Prefer client-side Supabase RPC to bypass server env issues; on any failure, fall back to API route
-        let loaded = false
-        if (typeof window !== 'undefined' && process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
-          try {
-            const { createClient } = await import('@supabase/supabase-js')
-            const supabase = createClient(
-              process.env.NEXT_PUBLIC_SUPABASE_URL as string,
-              process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY as string,
-              { auth: { persistSession: false } }
-            )
-            const fromDate = new Date(Date.now() - 29 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
-            const { data, error } = await supabase.rpc('get_api_usage', { from_date: fromDate, p_source: null, p_endpoint: null })
-            if (!error && Array.isArray(data)) {
-              setRows(data as any)
-              loaded = true
-            }
-          } catch {}
-        }
-        if (!loaded) {
-          const res = await fetch('/api/usage')
-          if (!res.ok) throw new Error('Failed to load usage data')
-          const json = await res.json()
-          setRows(json.data ?? [])
-        }
+        // Fetch usage data from API route
+        const res = await fetch('/api/usage')
+        if (!res.ok) throw new Error('Failed to load usage data')
+        const json = await res.json()
+        setRows(json.data ?? [])
       } catch (e: any) {
         setError(e?.message || 'Failed to load')
       } finally {

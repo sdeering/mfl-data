@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useWallet } from '../contexts/WalletContext';
-import { supabaseDataService } from '../services/supabaseDataService';
+import { supabaseDataService } from '../services/clientDataService';
 
 export default function AgencyPageDebug() {
   const { isConnected, account } = useWallet();

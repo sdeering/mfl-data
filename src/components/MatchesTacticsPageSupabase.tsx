@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { useWallet } from '../contexts/WalletContext';
 import { useRouter } from 'next/navigation';
-import { supabaseDataService } from '../services/supabaseDataService';
+import { supabaseDataService } from '../services/clientDataService';
 import { MFLMatch } from '../services/matchesService';
 
 const MatchesTacticsPageSupabase: React.FC = () => {

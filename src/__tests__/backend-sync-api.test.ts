@@ -108,20 +108,16 @@ const GET = async (request: MockNextRequest) => {
 jest.mock('../services/marketValueService');
 const mockGetPlayerMarketValue = getPlayerMarketValue as jest.MockedFunction<typeof getPlayerMarketValue>;
 
-// Mock Supabase
-jest.mock('../lib/supabase', () => ({
-  supabase: {
-    from: jest.fn(() => ({
-      select: jest.fn(() => ({
-        eq: jest.fn(() => ({
-          maybeSingle: jest.fn(() => Promise.resolve({ data: null, error: null }))
-        }))
-      }))
-    }))
-  },
-  TABLES: {
-    MARKET_VALUES: 'market_values'
-  }
+// Mock db-helpers
+jest.mock('../lib/db-helpers', () => ({
+  selectAll: jest.fn(() => Promise.resolve({ data: [], error: null })),
+  selectOne: jest.fn(() => Promise.resolve({ data: null, error: null })),
+  selectMaybeOne: jest.fn(() => Promise.resolve({ data: null, error: null })),
+  upsertOne: jest.fn(() => Promise.resolve({ data: null, error: null })),
+  upsertMany: jest.fn(() => Promise.resolve({ data: null, error: null })),
+  insertOne: jest.fn(() => Promise.resolve({ data: null, error: null })),
+  deleteWhere: jest.fn(() => Promise.resolve({ data: null, error: null })),
+  executeRaw: jest.fn(() => Promise.resolve({ data: null, error: null })),
 }));
 
 describe('Backend Sync API', () => {

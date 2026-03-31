@@ -5,7 +5,8 @@ import { fetchPlayerExperienceHistory, processProgressionData } from './playerEx
 import { fetchPlayerMatches } from './playerMatchesService';
 import { fetchMarketData } from './marketDataService';
 import { calculateAllPositionOVRs } from '../utils/ruleBasedPositionCalculator';
-import { supabase, TABLES } from '../lib/supabase';
+import { TABLES } from '../lib/database';
+import { upsertOne, selectMaybeOne } from '../lib/db-helpers';
 import type { MarketValueEstimate } from '../utils/marketValueCalculator';
 
 // In-memory cache for market values (1 hour TTL)
@@ -120,9 +121,9 @@ export async function calculatePlayerMarketValue(
 
     // Store the calculated market value in the database
     // Market values are player-specific, not wallet-specific
-    const { error: upsertError } = await supabase
-      .from(TABLES.MARKET_VALUES)
-      .upsert({
+    const { error: upsertError } = await upsertOne(
+      TABLES.MARKET_VALUES,
+      {
         mfl_player_id: parseInt(playerIdStr),
         data: {
           market_value: marketValueEstimate.estimatedValue,
@@ -133,9 +134,9 @@ export async function calculatePlayerMarketValue(
           cache_version: '1.1' // Version to handle service changes
         },
         last_synced: new Date().toISOString()
-      }, {
-        onConflict: 'mfl_player_id'
-      });
+      },
+      'mfl_player_id'
+    );
     
     if (upsertError) {
       console.warn(`⚠️ Error storing market value for player ${playerIdStr}:`, upsertError);
@@ -174,11 +175,10 @@ export async function getCachedMarketValue(
     const playerIdStr = playerId.toString();
     console.log(`🔍 Checking database cache for player ${playerIdStr} (max age: ${maxAgeHours}h)`);
     
-    const { data, error } = await supabase
-      .from(TABLES.MARKET_VALUES)
-      .select('*')
-      .eq('mfl_player_id', parseInt(playerIdStr))
-      .maybeSingle();
+    const { data, error } = await selectMaybeOne(
+      TABLES.MARKET_VALUES,
+      { where: { mfl_player_id: parseInt(playerIdStr) } }
+    );
 
     if (error) {
       console.log(`❌ Cache lookup error for player ${playerIdStr}:`, error);

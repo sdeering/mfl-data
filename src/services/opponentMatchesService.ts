@@ -1,4 +1,4 @@
-import { supabase } from '../lib/supabase';
+import { selectMaybeOne, selectAll } from '../lib/db-helpers';
 
 export interface OpponentMatchData {
   id: string;
@@ -28,12 +28,10 @@ class OpponentMatchesService {
     try {
       console.log(`🔍 DB: Fetching opponent data for squad ${opponentSquadId} from database...`);
       
-      const { data, error } = await supabase
-        .from('opponent_matches')
-        .select('*')
-        .eq('opponent_squad_id', opponentSquadId)
-        .eq('match_limit', matchLimit)
-        .maybeSingle();
+      const { data, error } = await selectMaybeOne(
+        'opponent_matches',
+        { where: { opponent_squad_id: opponentSquadId, match_limit: matchLimit } }
+      );
 
       if (error) {
         console.error(`❌ DB: Error fetching opponent data for squad ${opponentSquadId}:`, error);
@@ -86,11 +84,10 @@ class OpponentMatchesService {
     try {
       console.log(`🔍 DB: Fetching opponent data for ${opponentSquadIds.length} squads from database...`);
       
-      const { data, error } = await supabase
-        .from('opponent_matches')
-        .select('*')
-        .in('opponent_squad_id', opponentSquadIds)
-        .eq('match_limit', matchLimit);
+      const { data, error } = await selectAll(
+        'opponent_matches',
+        { where: { opponent_squad_id: { in: opponentSquadIds }, match_limit: matchLimit } }
+      );
 
       if (error) {
         console.error(`❌ DB: Error fetching multiple opponent data:`, error);

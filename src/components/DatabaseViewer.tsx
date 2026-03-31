@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { supabase, TABLES } from '../lib/supabase';
+// Uses /api/data/db-stats endpoint instead of direct database access
 
 interface TableStats {
   tableName: string;
@@ -19,48 +19,17 @@ export default function DatabaseViewer() {
     setError(null);
 
     try {
-      const tables = [
-        TABLES.USERS,
-        TABLES.CLUBS,
-        TABLES.AGENCY_PLAYERS,
-        TABLES.PLAYERS,
-        TABLES.MATCHES,
-        TABLES.SYNC_STATUS
-      ];
+      const res = await fetch('/api/data/db-stats');
+      if (!res.ok) throw new Error('Failed to fetch database stats');
+      const dbStats = await res.json();
 
-      const statsPromises = tables.map(async (table) => {
-        try {
-          // Get count
-          const { count, error: countError } = await supabase
-            .from(table)
-            .select('*', { count: 'exact', head: true });
+      const tableNames = ['users', 'clubs', 'agency_players', 'players', 'matches', 'sync_status'];
+      const stats: TableStats[] = tableNames.map(table => ({
+        tableName: table,
+        count: dbStats.tables?.[table]?.count || 0,
+        lastSynced: dbStats.tables?.[table]?.lastSynced || null
+      }));
 
-          if (countError) throw countError;
-
-          // Get last synced
-          const { data: lastSyncedData, error: lastSyncedError } = await supabase
-            .from(table)
-            .select('last_synced')
-            .order('last_synced', { ascending: false })
-            .limit(1)
-            .single();
-
-          return {
-            tableName: table,
-            count: count || 0,
-            lastSynced: lastSyncedData?.last_synced || null
-          };
-        } catch (error) {
-          console.warn(`Error fetching stats for ${table}:`, error);
-          return {
-            tableName: table,
-            count: 0,
-            lastSynced: null
-          };
-        }
-      });
-
-      const stats = await Promise.all(statsPromises);
       setTableStats(stats);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unknown error');

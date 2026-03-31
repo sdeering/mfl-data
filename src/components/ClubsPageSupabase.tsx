@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useWallet } from '../contexts/WalletContext';
-import { supabaseDataService } from '../services/supabaseDataService';
+import { supabaseDataService } from '../services/clientDataService';
 import { useLoading } from '../contexts/LoadingContext';
 
 // Import the clubsService for utility functions

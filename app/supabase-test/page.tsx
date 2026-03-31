@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { supabase } from '../../src/lib/supabase'
 
 export default function SupabaseTestPage() {
   const [connectionStatus, setConnectionStatus] = useState<'testing' | 'connected' | 'error'>('testing')
@@ -9,86 +8,47 @@ export default function SupabaseTestPage() {
   const [testResults, setTestResults] = useState<any[]>([])
 
   useEffect(() => {
-    testSupabaseConnection()
+    testDatabaseConnection()
   }, [])
 
-  const testSupabaseConnection = async () => {
+  const testDatabaseConnection = async () => {
     try {
       setConnectionStatus('testing')
       setError(null)
       setTestResults([])
 
-      // Test 1: Basic connection
-      const { data: connectionTest, error: connectionError } = await supabase
-        .from('users')
-        .select('count')
-        .limit(1)
-
-      if (connectionError) throw connectionError
+      // Test 1: Basic connection via db-stats
+      const res = await fetch('/api/data/db-stats')
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      const dbStats = await res.json()
 
       setTestResults(prev => [...prev, {
         test: 'Database Connection',
         status: 'success',
-        message: 'Successfully connected to Supabase'
+        message: 'Successfully connected to database'
       }])
 
       // Test 2: Check table structure
-      const { data: tables, error: tablesError } = await supabase
-        .from('information_schema.tables')
-        .select('table_name')
-        .eq('table_schema', 'public')
-
-      if (tablesError) {
-        setTestResults(prev => [...prev, {
-          test: 'Table Structure Check',
-          status: 'warning',
-          message: 'Could not check table structure (this is normal)'
-        }])
-      } else {
-        setTestResults(prev => [...prev, {
-          test: 'Table Structure Check',
-          status: 'success',
-          message: `Found ${tables?.length || 0} tables`
-        }])
-      }
-
-      // Test 3: Test insert/update (users table)
-      const testWalletAddress = '0x95dc70d7d39f6f76'
-      const testUserData = {
-        wallet_address: testWalletAddress,
-        data: {
-          walletAddress: testWalletAddress,
-          username: 'Test User',
-          experience: 1000
-        },
-        last_synced: new Date().toISOString()
-      }
-
-      const { error: insertError } = await supabase
-        .from('users')
-        .upsert(testUserData)
-
-      if (insertError) throw insertError
-
+      const tableNames = Object.keys(dbStats.tables || {})
       setTestResults(prev => [...prev, {
-        test: 'Data Insert/Update',
-        status: 'success',
-        message: 'Successfully inserted test user data'
+        test: 'Table Structure Check',
+        status: tableNames.length > 0 ? 'success' : 'warning',
+        message: `Found ${tableNames.length} tables`
       }])
 
-      // Test 4: Test query
-      const { data: userData, error: queryError } = await supabase
-        .from('users')
-        .select('*')
-        .eq('wallet_address', testWalletAddress)
-        .single()
-
-      if (queryError) throw queryError
-
+      // Test 3: Check data existence
+      const totalRecords = tableNames.reduce((acc: number, t: string) => acc + (dbStats.tables[t]?.count || 0), 0)
       setTestResults(prev => [...prev, {
-        test: 'Data Query',
+        test: 'Data Check',
         status: 'success',
-        message: `Successfully queried user data: ${userData?.data?.username || 'Unknown'}`
+        message: `Total records across all tables: ${totalRecords}`
+      }])
+
+      // Test 4: Check health
+      setTestResults(prev => [...prev, {
+        test: 'Health Check',
+        status: dbStats.healthy ? 'success' : 'warning',
+        message: dbStats.healthy ? 'Database is healthy' : 'Database health check failed'
       }])
 
       setConnectionStatus('connected')
@@ -97,7 +57,7 @@ export default function SupabaseTestPage() {
       const errorMessage = err instanceof Error ? err.message : 'Unknown error'
       setError(errorMessage)
       setConnectionStatus('error')
-      
+
       setTestResults(prev => [...prev, {
         test: 'Error Test',
         status: 'error',
@@ -114,13 +74,12 @@ export default function SupabaseTestPage() {
         message: 'Testing sync service...'
       }])
 
-      // Import the sync service dynamically to avoid SSR issues
-      const { supabaseSyncService } = await import('../../src/services/supabaseSyncService')
-      
-      // Test sync with your wallet address
+      const { clientSyncService } = await import('../../src/services/clientSyncService')
+
+      // Test sync with a wallet address
       const walletAddress = '0x95dc70d7d39f6f76'
-      
-      await supabaseSyncService.syncAllData(walletAddress, {
+
+      await clientSyncService.syncAllData(walletAddress, {
         forceRefresh: true,
         onProgress: (progress) => {
           setTestResults(prev => [...prev, {
@@ -159,7 +118,7 @@ export default function SupabaseTestPage() {
           <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
             Connection Status
           </h2>
-          
+
           <div className="flex items-center space-x-3">
             {connectionStatus === 'testing' && (
               <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
@@ -178,7 +137,7 @@ export default function SupabaseTestPage() {
                 </svg>
               </div>
             )}
-            
+
             <span className={`text-lg font-medium ${
               connectionStatus === 'connected' ? 'text-green-600 dark:text-green-400' :
               connectionStatus === 'error' ? 'text-red-600 dark:text-red-400' :
@@ -202,7 +161,7 @@ export default function SupabaseTestPage() {
           <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
             Test Results
           </h2>
-          
+
           <div className="space-y-3">
             {testResults.map((result, index) => (
               <div key={index} className="flex items-center space-x-3 p-3 rounded-md bg-gray-50 dark:bg-gray-700">
@@ -237,7 +196,7 @@ export default function SupabaseTestPage() {
                 {result.status === 'testing' && (
                   <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600"></div>
                 )}
-                
+
                 <div>
                   <p className="font-medium text-gray-900 dark:text-white">{result.test}</p>
                   <p className="text-sm text-gray-600 dark:text-gray-300">{result.message}</p>
@@ -252,15 +211,15 @@ export default function SupabaseTestPage() {
           <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
             Actions
           </h2>
-          
+
           <div className="space-x-4">
             <button
-              onClick={testSupabaseConnection}
+              onClick={testDatabaseConnection}
               className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
             >
               Test Connection
             </button>
-            
+
             <button
               onClick={runSyncTest}
               className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors"

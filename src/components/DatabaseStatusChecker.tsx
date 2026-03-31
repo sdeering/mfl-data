@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useWallet } from '../contexts/WalletContext';
-import { supabase, TABLES } from '../lib/supabase';
+// Uses /api/data/db-stats endpoint instead of direct database access
 
 export default function DatabaseStatusChecker() {
   const { isConnected, account } = useWallet();
@@ -19,56 +19,44 @@ export default function DatabaseStatusChecker() {
     try {
       console.log('Checking database status for wallet:', account);
       
-      // Check all tables
-      const [
-        usersResult,
-        agencyPlayersResult,
-        playersResult,
-        clubsResult,
-        matchesResult,
-        syncStatusResult
-      ] = await Promise.all([
-        supabase.from(TABLES.USERS).select('*').eq('wallet_address', account),
-        supabase.from(TABLES.AGENCY_PLAYERS).select('*').eq('wallet_address', account),
-        supabase.from(TABLES.PLAYERS).select('*').limit(10),
-        supabase.from(TABLES.CLUBS).select('*').limit(10),
-        supabase.from(TABLES.MATCHES).select('*').limit(10),
-        supabase.from(TABLES.SYNC_STATUS).select('*').order('updated_at', { ascending: false })
-      ]);
+      // Check database status via API
+      const res = await fetch(`/api/data/db-stats?walletAddress=${encodeURIComponent(account)}`);
+      if (!res.ok) throw new Error('Failed to fetch database status');
+      const dbStats = await res.json();
 
       const statusData = {
         walletAddress: account,
         timestamp: new Date().toISOString(),
         tables: {
           users: {
-            count: usersResult.data?.length || 0,
-            data: usersResult.data?.[0] || null,
-            error: usersResult.error?.message || null
+            count: dbStats.tables?.users?.count || 0,
+            data: dbStats.tables?.users?.sample?.[0] || null,
+            error: dbStats.tables?.users?.error || null
           },
           agencyPlayers: {
-            count: agencyPlayersResult.data?.length || 0,
-            sampleData: agencyPlayersResult.data?.slice(0, 3) || [],
-            error: agencyPlayersResult.error?.message || null
+            count: dbStats.tables?.agency_players?.count || 0,
+            sampleData: dbStats.tables?.agency_players?.sample || [],
+            error: dbStats.tables?.agency_players?.error || null
           },
           players: {
-            count: playersResult.data?.length || 0,
-            sampleData: playersResult.data?.slice(0, 3) || [],
-            error: playersResult.error?.message || null
+            count: dbStats.tables?.players?.count || 0,
+            sampleData: dbStats.tables?.players?.sample || [],
+            error: dbStats.tables?.players?.error || null
           },
           clubs: {
-            count: clubsResult.data?.length || 0,
-            sampleData: clubsResult.data?.slice(0, 3) || [],
-            error: clubsResult.error?.message || null
+            count: dbStats.tables?.clubs?.count || 0,
+            sampleData: dbStats.tables?.clubs?.sample || [],
+            error: dbStats.tables?.clubs?.error || null
           },
           matches: {
-            count: matchesResult.data?.length || 0,
-            sampleData: matchesResult.data?.slice(0, 3) || [],
-            error: matchesResult.error?.message || null
+            count: dbStats.tables?.matches?.count || 0,
+            sampleData: dbStats.tables?.matches?.sample || [],
+            error: dbStats.tables?.matches?.error || null
           },
           syncStatus: {
-            count: syncStatusResult.data?.length || 0,
-            data: syncStatusResult.data || [],
-            error: syncStatusResult.error?.message || null
+            count: dbStats.tables?.sync_status?.count || 0,
+            data: dbStats.tables?.sync_status?.sample || [],
+            error: dbStats.tables?.sync_status?.error || null
           }
         }
       };
