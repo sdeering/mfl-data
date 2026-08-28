@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { MFL_API_BASE_URL, getMflAuthHeaders } from '@/src/config/mflApi';
 
-const MFL_API_BASE = 'https://z519wdyajg.execute-api.us-east-1.amazonaws.com/prod';
 const TIMEOUT_MS = 30000; // 30 seconds
 
 export async function GET(
@@ -23,22 +23,23 @@ export async function GET(
 
     console.log(`[API] GET /api/matches/${matchId} - withFormations: ${withFormations}`);
     
-    const url = `${MFL_API_BASE}/matches/${matchId}${withFormations ? '?withFormations=true' : ''}`;
+    const url = `${MFL_API_BASE_URL}/matches/${matchId}${withFormations ? '?withFormations=true' : ''}`;
     console.log(`[API] Fetching from MFL API: ${url}`);
-    
+
     // Use native fetch with proper timeout handling
     const controller = new AbortController();
     const timeoutId = setTimeout(() => {
       console.log(`[API] Timeout reached, aborting request for match ${matchId}`);
       controller.abort();
     }, TIMEOUT_MS);
-    
+
     try {
       const fetchStartTime = Date.now();
       const response = await fetch(url, {
         method: 'GET',
         headers: {
           'Accept': 'application/json',
+          ...getMflAuthHeaders(),
         },
         signal: controller.signal,
         // Cache for 6 hours (21600 seconds)

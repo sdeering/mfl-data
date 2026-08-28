@@ -1,7 +1,10 @@
 import { mflApi } from '../services/mflApi';
 import { MFLInterval } from '../types/mflApi';
 
-describe('Player Progression Endpoint - Real API Tests', () => {
+const skipReal = process.env.DISABLE_REAL_API_TESTS === '1' || process.env.CI === 'true' || process.env.MFL_API_TOKEN === 'test-mfl-api-token'
+const maybeDescribe = skipReal ? describe.skip : describe
+
+maybeDescribe('Player Progression Endpoint - Real API Tests', () => {
   // These tests use real API calls to verify the endpoint works correctly
 
   describe('getPlayerProgressions', () => {

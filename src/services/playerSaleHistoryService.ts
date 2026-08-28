@@ -1,4 +1,5 @@
 import type { PlayerSaleHistory, PlayerSaleHistoryEntry } from '../types/playerSaleHistory';
+import { MFL_API_BASE_URL, getMflAuthHeaders } from '../config/mflApi';
 
 // Cache for player sale history data
 const cache = new Map<string, { data: PlayerSaleHistory; timestamp: number }>();
@@ -58,9 +59,9 @@ export async function fetchPlayerSaleHistory(playerId: string, limit: number = 2
       }
     } else {
       // In Node.js/test environment, use direct MFL API call
-      const url = `https://z519wdyajg.execute-api.us-east-1.amazonaws.com/prod/listings/feed?limit=${limit}&playerId=${playerId}`;
+      const url = `${MFL_API_BASE_URL}/listings/feed?limit=${limit}&playerId=${playerId}`;
       try {
-        response = await fetch(url);
+        response = await fetch(url, { headers: getMflAuthHeaders() });
       } catch (networkError) {
         console.warn(`⚠️ Network error - unable to reach player sale history API: ${networkError}`);
         const errorResult: PlayerSaleHistory = {

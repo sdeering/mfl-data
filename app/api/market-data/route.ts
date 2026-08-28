@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { MFL_API_BASE_URL, getMflAuthHeaders } from '@/src/config/mflApi';
 
 export async function GET(request: Request) {
   try {
@@ -44,7 +45,7 @@ export async function GET(request: Request) {
     const onlyPrimaryPosition = searchParams.get('onlyPrimaryPosition') || 'true';
 
     // Build the API URL
-    const baseUrl = 'https://z519wdyajg.execute-api.us-east-1.amazonaws.com/prod/listings';
+    const baseUrl = `${MFL_API_BASE_URL}/listings`;
     const params = new URLSearchParams({
       limit,
       type,
@@ -73,7 +74,8 @@ export async function GET(request: Request) {
       method: 'GET',
       headers: {
         'Accept': 'application/json',
-        'User-Agent': 'MFL-Player-Search/1.0'
+        'User-Agent': 'MFL-Player-Search/1.0',
+        ...getMflAuthHeaders(),
       },
       signal: controller.signal
     }).finally(() => clearTimeout(timeout));

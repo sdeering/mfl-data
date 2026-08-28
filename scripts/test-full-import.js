@@ -5,6 +5,7 @@
  * This script will test the Supabase sync service with actual MFL API data
  */
 
+require('./load-env');
 const { createClient } = require('@supabase/supabase-js');
 
 // Import fetch for Node.js
@@ -20,7 +21,11 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 const WALLET_ADDRESS = '0x95dc70d7d39f6f76';
 
 // MFL API configuration
-const MFL_API_BASE = 'https://z519wdyajg.execute-api.us-east-1.amazonaws.com/prod';
+const MFL_API_BASE = 'https://api.playmfl.com';
+
+if (!process.env.MFL_API_TOKEN) {
+  throw new Error('MFL_API_TOKEN is not set');
+}
 
 /**
  * Make HTTP request to MFL API
@@ -28,8 +33,10 @@ const MFL_API_BASE = 'https://z519wdyajg.execute-api.us-east-1.amazonaws.com/pro
 async function mflApiRequest(endpoint) {
   const url = `${MFL_API_BASE}${endpoint}`;
   console.log(`📡 Fetching: ${url}`);
-  
-  const response = await fetch(url);
+
+  const response = await fetch(url, {
+    headers: { 'X-MFL-Api-Token': process.env.MFL_API_TOKEN },
+  });
   if (!response.ok) {
     throw new Error(`HTTP ${response.status}: ${response.statusText}`);
   }

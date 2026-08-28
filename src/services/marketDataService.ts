@@ -1,10 +1,8 @@
 // Market Data Service for fetching comparable player listings
 // Used for market value estimation
-// 
-// NOTE: The external API requires authentication (API key) which we don't currently have.
-// When the API call fails, the system falls back to a simple calculation based on overall rating.
 
 import { cacheService } from './cacheService';
+import { MFL_API_BASE_URL } from '../config/mflApi';
 
 // Rate limiter to protect external API
 class RateLimiter {
@@ -103,7 +101,7 @@ export async function fetchMarketData(params: {
       onlyPrimaryPosition: 'true'  // Only include primary position matches
     });
 
-    const url = `https://z519wdyajg.execute-api.us-east-1.amazonaws.com/prod/listings?${queryParams}`;
+    const url = `${MFL_API_BASE_URL}/listings?${queryParams}`;
 
     // Check cache first
     const cachedData = cacheService.get(url);

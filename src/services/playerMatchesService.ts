@@ -1,4 +1,5 @@
 import type { PlayerMatchesResponse } from '../types/playerMatches';
+import { MFL_API_BASE_URL, getMflAuthHeaders } from '../config/mflApi';
 
 // Cache for player matches data
 const cache = new Map<string, { data: PlayerMatchesResponse; timestamp: number }>();
@@ -62,7 +63,8 @@ export const fetchPlayerMatches = async (playerId: string): Promise<PlayerMatche
       } else {
         // In Node.js/test environment, use direct MFL API call
         response = await fetch(
-          `https://z519wdyajg.execute-api.us-east-1.amazonaws.com/prod/players/${playerId}/matches/stats?limit=25`
+          `${MFL_API_BASE_URL}/players/${playerId}/matches/stats?limit=25`,
+          { headers: getMflAuthHeaders() }
         );
       }
 

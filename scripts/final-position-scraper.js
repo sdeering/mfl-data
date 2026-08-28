@@ -1,3 +1,4 @@
+require('./load-env');
 const puppeteer = require('puppeteer');
 const axios = require('axios');
 const XLSX = require('xlsx');
@@ -9,11 +10,17 @@ const OWNER_WALLETS = [
   '0x55e8be2966409ed4'
 ];
 
-const API_BASE_URL = 'https://z519wdyajg.execute-api.us-east-1.amazonaws.com/prod';
+const API_BASE_URL = 'https://api.playmfl.com';
+
+if (!process.env.MFL_API_TOKEN) {
+  throw new Error('MFL_API_TOKEN is not set');
+}
+
+const MFL_HEADERS = { 'X-MFL-Api-Token': process.env.MFL_API_TOKEN };
 
 async function getPlayersFromWallet(walletAddress) {
   try {
-    const response = await axios.get(`${API_BASE_URL}/players?ownerWalletAddress=${walletAddress}&limit=1200`);
+    const response = await axios.get(`${API_BASE_URL}/players?ownerWalletAddress=${walletAddress}&limit=1200`, { headers: MFL_HEADERS });
     return response.data.map(player => player.id);
   } catch (error) {
     console.error(`Error fetching players for wallet ${walletAddress}:`, error);
@@ -23,7 +30,7 @@ async function getPlayersFromWallet(walletAddress) {
 
 async function getPlayerData(playerId) {
   try {
-    const response = await axios.get(`${API_BASE_URL}/players/${playerId}`);
+    const response = await axios.get(`${API_BASE_URL}/players/${playerId}`, { headers: MFL_HEADERS });
     return response.data.player;
   } catch (error) {
     console.error(`Error fetching player data for ID ${playerId}:`, error);

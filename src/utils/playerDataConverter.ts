@@ -1,4 +1,5 @@
 import { PlayerForOVRCalculation } from '../types/positionOvr';
+import { mflApi } from '../services/mflApi';
 
 /**
  * MFL API Player interface based on the example provided
@@ -116,23 +117,16 @@ export function validateMFLPlayerData(mflPlayer: any): mflPlayer is MFLPlayer {
  */
 export async function fetchAndConvertPlayerData(playerId: number): Promise<PlayerForOVRCalculation> {
   try {
-    const response = await fetch(`https://z519wdyajg.execute-api.us-east-1.amazonaws.com/prod/players/${playerId}`);
-    
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
+    // Delegate to mflApi.getPlayer(), which already branches proxy (browser)
+    // vs direct MFL call (server) — avoids an unconditional client-side MFL
+    // call that would break once auth is required.
+    const player = await mflApi.getPlayer(playerId);
 
-    const data = await response.json();
-    
-    if (!data.player) {
-      throw new Error('Invalid API response: missing player data');
-    }
-
-    if (!validateMFLPlayerData(data.player)) {
+    if (!validateMFLPlayerData(player)) {
       throw new Error('Invalid player data structure');
     }
 
-    return convertMFLResponseToOVRFormat(data);
+    return convertMFLResponseToOVRFormat({ player });
   } catch (error) {
     throw new Error(`Failed to fetch player data: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }

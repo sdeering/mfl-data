@@ -1,6 +1,6 @@
 import { mflApi } from '../services/mflApi';
 
-const skipReal = process.env.DISABLE_REAL_API_TESTS === '1' || process.env.CI === 'true'
+const skipReal = process.env.DISABLE_REAL_API_TESTS === '1' || process.env.CI === 'true' || process.env.MFL_API_TOKEN === 'test-mfl-api-token'
 
 const maybeDescribe = skipReal ? describe.skip : describe
 

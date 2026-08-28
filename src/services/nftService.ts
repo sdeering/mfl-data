@@ -1,9 +1,11 @@
 /**
  * NFT Service for MFL Player Management
- * 
+ *
  * This service provides access to MFL player data from the official API.
  * It fetches real player data for connected wallet addresses.
  */
+
+import { mflApi } from './mflApi';
 
 export interface MFLPlayer {
   id: number;
@@ -61,50 +63,33 @@ export interface MFLPlayer {
   nbSeasonYellows: number;
 }
 
-export interface NFTServiceConfig {
-  apiBaseUrl?: string;
-}
-
 class NFTService {
-  private config: NFTServiceConfig;
   private cache: Map<string, MFLPlayer[]> = new Map();
   private cacheExpiry: Map<string, number> = new Map();
   private readonly CACHE_DURATION = 60 * 60 * 1000; // 1 hour
-
-  constructor(config: NFTServiceConfig = {}) {
-    this.config = {
-      apiBaseUrl: 'https://z519wdyajg.execute-api.us-east-1.amazonaws.com/prod',
-      ...config
-    };
-  }
 
   /**
    * Fetch MFL players for a given wallet address
    */
   async fetchNFTsForWallet(walletAddress: string): Promise<MFLPlayer[]> {
     const cacheKey = `players_${walletAddress}`;
-    
+
     // Check cache first
     if (this.isCacheValid(cacheKey)) {
       return this.cache.get(cacheKey) || [];
     }
 
     try {
-      // Fetch real player data from MFL API
-      const response = await fetch(
-        `${this.config.apiBaseUrl}/players?ownerWalletAddress=${walletAddress}&limit=1200`
-      );
-      
-      if (!response.ok) {
-        throw new Error(`Failed to fetch players: ${response.status} ${response.statusText}`);
-      }
-      
-      const players: MFLPlayer[] = await response.json();
-      
+      // Delegate to mflApi.getOwnerPlayers(), which already branches
+      // proxy (browser) vs direct MFL call (server) — avoids an
+      // unconditional client-side MFL call that would break once auth
+      // is required.
+      const players = (await mflApi.getOwnerPlayers(walletAddress, 1200)) as unknown as MFLPlayer[];
+
       // Cache the results
       this.cache.set(cacheKey, players);
       this.cacheExpiry.set(cacheKey, Date.now() + this.CACHE_DURATION);
-      
+
       return players;
     } catch (error) {
       console.error('Error fetching MFL players:', error);

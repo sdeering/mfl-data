@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { MFL_API_BASE_URL, getMflAuthHeaders } from '@/src/config/mflApi';
 
-const MFL_API_BASE = 'https://z519wdyajg.execute-api.us-east-1.amazonaws.com/prod';
 const TIMEOUT_MS = 30000; // 30 seconds
 
 export async function GET(
@@ -21,21 +21,22 @@ export async function GET(
 
     console.log(`[API] GET /api/clubs/${clubId}/players`);
     
-    const url = `${MFL_API_BASE}/clubs/${clubId}/players`;
+    const url = `${MFL_API_BASE_URL}/clubs/${clubId}/players`;
     console.log(`[API] Fetching from MFL API: ${url}`);
-    
+
     const controller = new AbortController();
     const timeoutId = setTimeout(() => {
       console.log(`[API] Timeout reached, aborting request for club players`);
       controller.abort();
     }, TIMEOUT_MS);
-    
+
     try {
       const fetchStartTime = Date.now();
       const response = await fetch(url, {
         method: 'GET',
         headers: {
           'Accept': 'application/json',
+          ...getMflAuthHeaders(),
         },
         signal: controller.signal,
         next: { revalidate: 3600 }, // Cache for 1 hour

@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { MFL_API_BASE_URL, getMflAuthHeaders } from '../config/mflApi';
 
 export interface MFLUser {
   id: number;
@@ -69,8 +70,8 @@ class UserService {
         }
       } else {
         // In Node.js/test environment, use direct MFL API call
-        const url = `https://z519wdyajg.execute-api.us-east-1.amazonaws.com/prod/clubs?walletAddress=${walletAddress}`;
-        const response = await axios.get(url, { timeout: 30000 });
+        const url = `${MFL_API_BASE_URL}/clubs?walletAddress=${walletAddress}`;
+        const response = await axios.get(url, { timeout: 30000, headers: getMflAuthHeaders() });
         responseData = response.data;
       }
       

@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-
-const MFL_API_BASE = 'https://z519wdyajg.execute-api.us-east-1.amazonaws.com/prod';
+import { MFL_API_BASE_URL, getMflAuthHeaders } from '@/src/config/mflApi';
 
 export async function GET(request: NextRequest) {
   try {
@@ -17,33 +16,35 @@ export async function GET(request: NextRequest) {
     console.log(`🔍 [API] Fetching clubs for wallet: ${walletAddress}`);
 
     // Try the /users/{walletAddress}/clubs endpoint first
-    const url = `${MFL_API_BASE}/users/${walletAddress}/clubs`;
-    
+    const url = `${MFL_API_BASE_URL}/users/${walletAddress}/clubs`;
+
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 10000); // 10 second timeout
-    
+
     try {
       const response = await fetch(url, {
         method: 'GET',
         headers: {
           'Accept': 'application/json',
-          'User-Agent': 'MFL-Player-Search/1.0'
+          'User-Agent': 'MFL-Player-Search/1.0',
+          ...getMflAuthHeaders(),
         },
         signal: controller.signal
       }).finally(() => clearTimeout(timeout));
 
       if (!response.ok) {
         console.error(`❌ [API] Clubs API error: ${response.status} - ${response.statusText}`);
-        
+
         // If 502 or other server error, try fallback endpoint
         if (response.status >= 500) {
           console.log(`🔄 [API] Trying fallback endpoint: /clubs?walletAddress=`);
-          const fallbackUrl = `${MFL_API_BASE}/clubs?walletAddress=${walletAddress}`;
+          const fallbackUrl = `${MFL_API_BASE_URL}/clubs?walletAddress=${walletAddress}`;
           const fallbackResponse = await fetch(fallbackUrl, {
             method: 'GET',
             headers: {
               'Accept': 'application/json',
-              'User-Agent': 'MFL-Player-Search/1.0'
+              'User-Agent': 'MFL-Player-Search/1.0',
+              ...getMflAuthHeaders(),
             },
             signal: controller.signal
           });

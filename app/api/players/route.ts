@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-
-const MFL_API_BASE = 'https://z519wdyajg.execute-api.us-east-1.amazonaws.com/prod';
+import { MFL_API_BASE_URL, getMflAuthHeaders } from '@/src/config/mflApi';
 
 export async function GET(request: NextRequest) {
   try {
@@ -28,20 +27,21 @@ export async function GET(request: NextRequest) {
       params.append('isRetired', isRetired);
     }
 
-    const url = `${MFL_API_BASE}/players?${params.toString()}`;
-    
+    const url = `${MFL_API_BASE_URL}/players?${params.toString()}`;
+
     console.log(`🌐 [API] Requesting: ${url}`);
-    
+
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 30000); // 30 second timeout for large player lists
-    
+
     try {
       const startTime = Date.now();
       const response = await fetch(url, {
         method: 'GET',
         headers: {
           'Accept': 'application/json',
-          'User-Agent': 'MFL-Player-Search/1.0'
+          'User-Agent': 'MFL-Player-Search/1.0',
+          ...getMflAuthHeaders(),
         },
         signal: controller.signal
       }).finally(() => clearTimeout(timeout));

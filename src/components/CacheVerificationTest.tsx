@@ -76,28 +76,28 @@ export default function CacheVerificationTest() {
       testResults.tests.push(await runCacheTestForService(
         'userService',
         () => userService.fetchUserByWallet(account),
-        'https://z519wdyajg.execute-api.us-east-1.amazonaws.com/prod/clubs?walletAddress=' + account
+        'https://api.playmfl.com/clubs?walletAddress=' + account
       ));
       
       // Test 2: Clubs Service Cache
       testResults.tests.push(await runCacheTestForService(
         'clubsService',
         () => clubsService.fetchClubsForWallet(account),
-        'https://z519wdyajg.execute-api.us-east-1.amazonaws.com/prod/clubs?walletAddress=' + account
+        'https://api.playmfl.com/clubs?walletAddress=' + account
       ));
       
       // Test 3: Matches Service Cache (Upcoming)
       testResults.tests.push(await runCacheTestForService(
         'matchesService (upcoming)',
         () => matchesService.fetchUpcomingMatches('28'),
-        'https://z519wdyajg.execute-api.us-east-1.amazonaws.com/prod/matches (upcoming)'
+        'https://api.playmfl.com/matches (upcoming)'
       ));
       
       // Test 4: Matches Service Past Matches Cache
       testResults.tests.push(await runCacheTestForService(
         'matchesService (past)',
         () => matchesService.fetchPastMatches('28'),
-        'https://z519wdyajg.execute-api.us-east-1.amazonaws.com/prod/matches (past)'
+        'https://api.playmfl.com/matches (past)'
       ));
       
       // Test 5: MFL API Player Progressions Cache
@@ -105,13 +105,13 @@ export default function CacheVerificationTest() {
         testResults.tests.push(await runCacheTestForService(
           'mflApi (progressions)',
           () => mflApi.getPlayerProgressions([93886, 116267], 'ALL'),
-          'https://z519wdyajg.execute-api.us-east-1.amazonaws.com/prod/players/progressions?playersIds=93886,116267&interval=ALL'
+          'https://api.playmfl.com/players/progressions?playersIds=93886,116267&interval=ALL'
         ));
       } catch (error) {
         console.warn('⚠️ Progressions test failed:', error);
         testResults.tests.push({
           service: 'mflApi (progressions)',
-          url: 'https://z519wdyajg.execute-api.us-east-1.amazonaws.com/prod/players/progressions?playersIds=93886,116267&interval=ALL',
+          url: 'https://api.playmfl.com/players/progressions?playersIds=93886,116267&interval=ALL',
           firstCall: 'N/A',
           secondCall: 'N/A',
           cacheWorking: false,
@@ -119,18 +119,18 @@ export default function CacheVerificationTest() {
         });
       }
       
-      // Test 6: MFL API Player Experience History Cache
+      // Test 6: Player Experience History Cache
       try {
         testResults.tests.push(await runCacheTestForService(
-          'mflApi (experience history)',
-          () => mflApi.getPlayerExperienceHistory(93886),
-          'https://z519wdyajg.execute-api.us-east-1.amazonaws.com/prod/players/93886/experiences/history'
+          'playerExperienceService (experience history)',
+          () => playerExperienceService.fetchPlayerExperienceHistory('93886'),
+          'https://api.playmfl.com/players/93886/experiences/history'
         ));
       } catch (error) {
         console.warn('⚠️ Experience history test failed:', error);
         testResults.tests.push({
-          service: 'mflApi (experience history)',
-          url: 'https://z519wdyajg.execute-api.us-east-1.amazonaws.com/prod/players/93886/experiences/history',
+          service: 'playerExperienceService (experience history)',
+          url: 'https://api.playmfl.com/players/93886/experiences/history',
           firstCall: 'N/A',
           secondCall: 'N/A',
           cacheWorking: false,
@@ -142,21 +142,21 @@ export default function CacheVerificationTest() {
       testResults.tests.push(await runCacheTestForService(
         'mflApi (player)',
         () => mflApi.getPlayer(93886),
-        'https://z519wdyajg.execute-api.us-east-1.amazonaws.com/prod/players/93886'
+        'https://api.playmfl.com/players/93886'
       ));
       
       // Test 8: Club Players Service Cache
       testResults.tests.push(await runCacheTestForService(
         'clubPlayersService',
         () => clubPlayersService.fetchPlayersForClub('28'),
-        'https://z519wdyajg.execute-api.us-east-1.amazonaws.com/prod/clubs/28/players'
+        'https://api.playmfl.com/clubs/28/players'
       ));
       
       // Test 9: NFT Service Cache
       testResults.tests.push(await runCacheTestForService(
         'nftService',
         () => nftService.fetchNFTsForWallet(account),
-        'https://z519wdyajg.execute-api.us-east-1.amazonaws.com/prod/players?ownerWalletAddress=' + account + '&limit=1200'
+        'https://api.playmfl.com/players?ownerWalletAddress=' + account + '&limit=1200'
       ));
       
       // Test 10: Opponent Matches Service Cache (12-hour cache)
@@ -164,13 +164,13 @@ export default function CacheVerificationTest() {
         testResults.tests.push(await runCacheTestForService(
           'opponentMatchesService',
           () => matchesService.fetchOpponentPastMatches(482, 5),
-          'https://z519wdyajg.execute-api.us-east-1.amazonaws.com/prod/matches?squadId=482&past=true&limit=5'
+          'https://api.playmfl.com/matches?squadId=482&past=true&limit=5'
         ));
       } catch (error) {
         console.warn('⚠️ Opponent matches test failed:', error);
         testResults.tests.push({
           service: 'opponentMatchesService',
-          url: 'https://z519wdyajg.execute-api.us-east-1.amazonaws.com/prod/matches?squadId=482&past=true&limit=5',
+          url: 'https://api.playmfl.com/matches?squadId=482&past=true&limit=5',
           firstCall: 'N/A',
           secondCall: 'N/A',
           cacheWorking: false,

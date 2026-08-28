@@ -1,4 +1,5 @@
 import type { PlayerExperienceHistory, PlayerExperienceEntry } from '../types/playerExperience';
+import { MFL_API_BASE_URL, getMflAuthHeaders } from '../config/mflApi';
 
 interface CacheEntry {
   data: PlayerExperienceHistory;
@@ -52,7 +53,7 @@ class PlayerExperienceService {
         }
       } else {
         // In Node.js/test environment, use direct MFL API call
-        response = await fetch(`https://z519wdyajg.execute-api.us-east-1.amazonaws.com/prod/players/${playerId}/experiences/history`);
+        response = await fetch(`${MFL_API_BASE_URL}/players/${playerId}/experiences/history`, { headers: getMflAuthHeaders() });
       }
       
       if (!response.ok) {

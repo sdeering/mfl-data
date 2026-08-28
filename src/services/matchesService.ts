@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { incrementUsage } from './apiUsage'
+import { MFL_API_BASE_URL, getMflAuthHeaders } from '../config/mflApi'
 
 export interface MFLMatch {
   id: number;
@@ -189,8 +190,8 @@ class MatchesService {
         }
       } else {
         // In Node.js/test environment, use direct MFL API call
-        const url = `https://z519wdyajg.execute-api.us-east-1.amazonaws.com/prod/clubs/${clubId}`;
-        const response = await axios.get(url, { timeout: 30000 });
+        const url = `${MFL_API_BASE_URL}/clubs/${clubId}`;
+        const response = await axios.get(url, { timeout: 30000, headers: getMflAuthHeaders() });
         const data = response.data;
         this.cache.set(cacheKey, { data, timestamp: Date.now() });
         return data;
@@ -290,17 +291,17 @@ class MatchesService {
         }
       } else {
         // In Node.js/test environment, use direct MFL API call
-        const url = `https://z519wdyajg.execute-api.us-east-1.amazonaws.com/prod/matches`;
+        const url = `${MFL_API_BASE_URL}/matches`;
         const params = {
           squadId: squadId.toString(),
           past: true,
           onlyCompetitions: true,
           limit: 15
         };
-        
+
         console.log('Fetching past matches from:', url, 'with params:', params);
-        
-        const response = await axios.get(url, { params, timeout: 30000 });
+
+        const response = await axios.get(url, { params, timeout: 30000, headers: getMflAuthHeaders() });
         try { await incrementUsage('mfl', '/matches'); } catch {}
         
         console.log('Past matches response:', response.data);
@@ -420,17 +421,17 @@ class MatchesService {
         }
       } else {
         // In Node.js/test environment, use direct MFL API call
-        const url = `https://z519wdyajg.execute-api.us-east-1.amazonaws.com/prod/matches`;
+        const url = `${MFL_API_BASE_URL}/matches`;
         const params = {
           squadId: squadId.toString(),
           upcoming: true,
           live: true,
           limit: 30
         };
-        
+
         console.log('Fetching upcoming matches from:', url, 'with params:', params);
-        
-        const response = await axios.get(url, { params, timeout: 30000 });
+
+        const response = await axios.get(url, { params, timeout: 30000, headers: getMflAuthHeaders() });
         try { await incrementUsage('mfl', '/matches'); } catch {}
         
         console.log('Upcoming matches response:', response.data);
@@ -578,15 +579,15 @@ class MatchesService {
         }
       } else {
         // In Node.js/test environment, use direct MFL API call
-        const url = `https://z519wdyajg.execute-api.us-east-1.amazonaws.com/prod/matches`;
+        const url = `${MFL_API_BASE_URL}/matches`;
         const params = {
           squadId: opponentSquadId.toString(),
           past: true,
           onlyCompetitions: true,
           limit: limit
         };
-        
-        const response = await axios.get(url, { params, timeout: 30000 });
+
+        const response = await axios.get(url, { params, timeout: 30000, headers: getMflAuthHeaders() });
         try { await incrementUsage('mfl', '/matches'); } catch {}
         
         console.log(`Found ${response.data.length} past matches for squad ${opponentSquadId}`);
@@ -630,21 +631,15 @@ class MatchesService {
     }
 
     try {
-      const url = `https://z519wdyajg.execute-api.us-east-1.amazonaws.com/prod/matches/${matchId}?withFormations=true`;
-      
-      const response = await axios.get(url);
-      try { await incrementUsage('mfl', '/clubs/:id'); } catch {}
-      const matchData = response.data;
-      
-      // Extract formation type from the match data
-      let formation = null;
-      if (matchData.homeFormation?.type) {
-        formation = matchData.homeFormation.type;
-      } else if (matchData.awayFormation?.type) {
-        formation = matchData.awayFormation.type;
-      }
-      
-      this.cache.set(cacheKey, { data: formation, timestamp: Date.now() });
+      // Delegate to fetchMatchFormations, which already branches proxy (browser)
+      // vs direct MFL call (server) — avoids an unconditional client-side MFL
+      // call that would break once auth is required.
+      const { home, away } = await this.fetchMatchFormations(matchId);
+      const formation = home ?? away ?? null;
+
+      // This cache is typed for MFLMatch[]; formation data has always been
+      // stored here too (pre-existing, unrelated to this change).
+      this.cache.set(cacheKey, { data: formation as any, timestamp: Date.now() });
       return formation;
     } catch (error) {
       console.error('Error fetching match formation:', error);
@@ -704,8 +699,8 @@ class MatchesService {
         }
       } else {
         // In Node.js/test environment, use direct MFL API call
-        const url = `https://z519wdyajg.execute-api.us-east-1.amazonaws.com/prod/matches/${matchId}?withFormations=true`;
-        const response = await axios.get(url, { timeout: 30000 });
+        const url = `${MFL_API_BASE_URL}/matches/${matchId}?withFormations=true`;
+        const response = await axios.get(url, { timeout: 30000, headers: getMflAuthHeaders() });
         try { await incrementUsage('mfl', '/matches/:id'); } catch {}
         const matchData = response.data;
 

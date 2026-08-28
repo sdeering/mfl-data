@@ -6,6 +6,7 @@
  */
 
 import axios from 'axios';
+import { MFL_API_BASE_URL, getMflAuthHeaders } from '../config/mflApi';
 
 export interface ClubPlayer {
   id: number;
@@ -156,8 +157,8 @@ class ClubPlayersService {
       } else {
         // In Node.js/test environment, use direct MFL API call
         const response = await axios.get<ClubPlayer[]>(
-          `https://z519wdyajg.execute-api.us-east-1.amazonaws.com/prod/clubs/${clubId}/players`,
-          { timeout: 30000 }
+          `${MFL_API_BASE_URL}/clubs/${clubId}/players`,
+          { timeout: 30000, headers: getMflAuthHeaders() }
         );
 
         const players = response.data;

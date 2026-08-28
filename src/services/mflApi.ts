@@ -15,13 +15,14 @@ import {
   MFLMatchReport
 } from '../types/mflApi';
 import { incrementUsage } from './apiUsage'
+import { MFL_API_BASE_URL, getMflAuthHeaders } from '../config/mflApi'
 
 // ============================================================================
 // CONFIGURATION
 // ============================================================================
 
 const MFL_API_CONFIG = {
-  baseUrl: 'https://z519wdyajg.execute-api.us-east-1.amazonaws.com/prod',
+  baseUrl: MFL_API_BASE_URL,
   timeout: 10000, // 10 seconds
   retries: 3,
   retryDelay: 1000, // 1 second
@@ -300,6 +301,12 @@ class HTTPClient {
         requestHeaders['Content-Type'] = 'application/json';
       }
 
+      // Auth token is server-only (process.env.MFL_API_TOKEN is never inlined
+      // into the client bundle); only attach it outside the browser.
+      if (!isBrowserRuntime) {
+        Object.assign(requestHeaders, getMflAuthHeaders());
+      }
+
       const fetchInit: RequestInit = {
         method,
         headers: requestHeaders,
@@ -476,6 +483,29 @@ export class MFLAPIService {
     const idCount = Array.isArray(playerIds) ? playerIds.length : 1;
     if (idCount > 50) {
       throw new Error('Maximum 50 player IDs allowed per request');
+    }
+
+    // Detect environment: use proxy in browser, direct API in Node/test
+    const hasDom = typeof window !== 'undefined' && typeof document !== 'undefined';
+    const isTest = typeof process !== 'undefined' && !!(process.env?.JEST_WORKER_ID || process.env?.NODE_ENV === 'test');
+    const isBrowserRuntime = hasDom && !isTest;
+
+    if (isBrowserRuntime) {
+      // Use proxy API route to avoid CORS issues in browser
+      const proxyUrl = `/api/players/progressions?playersIds=${ids}&interval=${interval}`;
+      const response = await fetch(proxyUrl, {
+        method: 'GET',
+        headers: { 'Accept': 'application/json' },
+        signal: this.abortSignal,
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+        throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const result = await response.json();
+      return (result.data || result) as MFLPlayerProgressionsResponse;
     }
 
     return await this.httpClient.request<MFLPlayerProgressionsResponse>(

@@ -1,5 +1,5 @@
 // MFL API Type Definitions
-// Based on actual API responses from https://z519wdyajg.execute-api.us-east-1.amazonaws.com/prod/
+// Based on actual API responses from https://api.playmfl.com/
 
 // ============================================================================
 // BASE TYPES

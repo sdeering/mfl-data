@@ -4,6 +4,24 @@ import * as XLSX from 'xlsx';
 import * as fs from 'fs';
 import * as path from 'path';
 
+// Minimal .env.local / .env loader (no dependency)
+for (const file of ['.env.local', '.env']) {
+  const filePath = path.join(__dirname, '..', file);
+  if (!fs.existsSync(filePath)) continue;
+  for (const line of fs.readFileSync(filePath, 'utf8').split('\n')) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) continue;
+    const eq = trimmed.indexOf('=');
+    if (eq === -1) continue;
+    const key = trimmed.slice(0, eq).trim();
+    let value = trimmed.slice(eq + 1).trim();
+    if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+      value = value.slice(1, -1);
+    }
+    if (!(key in process.env)) process.env[key] = value;
+  }
+}
+
 interface PlayerData {
   name: string;
   id: number;
@@ -66,8 +84,14 @@ const OWNER_WALLETS = [
   '0x55e8be2966409ed4'
 ];
 
-const API_BASE_URL = 'https://z519wdyajg.execute-api.us-east-1.amazonaws.com/prod';
+const API_BASE_URL = 'https://api.playmfl.com';
 const MFL_PLAYER_BASE_URL = 'https://mflplayer.info/player';
+
+if (!process.env.MFL_API_TOKEN) {
+  throw new Error('MFL_API_TOKEN is not set');
+}
+
+const MFL_HEADERS = { 'X-MFL-Api-Token': process.env.MFL_API_TOKEN };
 
 // Sample data you provided
 const SAMPLE_DATA: PlayerData[] = [
@@ -120,7 +144,7 @@ const SAMPLE_DATA: PlayerData[] = [
 
 async function getPlayersFromWallet(walletAddress: string): Promise<number[]> {
   try {
-    const response = await axios.get(`${API_BASE_URL}/players?ownerWalletAddress=${walletAddress}&limit=1200`);
+    const response = await axios.get(`${API_BASE_URL}/players?ownerWalletAddress=${walletAddress}&limit=1200`, { headers: MFL_HEADERS });
     return response.data.map((player: any) => player.id);
   } catch (error) {
     console.error(`Error fetching players for wallet ${walletAddress}:`, error);
@@ -130,7 +154,7 @@ async function getPlayersFromWallet(walletAddress: string): Promise<number[]> {
 
 async function getPlayerData(playerId: number): Promise<ApiPlayer | null> {
   try {
-    const response = await axios.get(`${API_BASE_URL}/players/${playerId}`);
+    const response = await axios.get(`${API_BASE_URL}/players/${playerId}`, { headers: MFL_HEADERS });
     return response.data.player;
   } catch (error) {
     console.error(`Error fetching player data for ID ${playerId}:`, error);

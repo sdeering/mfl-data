@@ -94,12 +94,13 @@ describe('MFL API Service', () => {
 
       expect(result).toEqual(mockPlayer);
       expect(mockFetch).toHaveBeenCalledWith(
-        'https://z519wdyajg.execute-api.us-east-1.amazonaws.com/prod/players/93886',
+        'https://api.playmfl.com/players/93886',
         expect.objectContaining({
           method: 'GET',
           headers: expect.objectContaining({
             'Content-Type': 'application/json',
             'Accept': 'application/json',
+            'X-MFL-Api-Token': expect.any(String),
           }),
         })
       );
@@ -146,7 +147,7 @@ describe('MFL API Service', () => {
 
       expect(result).toEqual(mockProgressions);
       expect(mockFetch).toHaveBeenCalledWith(
-        'https://z519wdyajg.execute-api.us-east-1.amazonaws.com/prod/players/progressions?playersIds=93886&interval=ALL',
+        'https://api.playmfl.com/players/progressions?playersIds=93886&interval=ALL',
         expect.any(Object)
       );
     });
@@ -166,7 +167,7 @@ describe('MFL API Service', () => {
 
       expect(result).toEqual(mockProgressions);
       expect(mockFetch).toHaveBeenCalledWith(
-        'https://z519wdyajg.execute-api.us-east-1.amazonaws.com/prod/players/progressions?playersIds=93886,116267&interval=ALL',
+        'https://api.playmfl.com/players/progressions?playersIds=93886,116267&interval=ALL',
         expect.any(Object)
       );
     });
@@ -249,7 +250,7 @@ describe('MFL API Service', () => {
 
       expect(result).toEqual(mockPlayers);
       expect(mockFetch).toHaveBeenCalledWith(
-        'https://z519wdyajg.execute-api.us-east-1.amazonaws.com/prod/players?ownerWalletAddress=0x95dc70d7d39f6f76&limit=1200',
+        'https://api.playmfl.com/players?ownerWalletAddress=0x95dc70d7d39f6f76&limit=1200',
         expect.any(Object)
       );
     });
@@ -263,7 +264,7 @@ describe('MFL API Service', () => {
       await apiService.getOwnerPlayers("0x95dc70d7d39f6f76", 100, true);
 
       expect(mockFetch).toHaveBeenCalledWith(
-        'https://z519wdyajg.execute-api.us-east-1.amazonaws.com/prod/players?ownerWalletAddress=0x95dc70d7d39f6f76&limit=100&isRetired=true',
+        'https://api.playmfl.com/players?ownerWalletAddress=0x95dc70d7d39f6f76&limit=100&isRetired=true',
         expect.any(Object)
       );
     });
@@ -350,7 +351,7 @@ describe('MFL API Service', () => {
 
       expect(result).toEqual(mockSales);
       expect(mockFetch).toHaveBeenCalledWith(
-        'https://z519wdyajg.execute-api.us-east-1.amazonaws.com/prod/listings/feed?limit=25&playerId=44743',
+        'https://api.playmfl.com/listings/feed?limit=25&playerId=44743',
         expect.any(Object)
       );
     });
@@ -384,7 +385,7 @@ describe('MFL API Service', () => {
 
       expect(result).toEqual(mockHistory);
       expect(mockFetch).toHaveBeenCalledWith(
-        'https://z519wdyajg.execute-api.us-east-1.amazonaws.com/prod/players/93886/experiences/history',
+        'https://api.playmfl.com/players/93886/experiences/history',
         expect.any(Object)
       );
     });
