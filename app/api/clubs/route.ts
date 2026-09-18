@@ -52,11 +52,10 @@ export async function GET(request: NextRequest) {
 
     console.log(`🔍 [API] Fetching clubs for wallet: ${walletAddress}`);
 
-    // The new api.playmfl.com host dropped /users/{wallet}/clubs, so try the
-    // query-based variants first (list endpoints require a limit, like /players).
+    // The new api.playmfl.com host dropped /users/{wallet}/clubs and validates
+    // /clubs strictly: it requires walletAddress and rejects a limit param.
     const candidates = [
-      `${MFL_API_BASE_URL}/clubs?ownerWalletAddress=${walletAddress}&limit=400`,
-      `${MFL_API_BASE_URL}/clubs?walletAddress=${walletAddress}&limit=400`,
+      `${MFL_API_BASE_URL}/clubs?walletAddress=${walletAddress}`,
       `${MFL_API_BASE_URL}/users/${walletAddress}/clubs`,
     ];
 

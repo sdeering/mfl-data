@@ -70,7 +70,7 @@ class UserService {
         }
       } else {
         // In Node.js/test environment, use direct MFL API call
-        const url = `${MFL_API_BASE_URL}/clubs?ownerWalletAddress=${walletAddress}`;
+        const url = `${MFL_API_BASE_URL}/clubs?walletAddress=${walletAddress}`;
         const response = await axios.get(url, { timeout: 30000, headers: getMflAuthHeaders() });
         responseData = response.data;
       }
