@@ -7,6 +7,7 @@ import { useRenderedSurface } from '../hooks/useRenderedSurface';
 import { supabaseDataService } from '../services/clientDataService';
 import { loadProgressionHistories, type PlayerHistories, type ProgressionLoadProgress } from '../services/playerProgressionService';
 import type { MFLPlayer, MFLPosition } from '../types/mflApi';
+import { POSITIONS, POSITION_GROUPS } from '../utils/positionOptions';
 import {
   ATTRIBUTE_STATS,
   PROGRESSION_STATS,
@@ -39,30 +40,6 @@ interface PlayerProgressionPageProps {
   walletAddress?: string; // View another wallet's players; defaults to the connected wallet
 }
 
-// Same positions and groupings as the squad builder's position filter
-const POSITIONS: Array<{ value: MFLPosition; label: string }> = [
-  { value: 'GK', label: 'GK - Goalkeeper' },
-  { value: 'CB', label: 'CB - Center Back' },
-  { value: 'LB', label: 'LB - Left Back' },
-  { value: 'RB', label: 'RB - Right Back' },
-  { value: 'LWB', label: 'LWB - Left Wing Back' },
-  { value: 'RWB', label: 'RWB - Right Wing Back' },
-  { value: 'CDM', label: 'CDM - Defensive Midfielder' },
-  { value: 'CM', label: 'CM - Central Midfielder' },
-  { value: 'CAM', label: 'CAM - Attacking Midfielder' },
-  { value: 'LM', label: 'LM - Left Midfielder' },
-  { value: 'RM', label: 'RM - Right Midfielder' },
-  { value: 'LW', label: 'LW - Left Winger' },
-  { value: 'RW', label: 'RW - Right Winger' },
-  { value: 'ST', label: 'ST - Striker' },
-  { value: 'CF', label: 'CF - Center Forward' }
-];
-
-const POSITION_GROUPS: Record<string, { label: string; positions: MFLPosition[] }> = {
-  __GROUP_DEFENDERS: { label: 'Defenders (CB, LB, RB, LWB, RWB)', positions: ['CB', 'LB', 'RB', 'LWB', 'RWB'] },
-  __GROUP_MIDFIELDERS: { label: 'Midfielders (CM, CDM, LM, RM)', positions: ['CM', 'CDM', 'LM', 'RM'] },
-  __GROUP_FORWARDS: { label: 'Forwards (ST, CF, RW, LW, CAM)', positions: ['ST', 'CF', 'RW', 'LW', 'CAM'] }
-};
 const INITIAL_ROWS = 100;
 const PERIODS = [7, 14, 30, 90, 180, 365]; // Days; the chart always has one bar per day
 const DEFAULT_PERIOD = 90;

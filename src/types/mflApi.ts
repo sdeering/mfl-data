@@ -157,6 +157,20 @@ export interface MFLSaleHistoryItem {
 
 export type MFLSaleHistoryResponse = MFLSaleHistoryItem[];
 
+// Marketplace Listings Response (GET /listings)
+export interface MFLListing {
+  listingResourceId: string;
+  status: 'AVAILABLE';
+  price: number;
+  // Free agents are listed without a contract
+  player: Omit<MFLPlayer, 'activeContract'> & { activeContract?: MFLContract };
+  sellerAddress: string;
+  sellerName: string;
+  createdDateTime: number;
+}
+
+export type MFLListingsResponse = MFLListing[];
+
 // Player Experience History Response
 export interface MFLExperienceHistoryItem {
   date: number;

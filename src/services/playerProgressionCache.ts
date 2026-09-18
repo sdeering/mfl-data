@@ -51,7 +51,7 @@ const chunk = <T>(items: T[], size: number): T[][] => {
 // until this passes we answer "rate limited" ourselves instead of asking MFL again.
 let blockedUntil = 0
 
-async function fetchMfl(path: string): Promise<any> {
+export async function fetchMfl(path: string): Promise<any> {
   const remainingMs = blockedUntil - Date.now()
   if (remainingMs > 0) throw new MflRateLimitError(Math.ceil(remainingMs / 1000))
 

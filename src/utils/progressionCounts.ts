@@ -106,6 +106,12 @@ export function getDayStart(timestamp: number): number {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
 }
 
+/** Start of a window of `days` calendar days ending with the day containing `now`: the first day `buildDailySeries` charts. */
+export function getWindowStart(days: number, now: number = Date.now()): number {
+  const today = new Date(getDayStart(now));
+  return new Date(today.getFullYear(), today.getMonth(), today.getDate() - (days - 1)).getTime();
+}
+
 // `overallPoints` is the rise in precise (2-decimal) overall, as opposed to `overall`, which counts
 // whole overall points gained
 export type DailyProgression = { dayStart: number; total: number; overallPoints: number } & Record<ProgressionStat, number>;

@@ -10,7 +10,7 @@ import { ATTRIBUTE_STATS, type AttributeStat, type OverallPointsEvent } from './
  * The history is replayed entry by entry, comparing the precise overall before and after each one.
  * A player's first entry only sets their starting attributes, so it is never a gain itself.
  */
-export function getOverallPointsEvents(player: MFLPlayer, entries: PlayerExperienceEntry[]): OverallPointsEvent[] {
+export function getOverallPointsEvents(player: Pick<MFLPlayer, 'metadata'>, entries: PlayerExperienceEntry[]): OverallPointsEvent[] {
   const sorted = [...entries].sort((a, b) => a.date - b.date);
   const attributes = {} as Record<AttributeStat, number>;
   // A stat the history never mentions has not changed, so the player's current value stands in
@@ -40,4 +40,13 @@ export function getOverallPointsEvents(player: MFLPlayer, entries: PlayerExperie
   }
 
   return events;
+}
+
+/** How far a player's precise overall has risen since `since`, to the 2 places the pages show. */
+export function getOverallPointsSince(player: Pick<MFLPlayer, 'metadata'>, entries: PlayerExperienceEntry[], since: number): number {
+  const points = getOverallPointsEvents(player, entries)
+    .filter(event => event.date >= since)
+    .reduce((sum, event) => sum + event.points, 0);
+  // Summing many small decimals drifts (0.1 + 0.2 = 0.30000000000000004)
+  return Math.round(points * 100) / 100;
 }

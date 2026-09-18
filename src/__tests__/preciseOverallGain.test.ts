@@ -1,6 +1,6 @@
-import { getOverallPointsEvents } from '../utils/preciseOverallGain'
+import { getOverallPointsEvents, getOverallPointsSince } from '../utils/preciseOverallGain'
 import { calculatePreciseOverallRating } from '../utils/overallRatingCalculator'
-import { buildDailySeries } from '../utils/progressionCounts'
+import { buildDailySeries, getWindowStart } from '../utils/progressionCounts'
 import type { MFLPlayer } from '../types/mflApi'
 import type { PlayerExperienceEntry } from '../types/playerExperience'
 
@@ -62,6 +62,26 @@ describe('getOverallPointsEvents', () => {
 
   test('a player with no history has gained nothing', () => {
     expect(getOverallPointsEvents(striker, [])).toEqual([])
+  })
+})
+
+describe('getOverallPointsSince', () => {
+  test('adds up the gains since a date, measured against the value the player had before it', () => {
+    expect(getOverallPointsSince(striker, history, 0)).toBe(1.02) // Shooting +1 (0.46), then shooting +1 and pace +1 (0.56)
+    expect(getOverallPointsSince(striker, history, day(8))).toBe(0.56)
+    expect(getOverallPointsSince(striker, history, day(10))).toBe(0) // Only defense rose, which adds nothing for a striker
+  })
+
+  test('a player with no history has gained nothing', () => {
+    expect(getOverallPointsSince(striker, [], day(1))).toBe(0)
+  })
+})
+
+describe('getWindowStart', () => {
+  test('is midnight on the first of the days the daily series covers', () => {
+    const now = day(30, 15)
+    expect(getWindowStart(90, now)).toBe(buildDailySeries([], 90, now)[0].dayStart)
+    expect(getWindowStart(1, now)).toBe(day(30, 0))
   })
 })
 
