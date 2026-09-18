@@ -97,6 +97,8 @@ class CacheService {
 export const cacheService = new CacheService();
 
 // Clean up expired entries every 5 minutes
-setInterval(() => {
+const cleanupTimer: any = setInterval(() => {
   cacheService.cleanup();
 }, 5 * 60 * 1000);
+// Don't let this timer keep a Node process (scripts, tests) alive
+cleanupTimer?.unref?.();

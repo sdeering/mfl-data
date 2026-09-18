@@ -259,7 +259,33 @@ export async function getPlayerMarketValue(
 ): Promise<MarketValueCalculationResult> {
   const playerIdStr = playerId.toString();
   const cacheKey = `market_value_${playerIdStr}`;
-  
+
+  // In the browser there is no database access (Turso credentials are server-only),
+  // so delegate to the API route, which runs this same function on the server.
+  if (typeof window !== 'undefined') {
+    if (!forceRecalculate) {
+      const cached = marketValueCache.get(cacheKey);
+      if (cached && isCacheValid(cached.timestamp)) {
+        return cached.result;
+      }
+    }
+    try {
+      const response = await fetch(`/api/calculate-market-value/${playerIdStr}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ walletAddress, forceRecalculate }),
+      });
+      const result: MarketValueCalculationResult = await response.json();
+      if (result.success) {
+        marketValueCache.set(cacheKey, { result, timestamp: Date.now() });
+      }
+      return result;
+    } catch (error) {
+      console.error(`❌ Error fetching market value for player ${playerIdStr}:`, error);
+      return { success: false, error: error instanceof Error ? error.message : 'Failed to fetch market value' };
+    }
+  }
+
   // Check in-memory cache first (1 hour TTL)
   if (!forceRecalculate) {
     const cached = marketValueCache.get(cacheKey);

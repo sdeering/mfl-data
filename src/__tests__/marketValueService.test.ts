@@ -1,3 +1,7 @@
+/**
+ * @jest-environment node
+ */
+// Server-side path: in a browser (jsdom) getPlayerMarketValue delegates to the API route
 import { calculatePlayerMarketValue, getCachedMarketValue, getPlayerMarketValue, clearMarketValueCache } from '../services/marketValueService';
 import * as dbHelpers from '../lib/db-helpers';
 
