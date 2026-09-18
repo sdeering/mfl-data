@@ -38,11 +38,13 @@ CREATE TABLE IF NOT EXISTS agency_players (
 -- Clubs table
 CREATE TABLE IF NOT EXISTS clubs (
   id TEXT PRIMARY KEY,
-  mfl_club_id INTEGER UNIQUE NOT NULL,
+  mfl_club_id INTEGER NOT NULL,
+  wallet_address TEXT NOT NULL,
   data TEXT,
   last_synced TEXT,
   created_at TEXT DEFAULT (datetime('now')),
-  updated_at TEXT DEFAULT (datetime('now'))
+  updated_at TEXT DEFAULT (datetime('now')),
+  UNIQUE(mfl_club_id, wallet_address)
 );
 
 -- Matches table
@@ -259,21 +261,35 @@ export async function initializeSchema(): Promise<void> {
   if (_initialized) return
   const db = getDb()
 
-  // Execute each CREATE TABLE statement individually (libSQL doesn't support multi-statement in one call)
-  const statements = CREATE_TABLES
+  // Rebuild a legacy clubs table that predates the wallet_address column.
+  // The table only holds MFL API sync cache, so dropping it is safe — it is
+  // recreated below and repopulated on the next sync.
+  try {
+    const info = await db.execute('PRAGMA table_info(clubs)')
+    if (info.rows.length > 0 && !info.rows.some((r: any) => r.name === 'wallet_address')) {
+      await db.execute('DROP TABLE clubs')
+    }
+  } catch {
+    // Table doesn't exist yet — nothing to migrate
+  }
+
+  // Execute each CREATE TABLE statement individually (libSQL doesn't support multi-statement in one call).
+  // Strip comment lines from each chunk rather than filtering whole chunks — the
+  // statements are preceded by "-- Table" headers, which used to make the filter
+  // drop every statement entirely.
+  const toStatements = (sql: string): string[] => sql
     .split(';')
-    .map(s => s.trim())
-    .filter(s => s.length > 0 && !s.startsWith('--'))
+    .map(s => s.split('\n').filter(line => !line.trim().startsWith('--')).join('\n').trim())
+    .filter(s => s.length > 0)
+
+  const statements = toStatements(CREATE_TABLES)
 
   for (const stmt of statements) {
     await db.execute(stmt)
   }
 
   // Execute indexes
-  const indexes = CREATE_INDEXES
-    .split(';')
-    .map(s => s.trim())
-    .filter(s => s.length > 0 && !s.startsWith('--'))
+  const indexes = toStatements(CREATE_INDEXES)
 
   for (const idx of indexes) {
     await db.execute(idx)
