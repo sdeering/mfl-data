@@ -7,7 +7,9 @@ import { clubPlayersService, ClubPlayer } from '@/src/services/clubPlayersServic
 import { clubsService } from '@/src/services/clubsService';
 import { OverallRatingTooltip } from './OverallRatingTooltip';
 import { PlayerFilters, FilterState, applyFilters } from './PlayerFilters';
-import { MFLPlayer } from '../types/mflApi';
+import { MFLPlayer, MFLPosition } from '../types/mflApi';
+import { calculatePositionOVR } from '../utils/ruleBasedPositionCalculator';
+import ClubTrainingTab from './ClubTrainingTab';
 
 interface ClubPlayersPageProps {
   clubId: string;
@@ -49,6 +51,7 @@ export default function ClubPlayersPage({ clubId }: ClubPlayersPageProps) {
   });
   const [filteredPlayers, setFilteredPlayers] = useState<ClubPlayer[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
+  const [activeTab, setActiveTab] = useState<'players' | 'training'>('players');
 
   useEffect(() => {
     if (!isConnected || !account) {
@@ -231,6 +234,37 @@ export default function ClubPlayersPage({ clubId }: ClubPlayersPageProps) {
   };
 
   // Helper function to check if player is goalkeeper
+  // Tier text color for ratings (matches squad builder table)
+  const getTierTextColorValue = (value: number): string => {
+    if (value >= 95) return '#87f6f8';      // Ultimate
+    if (value >= 85) return '#fa53ff';      // Legendary
+    if (value >= 75) return '#0047ff';      // Epic
+    if (value >= 65) return '#71ff30';      // Uncommon
+    if (value >= 55) return '#ecd17f';      // Limited
+    return '#9f9f9f';                        // Common
+  };
+
+  // Rating at one of the player's playable positions (primary = overall)
+  const getPositionRating = (player: ClubPlayer, position: MFLPosition) => {
+    const m = player.metadata;
+    const result = calculatePositionOVR({
+      id: player.id,
+      name: `${m.firstName} ${m.lastName}`,
+      attributes: {
+        PAC: m.pace,
+        SHO: m.shooting,
+        PAS: m.passing,
+        DRI: m.dribbling,
+        DEF: m.defense,
+        PHY: m.physical,
+        GK: m.goalkeeping || 0
+      },
+      positions: (m.positions || []) as MFLPosition[],
+      overall: m.overall
+    }, position);
+    return result.success ? result.ovr : 0;
+  };
+
   const isGoalkeeper = (player: ClubPlayer) => {
     return player.metadata.positions?.includes('GK') || player.metadata.positions?.[0] === 'GK';
   };
@@ -252,6 +286,18 @@ export default function ClubPlayersPage({ clubId }: ClubPlayersPageProps) {
       </div>
     );
   };
+
+  // Squad averages: whole squad, best 11 and best 16 by overall
+  const overallsDesc = players.map(p => p.metadata.overall).sort((a, b) => b - a);
+  const averageOverall = (count: number) => {
+    const top = overallsDesc.slice(0, count);
+    return top.length > 0 ? (top.reduce((sum, o) => sum + o, 0) / top.length).toFixed(2) : '—';
+  };
+  const squadAverages = [
+    { label: 'Avg Overall', value: averageOverall(overallsDesc.length) },
+    { label: 'AVG (TOP11)', value: averageOverall(11) },
+    { label: 'AVG (TOP16)', value: averageOverall(16) },
+  ];
 
   // Helper function to get division name
   const getDivisionName = (division: number) => {
@@ -310,10 +356,42 @@ export default function ClubPlayersPage({ clubId }: ClubPlayersPageProps) {
           )}
         </div>
 
+        {/* Squad Averages */}
+        {players.length > 0 && (
+          <div className="grid grid-cols-3 gap-4 max-w-xl mb-6">
+            {squadAverages.map(({ label, value }) => (
+              <div key={label} className="bg-white dark:bg-gray-800 rounded-lg shadow px-4 py-3 text-center">
+                <div className="text-2xl font-bold text-gray-900 dark:text-white">{value}</div>
+                <div className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">{label}</div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Tabs */}
+        <div className="border-b border-gray-200 dark:border-gray-700">
+          <nav className="-mb-px flex gap-6">
+            {(['players', 'training'] as const).map(tab => (
+              <button
+                key={tab}
+                onClick={() => setActiveTab(tab)}
+                className={`py-2 px-1 border-b-2 text-sm font-medium capitalize cursor-pointer ${
+                  activeTab === tab
+                    ? 'border-blue-500 text-blue-600 dark:text-blue-400'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'
+                }`}
+              >
+                {tab}
+              </button>
+            ))}
+          </nav>
+        </div>
       </div>
 
+      {activeTab === 'training' && <ClubTrainingTab clubId={clubId} />}
+
       {/* Loading State */}
-      {isLoadingPlayers && (
+      {activeTab === 'players' && isLoadingPlayers && (
         <div className="text-center py-12">
           <div className="text-gray-400 dark:text-gray-500 text-lg">
             Loading club players...
@@ -322,7 +400,7 @@ export default function ClubPlayersPage({ clubId }: ClubPlayersPageProps) {
       )}
 
       {/* Players Table */}
-      {!isLoadingPlayers && filteredPlayers.length === 0 && (
+      {activeTab === 'players' && !isLoadingPlayers && filteredPlayers.length === 0 && (
         <div className="text-center py-12">
           <div className="text-gray-400 dark:text-gray-500 text-lg">
             {players.length === 0 ? 'No players found for this club.' : 'No players match the current filters.'}
@@ -330,7 +408,7 @@ export default function ClubPlayersPage({ clubId }: ClubPlayersPageProps) {
         </div>
       )}
 
-      {!isLoadingPlayers && filteredPlayers.length > 0 && (
+      {activeTab === 'players' && !isLoadingPlayers && filteredPlayers.length > 0 && (
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
           {/* Filters Section */}
           <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
@@ -587,7 +665,14 @@ export default function ClubPlayersPage({ clubId }: ClubPlayersPageProps) {
                         {player.metadata.age}
                       </td>
                       <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-900 dark:text-white">
-                        {player.metadata.positions?.join(', ') || 'N/A'}
+                        {player.metadata.positions?.length ? player.metadata.positions.map(pos => {
+                          const rating = getPositionRating(player, pos as MFLPosition);
+                          return (
+                            <span key={pos} className="mr-2">
+                              {pos} <span className="font-semibold" style={{ color: getTierTextColorValue(rating) }}>{rating}</span>
+                            </span>
+                          );
+                        }) : 'N/A'}
                       </td>
                       <td className="px-3 py-2 whitespace-nowrap w-20 text-center">
                         {renderAttributeValue(player, player.metadata.pace)}
