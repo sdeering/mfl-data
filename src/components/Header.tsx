@@ -70,7 +70,6 @@ export const Header: React.FC = () => {
     { label: 'My Clubs', path: '/clubs' },
     { label: 'My Matches', path: '/matches' },
     { label: 'Players Compare Tool', path: '/compare' },
-    { label: 'Upcoming Match Tactics Tool', path: '/matches/tactics' },
     { label: 'Squad Builder Tool', path: '/squad-builder' },
     { label: 'Useful MFL Resources', path: '/resources' }
   ];

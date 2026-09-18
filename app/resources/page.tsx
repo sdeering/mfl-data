@@ -144,39 +144,6 @@ export default function ResourcesPage() {
               </p>
             </div>
 
-            {/* MFLPlayer.info */}
-            <div className="border-l-4 border-green-500 pl-6">
-              <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-3">
-                <a 
-                  href="https://mflplayer.info" 
-                  target="_blank" 
-                  rel="noopener noreferrer"
-                  className="text-green-600 dark:text-green-400 hover:underline inline-flex items-center"
-                >
-                  MFLPlayer.info
-                  <svg className="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                  </svg>
-                </a>
-              </h2>
-              <p className="text-gray-600 dark:text-gray-300 mb-2">
-                Useful for viewing player information, player position ratings (find those players who can play multiple positions), training option with individual stats toggles to estimate how long before the next Overall jump, estimating player value, estimating contract loan percentages.
-              </p>
-              <p className="text-gray-600 dark:text-gray-300">
-                <a 
-                  href="https://mflplayer.info/players-table" 
-                  target="_blank" 
-                  rel="noopener noreferrer"
-                  className="text-green-600 dark:text-green-400 hover:underline inline-flex items-center"
-                >
-                  Full player table
-                  <svg className="w-3 h-3 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                  </svg>
-                </a> with filters and sorting, mobile first design, very well done app.
-              </p>
-            </div>
-
             {/* mfl-assistant.com */}
             <div className="border-l-4 border-purple-500 pl-6">
               <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-3">
@@ -261,43 +228,7 @@ export default function ResourcesPage() {
                     </svg>
                   </a> useful pre-season for building your teams from your Agency player pool
                 </p>
-                <p>
-                  Match Analysis tool:
-                </p>
-                <p>
-                  <a 
-                    href="https://mfl-coach.com/match-analysis" 
-                    target="_blank" 
-                    rel="noopener noreferrer"
-                    className="text-orange-600 dark:text-orange-400 hover:underline inline-flex items-center"
-                  >
-                    Match Analysis
-                    <svg className="w-3 h-3 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                    </svg>
-                  </a> a bit limited at the moment but could be useful for pre-season batch friendlies as it lets you select multiple matches and totals the stats, so you can run say 5 friendlies (team setup A) and compare against another 5 friendlies (team setup B).
-                </p>
               </div>
-        </div>
-
-            {/* metafixerlab.com */}
-            <div className="border-l-4 border-red-500 pl-6">
-              <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-3">
-                <a 
-                  href="https://metafixerlab.com" 
-                  target="_blank" 
-                  rel="noopener noreferrer"
-                  className="text-red-600 dark:text-red-400 hover:underline inline-flex items-center"
-                >
-                  metafixerlab.com
-                  <svg className="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                  </svg>
-                </a>
-              </h2>
-              <p className="text-gray-600 dark:text-gray-300">
-                Useful for estimating the amount of $MFL you are generating for the current season, really in-depth breakdowns of $MFL earnings and real-time analysis.
-              </p>
         </div>
 
             {/* Flowty */}
