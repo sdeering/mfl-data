@@ -5,7 +5,7 @@ import React from 'react';
 const Footer: React.FC = () => {
   return (
     <footer className="py-6">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8">
         <div className="text-center text-sm text-gray-600 dark:text-gray-400">
           <p>
             MFLData.com is completely free to use app developed by the MFL community. It is not affiliated with MFL. Built by{' '}
