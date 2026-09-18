@@ -70,14 +70,15 @@ class UserService {
         }
       } else {
         // In Node.js/test environment, use direct MFL API call
-        const url = `${MFL_API_BASE_URL}/clubs?walletAddress=${walletAddress}`;
+        const url = `${MFL_API_BASE_URL}/clubs?ownerWalletAddress=${walletAddress}`;
         const response = await axios.get(url, { timeout: 30000, headers: getMflAuthHeaders() });
         responseData = response.data;
       }
       
       if (responseData && responseData.length > 0) {
         // Extract user name from club names (e.g., "DogeSports Japan" -> "DogeSports")
-        const clubNames = responseData.map((club: any) => club.club.name);
+        // Handle both shapes: wrapped ({ club: {...} }) from /api/clubs, raw club objects from the MFL API
+        const clubNames = responseData.map((club: any) => club.club?.name ?? club.name);
         const commonPrefix = this.findCommonPrefix(clubNames);
         
         if (commonPrefix) {
