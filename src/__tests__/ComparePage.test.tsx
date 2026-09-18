@@ -35,6 +35,14 @@ jest.mock('../../src/utils/ruleBasedPositionCalculator', () => ({
   calculateAllPositionOVRs: jest.fn()
 }));
 
+jest.mock('../../src/contexts/WalletContext', () => ({
+  useWallet: () => ({ account: '0xtest', isConnected: true })
+}));
+
+jest.mock('../../src/services/clientDataService', () => ({
+  supabaseDataService: { getAgencyPlayers: jest.fn().mockResolvedValue([]) }
+}));
+
 jest.mock('../../src/contexts/LoadingContext', () => ({
   useLoading: () => ({
     setIsLoading: jest.fn()
@@ -619,6 +627,60 @@ describe('ComparePage', () => {
 
       expect(screen.queryByLabelText(/^Remove /)).not.toBeInTheDocument();
       expect(screen.queryByLabelText(/^Move /)).not.toBeInTheDocument();
+    });
+  });
+
+  describe('agency player suggestions', () => {
+    const agencyPlayer = (id: number, firstName: string, positions: string[], age: number) => ({
+      id,
+      metadata: { ...mockPlayer1.metadata, firstName, lastName: 'Agency', positions, age }
+    });
+
+    beforeEach(() => {
+      const { supabaseDataService } = require('../../src/services/clientDataService');
+      supabaseDataService.getAgencyPlayers.mockResolvedValue([
+        agencyPlayer(1, 'Defender', ['CB'], 25),
+        agencyPlayer(2, 'Striker', ['ST'], 25),
+        mockPlayer1
+      ]);
+    });
+
+    it('lists agency players closest to the other column first when an input is focused', async () => {
+      const { mflApi } = require('../../src/services/mflApi');
+      mflApi.getPlayer.mockResolvedValue(mockPlayer1);
+      render(<ComparePage />);
+
+      fireEvent.change(screen.getByLabelText('Player 1 ID'), { target: { value: '12345' } });
+      fireEvent.click(screen.getAllByText('Search')[0]);
+      await waitFor(() => expect(screen.getAllByText('John Doe').length).toBeGreaterThan(0));
+
+      fireEvent.focus(screen.getByLabelText('Player 2 ID'));
+
+      const options = await screen.findAllByRole('option');
+      // John Doe (ST) is already being compared, so he isn't offered again
+      expect(options.map(option => option.textContent)).toEqual([
+        expect.stringContaining('Striker Agency'),
+        expect.stringContaining('Defender Agency')
+      ]);
+    });
+
+    it('filters by typed name and loads the chosen player', async () => {
+      const { mflApi } = require('../../src/services/mflApi');
+      mflApi.getPlayer.mockResolvedValue(mockPlayer2);
+      render(<ComparePage />);
+
+      const input = screen.getByLabelText('Player 1 ID');
+      fireEvent.focus(input);
+      await screen.findAllByRole('option');
+      fireEvent.change(input, { target: { value: 'defen' } });
+
+      const options = screen.getAllByRole('option');
+      expect(options).toHaveLength(1);
+      fireEvent.mouseDown(options[0]);
+
+      expect(mflApi.getPlayer).toHaveBeenCalledWith('1');
+      expect(input).toHaveValue('1');
+      expect(screen.queryByRole('option')).not.toBeInTheDocument();
     });
   });
 });

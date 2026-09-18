@@ -21,6 +21,15 @@ const mockFetchPlayerSaleHistory = fetchPlayerSaleHistory as jest.MockedFunction
 const mockFetchPlayerExperienceHistory = fetchPlayerExperienceHistory as jest.MockedFunction<typeof fetchPlayerExperienceHistory>;
 const mockFetchPlayerMatches = fetchPlayerMatches as jest.MockedFunction<typeof fetchPlayerMatches>;
 
+// Mock the wallet and agency players used for search suggestions
+jest.mock('../contexts/WalletContext', () => ({
+  useWallet: () => ({ account: '0xtest', isConnected: true }),
+}));
+
+jest.mock('../services/clientDataService', () => ({
+  supabaseDataService: { getAgencyPlayers: jest.fn().mockResolvedValue([]) },
+}));
+
 // Mock the loading context
 jest.mock('../contexts/LoadingContext', () => ({
   useLoading: () => ({

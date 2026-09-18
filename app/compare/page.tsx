@@ -18,6 +18,9 @@ import PlayerProgressionGraph from '../../src/components/PlayerProgressionGraph'
 import PlayerRecentMatches from '../../src/components/PlayerRecentMatches';
 import PlayerSaleHistory from '../../src/components/PlayerSaleHistory';
 import { useLoading } from '../../src/contexts/LoadingContext';
+import { useWallet } from '../../src/contexts/WalletContext';
+import { supabaseDataService } from '../../src/services/clientDataService';
+import { rankSimilarPlayers } from '../../src/utils/playerSimilarity';
 
 interface CompareSlot {
   key: number; // Stable identity so a slot keeps its data and in-flight requests when it is moved
@@ -110,12 +113,31 @@ const calculateMarketValueForPlayer = async (player: MFLPlayer): Promise<MarketV
 const getSlotName = (slot: CompareSlot, index: number) =>
   slot.player ? `${slot.player.metadata.firstName} ${slot.player.metadata.lastName}` : `Player ${index + 1}`;
 
+const MAX_SUGGESTIONS = 50;
+
 const slotControlClass = 'px-2.5 flex items-center rounded-lg border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent';
 
 function ComparePageContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const { setIsLoading: setGlobalLoading } = useLoading();
+  const { account } = useWallet();
+
+  // Agency players offered as suggestions under the focused search input
+  const [agencyPlayers, setAgencyPlayers] = useState<MFLPlayer[]>([]);
+  const [suggestionsSlotKey, setSuggestionsSlotKey] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!account) {
+      setAgencyPlayers([]);
+      return;
+    }
+    let cancelled = false;
+    supabaseDataService.getAgencyPlayers(account)
+      .then(players => { if (!cancelled) setAgencyPlayers(players); })
+      .catch(err => console.error('Failed to load agency players for suggestions:', err));
+    return () => { cancelled = true; };
+  }, [account]);
 
   // Get player IDs from URL search params
   const urlPlayer1Id = searchParams.get('player1Id');
@@ -220,9 +242,42 @@ function ComparePageContent() {
     updateURL(nextSlots);
   };
 
+  // Agency players for a slot's dropdown: closest match to the player in the other column first,
+  // narrowed by whatever has been typed (name or ID)
+  const getSuggestions = (slot: CompareSlot): MFLPlayer[] => {
+    const reference = slots.find(s => s.key !== slot.key && s.player)?.player ?? null;
+    const selectedIds = slots.map(s => s.player?.id).filter(Boolean);
+    const query = slot.playerId.trim().toLowerCase();
+    const isLoadedId = !!slot.player && query === slot.player.id.toString();
+
+    return rankSimilarPlayers(reference, agencyPlayers)
+      .filter(p => !selectedIds.includes(p.id))
+      .filter(p => !query || isLoadedId ||
+        `${p.metadata.firstName} ${p.metadata.lastName}`.toLowerCase().includes(query) ||
+        p.id.toString().startsWith(query))
+      .slice(0, MAX_SUGGESTIONS);
+  };
+
+  const handleSelectSuggestion = (slot: CompareSlot, player: MFLPlayer) => {
+    const playerId = player.id.toString();
+    setSuggestionsSlotKey(null);
+    updateSlot(slot.key, { playerId });
+    fetchPlayer(slot.key, playerId);
+    updateURL(slots.map(s => s.key === slot.key ? { ...s, playerId } : s));
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent, slot: CompareSlot) => {
-    if (e.key === 'Enter') {
-      handleSearch(slot);
+    if (e.key === 'Escape') {
+      setSuggestionsSlotKey(null);
+    } else if (e.key === 'Enter') {
+      // A typed name isn't an ID, so Enter picks the top suggestion instead
+      const topSuggestion = /^\d+$/.test(slot.playerId.trim()) ? undefined : getSuggestions(slot)[0];
+      if (topSuggestion) {
+        handleSelectSuggestion(slot, topSuggestion);
+      } else {
+        setSuggestionsSlotKey(null);
+        handleSearch(slot);
+      }
     }
   };
 
@@ -266,6 +321,7 @@ function ComparePageContent() {
             const playerName = getSlotName(slot, index);
             // Empty columns can only be removed when they are an extra (third) column
             const canRemove = !!player || slots.length > MIN_SLOTS;
+            const suggestions = suggestionsSlotKey === slot.key ? getSuggestions(slot) : [];
 
             return (
               <div key={slot.key} className="flex-1">
@@ -273,16 +329,60 @@ function ComparePageContent() {
                   Player {index + 1} ID
                 </label>
                 <div className="flex gap-2">
-                  <input
-                    id={`player${index + 1}`}
-                    type="text"
-                    value={slot.playerId}
-                    onChange={(e) => updateSlot(slot.key, { playerId: e.target.value })}
-                    onKeyDown={(e) => handleKeyDown(e, slot)}
-                    onPaste={(e) => handlePaste(e, slot)}
-                    placeholder="Enter player ID..."
-                    className="flex-1 min-w-0 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
+                  <div className="relative flex-1 min-w-0">
+                    <input
+                      id={`player${index + 1}`}
+                      type="text"
+                      value={slot.playerId}
+                      onChange={(e) => {
+                        updateSlot(slot.key, { playerId: e.target.value });
+                        setSuggestionsSlotKey(slot.key);
+                      }}
+                      onFocus={() => setSuggestionsSlotKey(slot.key)}
+                      onBlur={() => setSuggestionsSlotKey(current => current === slot.key ? null : current)}
+                      onKeyDown={(e) => handleKeyDown(e, slot)}
+                      onPaste={(e) => handlePaste(e, slot)}
+                      placeholder={agencyPlayers.length > 0 ? 'Enter player ID or pick from your agency...' : 'Enter player ID...'}
+                      autoComplete="off"
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+
+                    {/* Agency player suggestions, closest match first */}
+                    {suggestionsSlotKey === slot.key && suggestions.length > 0 && (
+                      <ul
+                        role="listbox"
+                        aria-label={`Agency players for player ${index + 1}`}
+                        className="absolute z-20 left-0 right-0 mt-1 max-h-80 overflow-y-auto bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg shadow-lg"
+                      >
+                        {suggestions.map(suggestion => (
+                          <li
+                            key={suggestion.id}
+                            role="option"
+                            aria-selected={false}
+                            // mousedown fires before the input's blur, so the list is still open to receive it
+                            onMouseDown={(e) => {
+                              e.preventDefault();
+                              handleSelectSuggestion(slot, suggestion);
+                            }}
+                            className="px-3 py-2 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700"
+                          >
+                            <div className="flex items-center justify-between gap-2 text-sm text-gray-900 dark:text-white">
+                              <span className="truncate font-medium">
+                                {suggestion.metadata.firstName} {suggestion.metadata.lastName}
+                              </span>
+                              <span className="flex-shrink-0 text-gray-600 dark:text-gray-300">
+                                {suggestion.metadata.positions?.join(', ')} · {suggestion.metadata.overall}
+                              </span>
+                            </div>
+                            <div className="flex items-center justify-between gap-2 text-xs text-gray-500 dark:text-gray-400">
+                              <span className="truncate">{suggestion.activeContract?.club?.name || 'No club'}</span>
+                              <span className="flex-shrink-0">Age {suggestion.metadata.age} · #{suggestion.id}</span>
+                            </div>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
                   <button
                     onClick={() => handleSearch(slot)}
                     disabled={slot.isLoading || !slot.playerId.trim()}
