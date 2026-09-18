@@ -8,7 +8,11 @@ export type ProgressionStat = AttributeStat | 'overall';
 
 export const PROGRESSION_STATS: ProgressionStat[] = ['overall', ...ATTRIBUTE_STATS];
 
-export const STAT_LABELS: Record<ProgressionStat, string> = {
+// Anything that can be charted as a series: a stat, or the rise in precise overall
+export type ChartSeries = ProgressionStat | 'overallPoints';
+
+export const STAT_LABELS: Record<ChartSeries, string> = {
+  overallPoints: 'OVR pts',
   overall: 'OVR',
   pace: 'PAC',
   shooting: 'SHO',
@@ -19,7 +23,8 @@ export const STAT_LABELS: Record<ProgressionStat, string> = {
   goalkeeping: 'GK'
 };
 
-export const STAT_NAMES: Record<ProgressionStat, string> = {
+export const STAT_NAMES: Record<ChartSeries, string> = {
+  overallPoints: 'Overall points',
   overall: 'Overall',
   pace: 'Pace',
   shooting: 'Shooting',
@@ -32,7 +37,9 @@ export const STAT_NAMES: Record<ProgressionStat, string> = {
 
 // Same hue per stat as the single-player progression chart (orange pace, teal dribbling, ...),
 // stepped so every colour holds up on both the light and dark card surfaces.
-export const STAT_COLORS: Record<ProgressionStat, { light: string; dark: string }> = {
+export const STAT_COLORS: Record<ChartSeries, { light: string; dark: string }> = {
+  // Both measures of overall share a colour: they are never charted together
+  overallPoints: { light: '#e87ba4', dark: '#d55181' },
   overall: { light: '#e87ba4', dark: '#d55181' },
   pace: { light: '#eb6834', dark: '#d95926' },
   dribbling: { light: '#1baf7a', dark: '#199e70' },
@@ -99,13 +106,25 @@ export function getDayStart(timestamp: number): number {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
 }
 
-export type DailyProgression = { dayStart: number; total: number } & Record<ProgressionStat, number>;
+// `overallPoints` is the rise in precise (2-decimal) overall, as opposed to `overall`, which counts
+// whole overall points gained
+export type DailyProgression = { dayStart: number; total: number; overallPoints: number } & Record<ProgressionStat, number>;
+
+export interface OverallPointsEvent {
+  date: number; // Unix timestamp (ms)
+  points: number; // Rise in precise overall, e.g. 0.23
+}
 
 /**
  * Bucket events into the last `days` calendar days, ending with the day containing `now`. Days
  * with no progressions are kept (as zeros) so the time axis stays evenly spaced.
  */
-export function buildDailySeries(events: ProgressionEvent[], days: number, now: number = Date.now()): DailyProgression[] {
+export function buildDailySeries(
+  events: ProgressionEvent[],
+  days: number,
+  now: number = Date.now(),
+  overallPointsEvents: OverallPointsEvent[] = []
+): DailyProgression[] {
   const today = new Date(getDayStart(now));
   const series: DailyProgression[] = [];
   const byDayStart = new Map<number, DailyProgression>();
@@ -113,7 +132,7 @@ export function buildDailySeries(events: ProgressionEvent[], days: number, now: 
   // Step by calendar day rather than by 24 hours, so daylight-saving changes don't skew a day
   for (let offset = days - 1; offset >= 0; offset--) {
     const dayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate() - offset).getTime();
-    const day = { dayStart, total: 0 } as DailyProgression;
+    const day = { dayStart, total: 0, overallPoints: 0 } as DailyProgression;
     for (const stat of PROGRESSION_STATS) day[stat] = 0;
     series.push(day);
     byDayStart.set(dayStart, day);
@@ -126,6 +145,13 @@ export function buildDailySeries(events: ProgressionEvent[], days: number, now: 
     day[event.stat] += event.points;
     if (event.stat !== 'overall') day.total += event.points;
   }
+
+  for (const event of overallPointsEvents) {
+    const day = byDayStart.get(getDayStart(event.date));
+    if (day) day.overallPoints += event.points;
+  }
+  // Summing many small decimals drifts (0.1 + 0.2 = 0.30000000000000004); the page shows 2 places
+  for (const day of series) day.overallPoints = Math.round(day.overallPoints * 100) / 100;
 
   return series;
 }

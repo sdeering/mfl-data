@@ -17,6 +17,7 @@ import {
   buildDailySeries,
   getProgressionEvents,
   sumEvents,
+  type OverallPointsEvent,
   type ProgressionEvent,
   type ProgressionStat,
   type ProgressionTotals
@@ -31,6 +32,7 @@ import {
   isInSquad,
   type Squad
 } from '../utils/progressionSquads';
+import { getOverallPointsEvents } from '../utils/preciseOverallGain';
 import PlayerProgressionChart, { PlayerProgressionDayTable, type ProgressionChartMode } from './PlayerProgressionChart';
 
 interface PlayerProgressionPageProps {
@@ -65,9 +67,9 @@ const INITIAL_ROWS = 100;
 const PERIODS = [7, 14, 30, 90, 180, 365]; // Days; the chart always has one bar per day
 const DEFAULT_PERIOD = 90;
 
-const CHART_MODES: ProgressionChartMode[] = ['attributes', 'overall', ...ATTRIBUTE_STATS];
+const CHART_MODES: ProgressionChartMode[] = ['attributes', 'overallPoints', 'overall', ...ATTRIBUTE_STATS];
 
-type SortField = 'name' | 'age' | 'position' | 'squad' | 'rating' | 'total' | ProgressionStat;
+type SortField = 'name' | 'age' | 'position' | 'squad' | 'rating' | 'total' | 'overallPoints' | ProgressionStat;
 
 interface PlayerRow {
   player: MFLPlayer;
@@ -75,6 +77,7 @@ interface PlayerRow {
   squad: string | null;
   totals: ProgressionTotals;
   total: number;
+  overallPoints: number; // Rise in precise (2-decimal) overall over the period
 }
 
 const controlClass = 'px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent';
@@ -219,10 +222,21 @@ export default function PlayerProgressionPage({ walletAddress }: PlayerProgressi
     return Array.from({ length: Math.max(...ages) - youngest + 1 }, (_, i) => youngest + i);
   }, [players]);
 
+  // Rises in each player's precise overall, the 2-decimal overall shown on the player page
+  const overallPointsByPlayer = useMemo(() => {
+    const events = new Map<number, OverallPointsEvent[]>();
+    for (const player of players) {
+      const entries = histories[player.id];
+      if (entries) events.set(player.id, getOverallPointsEvents(player, entries));
+    }
+    return events;
+  }, [players, histories]);
+
   const days = useMemo(() => {
     const events = filteredPlayers.flatMap(player => eventsByPlayer.get(player.id) ?? []);
-    return buildDailySeries(events, periodDays);
-  }, [filteredPlayers, eventsByPlayer, periodDays]);
+    const overallPointsEvents = filteredPlayers.flatMap(player => overallPointsByPlayer.get(player.id) ?? []);
+    return buildDailySeries(events, periodDays, Date.now(), overallPointsEvents);
+  }, [filteredPlayers, eventsByPlayer, overallPointsByPlayer, periodDays]);
 
   // The table counts the same days the chart shows, so the two always agree
   const windowStart = days[0].dayStart;
@@ -231,15 +245,19 @@ export default function PlayerProgressionPage({ walletAddress }: PlayerProgressi
     return filteredPlayers.map(player => {
       const events = (eventsByPlayer.get(player.id) ?? []).filter(event => event.date >= windowStart);
       const totals = sumEvents(events);
+      const overallPoints = (overallPointsByPlayer.get(player.id) ?? [])
+        .filter(event => event.date >= windowStart)
+        .reduce((sum, event) => sum + event.points, 0);
       return {
         player,
         name: `${player.metadata.firstName} ${player.metadata.lastName}`,
         squad: getSquadName(player),
         totals,
-        total: attributeTotal(totals)
+        total: attributeTotal(totals),
+        overallPoints: Math.round(overallPoints * 100) / 100
       };
     });
-  }, [filteredPlayers, eventsByPlayer, windowStart]);
+  }, [filteredPlayers, eventsByPlayer, overallPointsByPlayer, windowStart]);
 
   const sortedRows = useMemo(() => {
     const getValue = (row: PlayerRow): string | number => {
@@ -250,6 +268,7 @@ export default function PlayerProgressionPage({ walletAddress }: PlayerProgressi
         case 'squad': return row.squad ?? '';
         case 'rating': return row.player.metadata.overall;
         case 'total': return row.total;
+        case 'overallPoints': return row.overallPoints;
         default: return row.totals[sortField] ?? 0;
       }
     };
@@ -528,6 +547,9 @@ export default function PlayerProgressionPage({ walletAddress }: PlayerProgressi
                     <th className={`${thClass} text-left`} onClick={() => handleSort('squad')}>Squad{sortArrow('squad')}</th>
                     <th className={`${thClass} text-right`} onClick={() => handleSort('rating')}>Rating{sortArrow('rating')}</th>
                     <th className={`${thClass} text-right`} onClick={() => handleSort('total')} title="Stat points gained, excluding overall">Total{sortArrow('total')}</th>
+                    <th className={`${thClass} text-right`} onClick={() => handleSort('overallPoints')} title="Rise in exact overall (the 2-decimal overall on the player page) over the period">
+                      +{STAT_LABELS.overallPoints}{sortArrow('overallPoints')}
+                    </th>
                     {PROGRESSION_STATS.map(stat => (
                       <th key={stat} className={`${thClass} text-right`} onClick={() => handleSort(stat)} title={`${STAT_NAMES[stat]} progressions`}>
                         +{STAT_LABELS[stat]}{sortArrow(stat)}
@@ -546,6 +568,13 @@ export default function PlayerProgressionPage({ walletAddress }: PlayerProgressi
                       <td className="px-3 py-2 whitespace-nowrap text-gray-700 dark:text-gray-300">{row.squad ?? <span className="text-gray-400 dark:text-gray-500">–</span>}</td>
                       <td className="px-3 py-2 text-right tabular-nums text-gray-700 dark:text-gray-300">{row.player.metadata.overall}</td>
                       <td className="px-3 py-2 text-right tabular-nums font-semibold text-gray-900 dark:text-white">{row.total || '–'}</td>
+                      <td
+                        className={`px-3 py-2 text-right tabular-nums ${
+                          mode === 'overallPoints' ? 'font-semibold text-gray-900 dark:text-white bg-gray-50 dark:bg-gray-700/40' : 'text-gray-700 dark:text-gray-300'
+                        }`}
+                      >
+                        {row.overallPoints > 0 ? `+${row.overallPoints.toFixed(2)}` : '–'}
+                      </td>
                       {PROGRESSION_STATS.map(stat => (
                         <td
                           key={stat}
@@ -560,7 +589,7 @@ export default function PlayerProgressionPage({ walletAddress }: PlayerProgressi
                   ))}
                   {rows.length === 0 && (
                     <tr>
-                      <td colSpan={6 + PROGRESSION_STATS.length} className="px-3 py-8 text-center text-gray-500 dark:text-gray-400">
+                      <td colSpan={7 + PROGRESSION_STATS.length} className="px-3 py-8 text-center text-gray-500 dark:text-gray-400">
                         No players match these filters.
                       </td>
                     </tr>

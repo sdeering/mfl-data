@@ -7,12 +7,12 @@ import {
   STAT_COLORS,
   STAT_LABELS,
   STAT_NAMES,
-  type ProgressionStat,
+  type ChartSeries,
   type DailyProgression
 } from '../utils/progressionCounts';
 
-// 'attributes' stacks every attribute stat (overall excluded); otherwise a single stat is charted
-export type ProgressionChartMode = 'attributes' | ProgressionStat;
+// 'attributes' stacks every attribute stat (overall excluded); otherwise a single series is charted
+export type ProgressionChartMode = 'attributes' | ChartSeries;
 
 interface PlayerProgressionChartProps {
   days: DailyProgression[];
@@ -30,12 +30,23 @@ const formatDay = (dayStart: number, style: 'short' | 'withYear' | 'full' = 'sho
     ...(style === 'full' ? { weekday: 'short', year: 'numeric' } : {})
   });
 
+/** Clean axis ticks for decimal values (0, 0.5, 1, ...) - left alone, the chart picks steps like 0.65. */
+function getDecimalTicks(max: number): number[] {
+  const steps = [0.1, 0.2, 0.25, 0.5, 1, 2, 2.5, 5, 10, 20, 25, 50, 100];
+  const step = steps.find(candidate => max / candidate <= 4) ?? steps[steps.length - 1];
+  const count = Math.max(1, Math.ceil(max / step));
+  return Array.from({ length: count + 1 }, (_, i) => Math.round(i * step * 100) / 100);
+}
+
 const MIN_BAR_WIDTH_FOR_GAPS = 8; // Narrower than this, spacing and gaps between stacked segments would swallow the bar
 const Y_AXIS_WIDTH = 36;
 const CHART_MARGIN_RIGHT = 8;
 
-export const getChartStats = (mode: ProgressionChartMode): ProgressionStat[] =>
+export const getChartStats = (mode: ProgressionChartMode): ChartSeries[] =>
   mode === 'attributes' ? STACK_ORDER : [mode];
+
+// Overall points are decimals ("+0.23"); everything else counts whole stat points
+const formatValue = (value: number, series: ChartSeries) => (series === 'overallPoints' ? `+${value.toFixed(2)}` : String(value));
 
 function DayTooltip({ active, payload, mode, isDark }: any) {
   const day: DailyProgression | undefined = payload?.[0]?.payload;
@@ -53,7 +64,7 @@ function DayTooltip({ active, payload, mode, isDark }: any) {
           {[...stats].reverse().map(stat => (
             <div key={stat} className="flex items-center gap-2">
               <span className="w-3 h-0.5 rounded-full" style={{ backgroundColor: STAT_COLORS[stat][isDark ? 'dark' : 'light'] }} />
-              <span className="font-semibold text-gray-900 dark:text-white tabular-nums">{day[stat]}</span>
+              <span className="font-semibold text-gray-900 dark:text-white tabular-nums">{formatValue(day[stat], stat)}</span>
               <span className="text-gray-600 dark:text-gray-300">{STAT_NAMES[stat]}</span>
             </div>
           ))}
@@ -79,6 +90,7 @@ export default function PlayerProgressionChart({ days, mode, isDark, surface }: 
   const showRoomyBars = barSlotWidth >= MIN_BAR_WIDTH_FOR_GAPS;
   const showSegmentGaps = stats.length > 1 && showRoomyBars;
   const isEmpty = days.every(day => stats.every(stat => day[stat] === 0));
+  const decimalTicks = mode === 'overallPoints' && !isEmpty ? getDecimalTicks(Math.max(...days.map(day => day.overallPoints))) : undefined;
   const crossesNewYear = days.length > 0 && new Date(days[0].dayStart).getFullYear() !== new Date(days[days.length - 1].dayStart).getFullYear();
   const gridColor = isDark ? '#374151' : '#e5e7eb';
   const axisTextColor = isDark ? '#9ca3af' : '#6b7280';
@@ -88,7 +100,9 @@ export default function PlayerProgressionChart({ days, mode, isDark, surface }: 
       <div className="relative h-[340px] w-full">
         {isEmpty && (
           <p className="absolute inset-0 flex items-center justify-center text-sm text-gray-500 dark:text-gray-400 pointer-events-none">
-            No {mode === 'attributes' ? '' : `${STAT_NAMES[mode].toLowerCase()} `}progressions in this period
+            {mode === 'overallPoints'
+              ? 'No overall points gained in this period'
+              : `No ${mode === 'attributes' ? '' : `${STAT_NAMES[mode].toLowerCase()} `}progressions in this period`}
           </p>
         )}
         <ResponsiveContainer width="100%" height="100%" onResize={width => setChartWidth(width)}>
@@ -103,7 +117,9 @@ export default function PlayerProgressionChart({ days, mode, isDark, surface }: 
               minTickGap={40}
             />
             <YAxis
-              allowDecimals={false}
+              allowDecimals={mode === 'overallPoints'}
+              ticks={decimalTicks}
+              domain={decimalTicks ? [0, decimalTicks[decimalTicks.length - 1]] : undefined}
               tick={{ fill: axisTextColor, fontSize: 12 }}
               tickLine={false}
               axisLine={false}
@@ -175,7 +191,7 @@ export function PlayerProgressionDayTable({ days, mode }: { days: DailyProgressi
             <tr key={day.dayStart}>
               <td className="px-3 py-1.5 whitespace-nowrap text-gray-900 dark:text-white">{formatDay(day.dayStart, 'full')}</td>
               {stats.map(stat => (
-                <td key={stat} className="px-3 py-1.5 text-right tabular-nums text-gray-700 dark:text-gray-300">{day[stat] || '–'}</td>
+                <td key={stat} className="px-3 py-1.5 text-right tabular-nums text-gray-700 dark:text-gray-300">{day[stat] ? formatValue(day[stat], stat) : '–'}</td>
               ))}
               {showTotal && (
                 <td className="px-3 py-1.5 text-right tabular-nums font-semibold text-gray-900 dark:text-white">{day.total || '–'}</td>
