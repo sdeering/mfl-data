@@ -7,6 +7,13 @@ export async function GET(request: Request) {
   try {
     const { syncService } = await import('../../../../src/services/syncService')
 
+    if (action === 'state') {
+      return NextResponse.json({
+        isSyncing: syncService.isSyncInProgress(),
+        progress: syncService.getCurrentProgress()
+      })
+    }
+
     if (action === 'progress') {
       const progress = syncService.getCurrentProgress()
       return NextResponse.json(progress)
@@ -16,7 +23,7 @@ export async function GET(request: Request) {
       return NextResponse.json({ isSyncing: syncService.isSyncInProgress() })
     }
 
-    return NextResponse.json({ error: 'Invalid action. Use ?action=progress or ?action=isSyncing' }, { status: 400 })
+    return NextResponse.json({ error: 'Invalid action. Use ?action=state, ?action=progress or ?action=isSyncing' }, { status: 400 })
   } catch (error: any) {
     console.error('Error in /api/data/sync GET:', error)
     return NextResponse.json({ error: error.message }, { status: 500 })

@@ -5,18 +5,15 @@ import { useWallet } from '../contexts/WalletContext';
 import { useRouter } from 'next/navigation';
 import { supabaseDataService } from '../services/clientDataService';
 import { MFLPlayer } from '../types/mflApi';
-import { useSupabaseSync } from '../hooks/useSupabaseSync';
-import { GlobalSyncProgress } from './GlobalSyncProgress';
+import { useSupabaseSyncUI } from '../contexts/SupabaseSyncContext';
 import { OverallRatingTooltip } from './OverallRatingTooltip';
-import { supabaseSyncService, type SyncProgress } from '../services/clientSyncService';
 // Removed market value sync UI on agency page
 import * as XLSX from 'xlsx';
 import { PlayerFilters, FilterState, applyFilters } from './PlayerFilters';
 
 const AgencyPage: React.FC = () => {
   const { isConnected, account } = useWallet();
-  const { startSync, isSyncing, isVisible: isSyncVisible, closeProgress } = useSupabaseSync();
-  const [syncProgress, setSyncProgress] = useState<SyncProgress[]>([]);
+  const { startSync, isSyncing, progress: syncProgress } = useSupabaseSyncUI();
   const [players, setPlayers] = useState<MFLPlayer[]>([]);
   const [filteredPlayers, setFilteredPlayers] = useState<MFLPlayer[]>([]);
   const [displayedPlayers, setDisplayedPlayers] = useState<MFLPlayer[]>([]);
@@ -383,7 +380,7 @@ const AgencyPage: React.FC = () => {
     if (!account) return;
     
     try {
-      await startSync(true, true); // Force refresh and show display
+      await startSync(true); // Force refresh
     } catch (error) {
       console.error('Error starting sync:', error);
       setError('Failed to start sync. Please try again.');
@@ -428,24 +425,6 @@ const AgencyPage: React.FC = () => {
     // Update previous sync state
     prevIsSyncingRef.current = isSyncing;
   }, [isSyncing, account, hasAttemptedLoad]);
-
-  // Update sync progress messages while syncing
-  useEffect(() => {
-    if (!isSyncing) {
-      setSyncProgress([]);
-      return;
-    }
-
-    // Poll for sync progress updates
-    const interval = setInterval(() => {
-      const currentProgress = supabaseSyncService.getCurrentProgress();
-      if (currentProgress.length > 0) {
-        setSyncProgress(currentProgress);
-      }
-    }, 1000); // Update every second for more responsive feedback
-
-    return () => clearInterval(interval);
-  }, [isSyncing]);
 
   // Removed: Market values refresh during sync (market values no longer displayed on agency page)
 
@@ -523,9 +502,6 @@ const AgencyPage: React.FC = () => {
 
   return (
     <div className="min-h-screen">
-      {/* Global Sync Progress - Show when syncing */}
-      <GlobalSyncProgress isVisible={isSyncVisible} onClose={closeProgress} isSyncing={isSyncing} />
-      
       {/* Market Value Sync UI removed */}
       
       <div className="mb-8">
