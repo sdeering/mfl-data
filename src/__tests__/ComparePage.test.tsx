@@ -469,4 +469,156 @@ describe('ComparePage', () => {
     fireEvent.change(player1Input, { target: { value: '12345' } });
     expect(searchButtons[0]).not.toBeDisabled();
   });
+
+  describe('removing and switching players', () => {
+    const loadTwoPlayers = async () => {
+      const { mflApi } = require('../../src/services/mflApi');
+      mflApi.getPlayer
+        .mockResolvedValueOnce(mockPlayer1)
+        .mockResolvedValueOnce(mockPlayer2);
+
+      render(<ComparePage />);
+
+      const player1Input = screen.getByLabelText('Player 1 ID');
+      fireEvent.change(player1Input, { target: { value: '12345' } });
+      fireEvent.keyDown(player1Input, { key: 'Enter', code: 'Enter' });
+
+      const player2Input = screen.getByLabelText('Player 2 ID');
+      fireEvent.change(player2Input, { target: { value: '67890' } });
+      fireEvent.keyDown(player2Input, { key: 'Enter', code: 'Enter' });
+
+      await waitFor(() => {
+        expect(screen.getAllByTestId('player-image')).toHaveLength(2);
+      });
+    };
+
+    const playerOrder = () => screen.getAllByTestId('player-image').map(el => el.textContent);
+
+    it('switches players left and right without refetching them', async () => {
+      const { mflApi } = require('../../src/services/mflApi');
+      await loadTwoPlayers();
+      expect(playerOrder()).toEqual(['John Doe', 'Jane Smith']);
+
+      // The outer edges have nowhere to move to
+      expect(screen.getByLabelText('Move John Doe left')).toBeDisabled();
+      expect(screen.getByLabelText('Move Jane Smith right')).toBeDisabled();
+
+      fireEvent.click(screen.getByLabelText('Move John Doe right'));
+
+      expect(playerOrder()).toEqual(['Jane Smith', 'John Doe']);
+      expect(screen.getByLabelText('Player 1 ID')).toHaveValue('67890');
+      expect(screen.getByLabelText('Player 2 ID')).toHaveValue('12345');
+      expect(mockReplace).toHaveBeenLastCalledWith('?player1Id=67890&player2Id=12345', { scroll: false });
+
+      fireEvent.click(screen.getByLabelText('Move John Doe left'));
+
+      expect(playerOrder()).toEqual(['John Doe', 'Jane Smith']);
+      expect(mockReplace).toHaveBeenLastCalledWith('?player1Id=12345&player2Id=67890', { scroll: false });
+      expect(mflApi.getPlayer).toHaveBeenCalledTimes(2);
+    });
+
+    it('removes a player with the X button without moving the other player', async () => {
+      await loadTwoPlayers();
+
+      fireEvent.click(screen.getByLabelText('Remove John Doe'));
+
+      // Player 1 is emptied where it is; Player 2 stays in the Player 2 slot
+      expect(playerOrder()).toEqual(['Jane Smith']);
+      expect(screen.queryByText('John Doe')).not.toBeInTheDocument();
+      expect(screen.getByLabelText('Player 1 ID')).toHaveValue('');
+      expect(screen.getByLabelText('Player 2 ID')).toHaveValue('67890');
+      expect(mockReplace).toHaveBeenLastCalledWith('?player2Id=67890', { scroll: false });
+    });
+
+    it('keeps each slot independent after a removal', async () => {
+      await loadTwoPlayers();
+
+      fireEvent.click(screen.getByLabelText('Remove Jane Smith'));
+      fireEvent.change(screen.getByLabelText('Player 2 ID'), { target: { value: '777' } });
+
+      expect(screen.getByLabelText('Player 1 ID')).toHaveValue('12345');
+      expect(screen.getByLabelText('Player 2 ID')).toHaveValue('777');
+    });
+
+    it('with three players, removes the middle one in place, then closes the empty column', async () => {
+      const { mflApi } = require('../../src/services/mflApi');
+      const mockPlayer3 = { ...mockPlayer2, id: 11111, metadata: { ...mockPlayer2.metadata, firstName: 'Sam', lastName: 'Jones' } };
+      await loadTwoPlayers();
+
+      mflApi.getPlayer.mockResolvedValueOnce(mockPlayer3);
+      fireEvent.click(screen.getByText('+ Add Player'));
+      const player3Input = screen.getByLabelText('Player 3 ID');
+      fireEvent.change(player3Input, { target: { value: '11111' } });
+      fireEvent.keyDown(player3Input, { key: 'Enter', code: 'Enter' });
+      await waitFor(() => {
+        expect(screen.getAllByTestId('player-image')).toHaveLength(3);
+      });
+
+      fireEvent.click(screen.getByLabelText('Remove Jane Smith'));
+
+      // The third player stays in the third column
+      expect(screen.getByLabelText('Player 2 ID')).toHaveValue('');
+      expect(screen.getByLabelText('Player 3 ID')).toHaveValue('11111');
+      expect(mockReplace).toHaveBeenLastCalledWith('?player1Id=12345&player3Id=11111', { scroll: false });
+
+      // The now-empty middle column can be closed, which brings it back to two columns
+      fireEvent.click(screen.getByLabelText('Remove Player 2'));
+
+      expect(screen.queryByLabelText('Player 3 ID')).not.toBeInTheDocument();
+      expect(playerOrder()).toEqual(['John Doe', 'Sam Jones']);
+      expect(mockReplace).toHaveBeenLastCalledWith('?player1Id=12345&player2Id=11111', { scroll: false });
+    });
+
+    it('removing the last of three players drops its column', async () => {
+      const { mflApi } = require('../../src/services/mflApi');
+      const mockPlayer3 = { ...mockPlayer2, id: 11111, metadata: { ...mockPlayer2.metadata, firstName: 'Sam', lastName: 'Jones' } };
+      await loadTwoPlayers();
+
+      mflApi.getPlayer.mockResolvedValueOnce(mockPlayer3);
+      fireEvent.click(screen.getByText('+ Add Player'));
+      const player3Input = screen.getByLabelText('Player 3 ID');
+      fireEvent.change(player3Input, { target: { value: '11111' } });
+      fireEvent.keyDown(player3Input, { key: 'Enter', code: 'Enter' });
+      await waitFor(() => {
+        expect(screen.getAllByTestId('player-image')).toHaveLength(3);
+      });
+
+      fireEvent.click(screen.getByLabelText('Remove Sam Jones'));
+
+      expect(screen.queryByLabelText('Player 3 ID')).not.toBeInTheDocument();
+      expect(playerOrder()).toEqual(['John Doe', 'Jane Smith']);
+      expect(mockReplace).toHaveBeenLastCalledWith('?player1Id=12345&player2Id=67890', { scroll: false });
+    });
+
+    it('clears the URL when the last player is removed', async () => {
+      await loadTwoPlayers();
+
+      fireEvent.click(screen.getByLabelText('Remove John Doe'));
+      fireEvent.click(screen.getByLabelText('Remove Jane Smith'));
+
+      expect(screen.queryAllByTestId('player-image')).toHaveLength(0);
+      expect(mockReplace).toHaveBeenLastCalledWith('/compare', { scroll: false });
+    });
+
+    it('removes the third column with its X button', async () => {
+      await loadTwoPlayers();
+
+      fireEvent.click(screen.getByText('+ Add Player'));
+      expect(screen.getByLabelText('Player 3 ID')).toBeInTheDocument();
+      expect(screen.queryByText('+ Add Player')).not.toBeInTheDocument();
+
+      fireEvent.click(screen.getByLabelText('Remove Player 3'));
+
+      expect(screen.queryByLabelText('Player 3 ID')).not.toBeInTheDocument();
+      expect(screen.getByText('+ Add Player')).toBeInTheDocument();
+      expect(playerOrder()).toEqual(['John Doe', 'Jane Smith']);
+    });
+
+    it('does not offer remove or switch controls for empty player 1 and 2 columns', () => {
+      render(<ComparePage />);
+
+      expect(screen.queryByLabelText(/^Remove /)).not.toBeInTheDocument();
+      expect(screen.queryByLabelText(/^Move /)).not.toBeInTheDocument();
+    });
+  });
 });
