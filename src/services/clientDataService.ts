@@ -42,7 +42,7 @@ class ClientDataService {
   async getClubsForWallet(walletAddress: string): Promise<any[]> {
     const cacheKey = `clubs_${walletAddress}`
     return this.getCachedData(cacheKey, async () => {
-      const res = await fetch(`/api/data/agency-players?walletAddress=${encodeURIComponent(walletAddress)}&type=clubs`)
+      const res = await fetch(`/api/data/clubs?walletAddress=${encodeURIComponent(walletAddress)}`)
       if (!res.ok) throw new Error('Failed to fetch clubs')
       return res.json()
     })
