@@ -52,33 +52,34 @@ export async function GET(request: NextRequest) {
 
     console.log(`🔍 [API] Fetching clubs for wallet: ${walletAddress}`);
 
+    // The new api.playmfl.com host dropped /users/{wallet}/clubs, so try the
+    // query-based variants first (list endpoints require a limit, like /players).
+    const candidates = [
+      `${MFL_API_BASE_URL}/clubs?ownerWalletAddress=${walletAddress}&limit=400`,
+      `${MFL_API_BASE_URL}/clubs?walletAddress=${walletAddress}&limit=400`,
+      `${MFL_API_BASE_URL}/users/${walletAddress}/clubs`,
+    ];
+
+    const failures: string[] = [];
+
     try {
-      // Primary endpoint: /clubs?ownerWalletAddress= (same convention as /players)
-      const url = `${MFL_API_BASE_URL}/clubs?ownerWalletAddress=${walletAddress}`;
-      const response = await fetchWithTimeout(url);
+      for (const url of candidates) {
+        const response = await fetchWithTimeout(url);
 
-      if (response.ok) {
-        const clubs = normalizeClubs(await response.json());
-        console.log(`✅ [API] Clubs fetched successfully: ${clubs.length} clubs`);
-        return NextResponse.json({ success: true, data: clubs });
-      }
+        if (response.ok) {
+          const clubs = normalizeClubs(await response.json());
+          console.log(`✅ [API] Clubs fetched successfully from ${url}: ${clubs.length} clubs`);
+          return NextResponse.json({ success: true, data: clubs });
+        }
 
-      console.error(`❌ [API] Clubs API error: ${response.status} - ${response.statusText}`);
-
-      // Fallback: legacy /users/{walletAddress}/clubs endpoint
-      console.log(`🔄 [API] Trying fallback endpoint: /users/{walletAddress}/clubs`);
-      const fallbackUrl = `${MFL_API_BASE_URL}/users/${walletAddress}/clubs`;
-      const fallbackResponse = await fetchWithTimeout(fallbackUrl);
-
-      if (fallbackResponse.ok) {
-        const clubs = normalizeClubs(await fallbackResponse.json());
-        console.log(`✅ [API] Fallback endpoint succeeded: ${clubs.length} clubs`);
-        return NextResponse.json({ success: true, data: clubs });
+        const body = (await response.text().catch(() => '')).slice(0, 300);
+        console.error(`❌ [API] Clubs API error for ${url}: ${response.status} - ${body}`);
+        failures.push(`${url.replace(MFL_API_BASE_URL, '')} -> ${response.status} ${body}`);
       }
 
       return NextResponse.json(
-        { success: false, error: `HTTP ${response.status}: ${response.statusText}`, data: [] },
-        { status: response.status }
+        { success: false, error: `MFL API rejected all club endpoints: ${failures.join(' | ')}`, data: [] },
+        { status: 502 }
       );
 
     } catch (fetchError: any) {
