@@ -8,7 +8,7 @@ jest.mock('../contexts/WalletContext', () => ({
 }));
 
 // Mock the data service
-jest.mock('../services/dataService', () => ({
+jest.mock('../services/clientDataService', () => ({
   supabaseDataService: {
     getClubsForWallet: jest.fn(),
     getMatchesData: jest.fn(),
@@ -36,7 +36,7 @@ jest.mock('next/navigation', () => ({
 
 describe('Supabase Migration Tests', () => {
   const mockUseWallet = require('../contexts/WalletContext').useWallet as jest.MockedFunction<any>;
-  const mockSupabaseDataService = require('../services/dataService').supabaseDataService as jest.Mocked<any>;
+  const mockSupabaseDataService = require('../services/clientDataService').supabaseDataService as jest.Mocked<any>;
 
   beforeEach(() => {
     jest.clearAllMocks();

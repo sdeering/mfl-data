@@ -1,8 +1,12 @@
 import { TABLES } from '../lib/database';
 import { selectAll, selectOne, insertOne, deleteWhere } from '../lib/db-helpers';
 
+// These tests talk to a real database (one writes to it), so they only run when one is configured
+const hasDatabase = !!process.env.TURSO_DATABASE_URL
+const itWithDatabase = hasDatabase ? it : it.skip
+
 describe('Database Integration Tests', () => {
-  it('should connect to database successfully', async () => {
+  itWithDatabase('should connect to database successfully', async () => {
     // Test basic connection by querying a simple table
     const { data, error } = await selectAll(TABLES.SYNC_STATUS, {
       limit: 1,
@@ -39,7 +43,7 @@ describe('Database Integration Tests', () => {
     });
   });
 
-  it('should be able to insert and query sync status', async () => {
+  itWithDatabase('should be able to insert and query sync status', async () => {
     const testData = {
       data_type: 'test_sync',
       status: 'completed',

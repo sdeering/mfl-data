@@ -41,6 +41,11 @@ describe('Agency Market Values 7-day Gate', () => {
   test('starts backend sync when forced', async () => {
     // Mock db-helpers to return some agency players so flow proceeds to POST job
     mockDbHelpers.selectMaybeOne.mockResolvedValue({ data: null, error: null })
+    // Agency players are read through a join with the players table
+    mockDbHelpers.selectWithJoin.mockResolvedValue({
+      data: [{ mfl_player_id: 123, player: { mfl_player_id: 123 } }],
+      error: null
+    })
     mockDbHelpers.selectAll.mockResolvedValue({
       data: [{ mfl_player_id: 123, data: { metadata: { firstName: 'A', lastName: 'B', overall: 80, positions: ['ST'], age: 25, pace: 70, shooting: 70, passing: 70, dribbling: 70, defense: 50, physical: 60, goalkeeping: 1 } } }],
       error: null

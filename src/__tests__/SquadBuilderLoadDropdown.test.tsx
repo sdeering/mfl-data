@@ -16,7 +16,7 @@ jest.mock('@radix-ui/react-slider', () => {
 jest.mock('../../src/contexts/WalletContext', () => ({
   useWallet: () => ({ isConnected: true, account: '0xTEST' })
 }))
-jest.mock('../../src/services/dataService', () => ({
+jest.mock('../../src/services/clientDataService', () => ({
   supabaseDataService: {
     getAgencyPlayers: jest.fn().mockResolvedValue([]),
     getAgencyPlayerMarketValues: jest.fn().mockResolvedValue([])

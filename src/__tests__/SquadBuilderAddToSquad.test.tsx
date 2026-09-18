@@ -28,7 +28,7 @@ jest.mock('../..//src/components/Toast', () => ({
 }))
 
 // Mock services
-jest.mock('../../src/services/dataService', () => ({
+jest.mock('../../src/services/clientDataService', () => ({
   supabaseDataService: {
     getAgencyPlayers: jest.fn().mockResolvedValue([
       {
