@@ -69,11 +69,12 @@ export const Header: React.FC = () => {
     { label: 'My Players', path: '/agency' },
     { label: 'My Clubs', path: '/clubs' },
     { label: 'My Matches', path: '/matches' },
-    { label: 'Player Progression', path: '/player-progression' },
-    { label: 'Scout Players', path: '/scout' },
-    { label: 'Players Compare Tool', path: '/compare' },
-    { label: 'Squad Builder Tool', path: '/squad-builder' },
-    { label: 'Useful MFL Resources', path: '/resources' }
+    { label: 'My Player Progression', path: '/player-progression' },
+    { label: 'My Scouting', path: '/scout' },
+    { label: 'My Compare Tool', path: '/compare' },
+    { label: 'My Squad Builder', path: '/squad-builder' },
+    { label: 'My MFL Resources', path: '/resources' },
+    { label: 'Settings', path: '/settings' }
   ];
 
   const handleMenuClick = (path: string) => {

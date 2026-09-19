@@ -1,4 +1,5 @@
 import type { MFLPlayer, MFLMatch } from '../types/mflApi'
+import { applyRetiredPlayersSetting } from '../utils/appSettings'
 
 /**
  * Client-side data service that wraps fetch() calls to /api/data/* routes.
@@ -51,11 +52,13 @@ class ClientDataService {
   async getAgencyPlayers(walletAddress: string): Promise<MFLPlayer[]> {
     const cacheKey = `agency_players_${walletAddress}`
     const AGENCY_PLAYERS_CACHE_TTL = 24 * 60 * 60 * 1000 // 24 hours
-    return this.getCachedData(cacheKey, async () => {
+    const players = await this.getCachedData<MFLPlayer[]>(cacheKey, async () => {
       const res = await fetch(`/api/data/agency-players?walletAddress=${encodeURIComponent(walletAddress)}`)
       if (!res.ok) throw new Error('Failed to fetch agency players')
       return res.json()
     }, AGENCY_PLAYERS_CACHE_TTL)
+    // Applied after the cache so that changing the setting takes effect without a refetch
+    return applyRetiredPlayersSetting(players)
   }
 
   async getMatchesData(walletAddress: string, matchType?: 'upcoming' | 'previous') {

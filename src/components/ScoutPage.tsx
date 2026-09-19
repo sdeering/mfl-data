@@ -9,8 +9,11 @@ import {
   DEFAULT_SCOUT_FILTERS,
   FILTER_STATS,
   LISTING_LIMITS,
+  NUMBER_FILTER_OPTIONS,
   buildListingsQuery,
   filtersEqual,
+  loadScoutSettings,
+  saveScoutSettings,
   type NumberFilter,
   type ScoutFilters
 } from '../utils/scoutFilters';
@@ -26,22 +29,16 @@ const OVERALL_COLUMNS = [
 ] as const;
 type OverallKey = typeof OVERALL_COLUMNS[number]['key'];
 
-const range = (from: number, to: number, step = 1) => Array.from({ length: Math.floor((to - from) / step) + 1 }, (_, i) => from + i * step);
-
-// Age and overall are picked exactly, since a band like 70-82 matters; stat minimums are rough cut-offs
-const NUMBER_SELECTS: Array<{ filter: NumberFilter; label: string; title: string; options: number[] }> = [
-  { filter: 'ageMax', label: 'Max age', title: 'Oldest age to include', options: range(16, 40) },
-  { filter: 'overallMin', label: 'Min OVR', title: 'Lowest overall to include', options: range(40, 99) },
-  { filter: 'overallMax', label: 'Max OVR', title: 'Highest overall to include', options: range(40, 99) },
-  ...FILTER_STATS.map(stat => ({
-    filter: `${stat}Min` as const,
-    label: `Min ${STAT_LABELS[stat]}`,
-    title: `Lowest ${STAT_NAMES[stat].toLowerCase()} to include`,
-    options: range(20, 95, 5)
-  }))
+const NUMBER_SELECTS: Array<{ filter: NumberFilter; label: string; title: string }> = [
+  { filter: 'ageMax', label: 'Max age', title: 'Oldest age to include' },
+  { filter: 'overallMin', label: 'Min OVR', title: 'Lowest overall to include' },
+  { filter: 'overallMax', label: 'Max OVR', title: 'Highest overall to include' },
+  ...FILTER_STATS.map(stat => ({ filter: `${stat}Min` as const, label: `Min ${STAT_LABELS[stat]}`, title: `Lowest ${STAT_NAMES[stat].toLowerCase()} to include` }))
 ];
 
 type SortField = 'name' | 'age' | 'position' | 'rating' | 'price' | 'listed' | OverallKey | AttributeStat;
+const SORT_FIELDS: SortField[] = ['name', 'age', 'position', 'rating', 'price', 'listed', ...OVERALL_COLUMNS.map(column => column.key), ...ATTRIBUTE_STATS];
+const isSortField = (field: string): field is SortField => (SORT_FIELDS as string[]).includes(field);
 
 interface ScoutRow {
   listing: MFLListing;
@@ -93,13 +90,34 @@ export default function ScoutPage() {
 
   // Editing a filter only changes the draft; nothing is asked of MFL until it is searched for
   const [draftFilters, setDraftFilters] = useState<ScoutFilters>(DEFAULT_SCOUT_FILTERS);
-  const [filters, setFilters] = useState<ScoutFilters>(DEFAULT_SCOUT_FILTERS);
+  // null until the settings saved in this browser have been read, so the first search is the right one
+  const [filters, setFilters] = useState<ScoutFilters | null>(null);
 
   const [sortField, setSortField] = useState<SortField>('overall30');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
 
+  // Open on the filters and sort last used in this browser. They are read once mounted, as the
+  // server can't see them and rendering them straight away would not match what it sent.
+  useEffect(() => {
+    const saved = loadScoutSettings();
+    if (saved?.sort && isSortField(saved.sort.field)) {
+      setSortField(saved.sort.field);
+      setSortDirection(saved.sort.direction);
+    }
+    setDraftFilters(saved?.filters ?? DEFAULT_SCOUT_FILTERS);
+    setFilters(saved?.filters ?? DEFAULT_SCOUT_FILTERS);
+  }, []);
+
+  // Remember every change as it is made - there is nothing to press to save
+  const hasReadSettings = filters !== null;
+  useEffect(() => {
+    if (!hasReadSettings) return; // Saving any sooner would replace what was saved with the defaults
+    saveScoutSettings({ filters: draftFilters, sort: { field: sortField, direction: sortDirection } });
+  }, [hasReadSettings, draftFilters, sortField, sortDirection]);
+
   // Load the listings, then the progression history of every listed player
   useEffect(() => {
+    if (!filters) return;
     const controller = new AbortController();
 
     const load = async () => {
@@ -207,7 +225,7 @@ export default function ScoutPage() {
   const isRefreshing = !!progress && !progress.done;
   const isLoadingHistories = !isLoadingListings && !error && listings.length > 0 && !progress;
   const isBusy = isLoadingListings || isRefreshing;
-  const isFiltered = !filtersEqual(draftFilters, DEFAULT_SCOUT_FILTERS) || !filtersEqual(filters, DEFAULT_SCOUT_FILTERS);
+  const isFiltered = !filtersEqual(draftFilters, DEFAULT_SCOUT_FILTERS) || (filters !== null && !filtersEqual(filters, DEFAULT_SCOUT_FILTERS));
   const pending = <span className="text-gray-400 dark:text-gray-500">…</span>;
   // A rating on a badge of its MFL tier colour, as on the agency and club tables. The badge brings its
   // own background, so it reads on both themes - the tier colours alone don't, as text.
@@ -252,7 +270,7 @@ export default function ScoutPage() {
             {Object.entries(POSITION_GROUPS).map(([value, group]) => <option key={value} value={value}>{group.label}</option>)}
           </select>
         </div>
-        {NUMBER_SELECTS.map(({ filter, label, title, options }) => (
+        {NUMBER_SELECTS.map(({ filter, label, title }) => (
           <div key={filter} className={fieldClass}>
             <label htmlFor={`scout-${filter}`} className={labelClass}>{label}</label>
             <select
@@ -263,7 +281,7 @@ export default function ScoutPage() {
               className={controlClass}
             >
               <option value="">Any</option>
-              {options.map(option => <option key={option} value={option}>{option}</option>)}
+              {NUMBER_FILTER_OPTIONS[filter].map(option => <option key={option} value={option}>{option}</option>)}
             </select>
           </div>
         ))}

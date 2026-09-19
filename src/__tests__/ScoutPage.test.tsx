@@ -43,6 +43,7 @@ const cells = (playerName: string) => within(screen.getByText(playerName).closes
 describe('ScoutPage', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    window.localStorage.clear(); // The page remembers its settings, which would carry into the next test
     mockListings({ success: true, data: [listing(1, 'Steady', 50, daysAgo(0.01), ['ST', 'CF', 'CB']), listing(2, 'Rising', 120, daysAgo(1))] });
     mockLoadHistories.mockImplementation(async (playerIds: number[], onProgress: (update: unknown) => void) => {
       onProgress({ histories: { 1: [], 2: risingHistory }, refreshed: 0, toRefresh: 0, failedIds: [], done: true });
@@ -156,6 +157,61 @@ describe('ScoutPage', () => {
     expect(screen.getByLabelText('Position')).toHaveValue('all');
     expect(screen.getByLabelText('Max age')).toHaveValue('23');
     expect(screen.getByLabelText('Players')).toHaveValue('freeAgents');
+  });
+
+  test('remembers every change as it is made, without needing a search', async () => {
+    render(<ScoutPage />);
+    await screen.findByText('Rising Test');
+    const saved = () => JSON.parse(window.localStorage.getItem('mfl-data-scout-settings') ?? 'null');
+
+    fireEvent.change(screen.getByLabelText('Max age'), { target: { value: '19' } });
+    fireEvent.change(screen.getByLabelText('Position'), { target: { value: 'ST' } });
+    fireEvent.click(screen.getByText('Price'));
+
+    await waitFor(() => expect(saved()).toMatchObject({
+      filters: { ageMax: 19, position: 'ST', overallMin: 70, isFreeAgent: true, limit: 20 },
+      sort: { field: 'price', direction: 'desc' }
+    }));
+  });
+
+  test('opens on the settings saved last time, and asks MFL for nothing else first', async () => {
+    window.localStorage.setItem('mfl-data-scout-settings', JSON.stringify({
+      filters: { position: '__GROUP_FORWARDS', ageMax: 20, overallMin: 75, overallMax: null, paceMin: 70, isFreeAgent: false, limit: 50 },
+      sort: { field: 'price', direction: 'asc' }
+    }));
+    render(<ScoutPage />);
+    await screen.findByText('Rising Test');
+
+    const searches = (global.fetch as jest.Mock).mock.calls.map(call => Object.fromEntries(new URL(call[0], 'http://localhost').searchParams));
+    expect(searches.length).toBeGreaterThan(0);
+    for (const query of searches) {
+      expect(query).toMatchObject({ positions: 'ST,CF,RW,LW,CAM', ageMax: '20', overallMin: '75', paceMin: '70', limit: '50' });
+      expect(query).not.toHaveProperty('overallMax');
+      expect(query).not.toHaveProperty('isFreeAgent');
+      expect(query).toHaveProperty('passingMin', '50'); // Not in what was saved, so it keeps its default
+    }
+
+    expect(screen.getByLabelText('Position')).toHaveValue('__GROUP_FORWARDS');
+    expect(screen.getByLabelText('Max age')).toHaveValue('20');
+    expect(screen.getByLabelText('Max OVR')).toHaveValue('');
+    expect(screen.getByLabelText('Players')).toHaveValue('all');
+    expect(screen.getByLabelText('Listings')).toHaveValue('50');
+    expect(screen.getByText('Price ↑')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Reset' })).toBeInTheDocument();
+  });
+
+  test('ignores saved settings it can no longer use', async () => {
+    window.localStorage.setItem('mfl-data-scout-settings', JSON.stringify({
+      filters: { position: 'SWEEPER', ageMax: 'young', paceMin: 52, limit: 5000 },
+      sort: { field: 'total', direction: 'desc' } // A column that has since been removed
+    }));
+    render(<ScoutPage />);
+    await screen.findByText('Rising Test');
+
+    const query = Object.fromEntries(new URL((global.fetch as jest.Mock).mock.calls[0][0], 'http://localhost').searchParams);
+    expect(query).toMatchObject({ ageMax: '23', paceMin: '50', limit: '20' });
+    expect(query).not.toHaveProperty('positions');
+    expect(screen.getByText('+OVR 30D ↓')).toBeInTheDocument();
   });
 
   test('says when MFL is rate limiting instead of showing an empty table', async () => {

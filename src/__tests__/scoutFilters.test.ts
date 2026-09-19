@@ -1,4 +1,4 @@
-import { DEFAULT_SCOUT_FILTERS, buildListingsQuery, filtersEqual } from '../utils/scoutFilters'
+import { DEFAULT_SCOUT_FILTERS, buildListingsQuery, filtersEqual, loadScoutSettings, parseScoutFilters, saveScoutSettings } from '../utils/scoutFilters'
 
 describe('buildListingsQuery', () => {
   test('the default filters are the newest listings of young free agents with room to grow', () => {
@@ -41,5 +41,48 @@ describe('filtersEqual', () => {
     expect(filtersEqual(DEFAULT_SCOUT_FILTERS, { ...DEFAULT_SCOUT_FILTERS, isFreeAgent: false })).toBe(false)
     expect(filtersEqual(DEFAULT_SCOUT_FILTERS, { ...DEFAULT_SCOUT_FILTERS, limit: 50 })).toBe(false)
     expect(filtersEqual(DEFAULT_SCOUT_FILTERS, { ...DEFAULT_SCOUT_FILTERS, position: 'ST' })).toBe(false)
+  })
+})
+
+describe('parseScoutFilters', () => {
+  test('keeps saved filters, including ones that were switched off', () => {
+    const saved = { ...DEFAULT_SCOUT_FILTERS, position: '__GROUP_DEFENDERS', ageMax: null, defenseMin: 65, isFreeAgent: false, limit: 50 }
+    expect(parseScoutFilters(JSON.parse(JSON.stringify(saved)))).toEqual(saved)
+  })
+
+  test('falls back to the default for anything missing, mistyped or no longer in its dropdown', () => {
+    expect(parseScoutFilters({ position: 'toString', ageMax: '21', overallMin: 12, paceMin: 52, isFreeAgent: 'yes', limit: 25, physicalMin: 60 }))
+      .toEqual({ ...DEFAULT_SCOUT_FILTERS, physicalMin: 60 })
+  })
+
+  test('is the defaults when what was saved is not an object at all', () => {
+    for (const saved of [null, undefined, 'filters', 7, []]) expect(parseScoutFilters(saved)).toEqual(DEFAULT_SCOUT_FILTERS)
+  })
+})
+
+describe('saved scout settings', () => {
+  beforeEach(() => window.localStorage.clear())
+
+  test('come back as they were saved', () => {
+    const settings = { filters: { ...DEFAULT_SCOUT_FILTERS, position: 'CB', ageMax: 19 }, sort: { field: 'price', direction: 'asc' as const } }
+    saveScoutSettings(settings)
+    expect(loadScoutSettings()).toEqual(settings)
+  })
+
+  test('are null when nothing has been saved, or it cannot be read', () => {
+    expect(loadScoutSettings()).toBeNull()
+    window.localStorage.setItem('mfl-data-scout-settings', '{not json')
+    expect(loadScoutSettings()).toBeNull()
+  })
+
+  test('drop a sort that is not a field and a direction', () => {
+    window.localStorage.setItem('mfl-data-scout-settings', JSON.stringify({ filters: {}, sort: { field: 'price', direction: 'sideways' } }))
+    expect(loadScoutSettings()).toEqual({ filters: DEFAULT_SCOUT_FILTERS, sort: null })
+  })
+
+  test('never throw when the browser blocks storage', () => {
+    const blocked = jest.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new Error('QuotaExceededError') })
+    expect(() => saveScoutSettings({ filters: DEFAULT_SCOUT_FILTERS, sort: null })).not.toThrow()
+    blocked.mockRestore()
   })
 })
