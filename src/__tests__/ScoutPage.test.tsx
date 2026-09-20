@@ -169,13 +169,56 @@ describe('ScoutPage', () => {
     fireEvent.click(screen.getByText('Price'));
 
     await waitFor(() => expect(saved()).toMatchObject({
-      filters: { ageMax: 19, position: 'ST', overallMin: 70, isFreeAgent: true, limit: 20 },
+      filters: { ageMax: 19, position: 'ST', overallMin: 70, players: 'freeAgents', limit: 20 },
       sort: { field: 'price', direction: 'desc' }
     }));
   });
 
+  test('offers players under contract, and searches MFL for only them', async () => {
+    render(<ScoutPage />);
+    await screen.findByText('Rising Test');
+    const searches = () => (global.fetch as jest.Mock).mock.calls.map(call => new URL(call[0], 'http://localhost').searchParams);
+    const searchesOnLoad = searches().length;
+
+    const players = screen.getByLabelText('Players');
+    expect(within(players).getAllByRole('option').map(option => option.textContent)).toEqual(['Free agents', 'Under contract', 'All players']);
+
+    fireEvent.change(players, { target: { value: 'underContract' } });
+    expect(searches()).toHaveLength(searchesOnLoad); // Like every filter, it waits for Search
+    fireEvent.click(screen.getByRole('button', { name: 'Search' }));
+    await waitFor(() => expect(searches()).toHaveLength(searchesOnLoad + 1));
+
+    const query = Object.fromEntries(searches()[searchesOnLoad]);
+    expect(query).toMatchObject({ isFreeAgent: 'false', ageMax: '23', overallMin: '70', status: 'AVAILABLE' });
+    expect(query).not.toHaveProperty('activeContract'); // MFL rejects filters it does not have
+    expect(JSON.parse(window.localStorage.getItem('mfl-data-scout-settings') ?? 'null')).toMatchObject({ filters: { players: 'underContract' } });
+
+    // It counts as a change from the default search, which Reset undoes
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Reset' })).toBeEnabled());
+    fireEvent.click(screen.getByRole('button', { name: 'Reset' }));
+    await waitFor(() => expect(searches()).toHaveLength(searchesOnLoad + 2));
+    expect(Object.fromEntries(searches()[searchesOnLoad + 1])).toMatchObject({ isFreeAgent: 'true' });
+    expect(screen.getByLabelText('Players')).toHaveValue('freeAgents');
+  });
+
+  test('opens on players under contract when that was what was saved', async () => {
+    window.localStorage.setItem('mfl-data-scout-settings', JSON.stringify({
+      filters: { players: 'underContract' },
+      sort: null
+    }));
+    render(<ScoutPage />);
+    await screen.findByText('Rising Test');
+
+    const searches = (global.fetch as jest.Mock).mock.calls.map(call => Object.fromEntries(new URL(call[0], 'http://localhost').searchParams));
+    expect(searches.length).toBeGreaterThan(0);
+    for (const query of searches) expect(query).toHaveProperty('isFreeAgent', 'false');
+    expect(screen.getByLabelText('Players')).toHaveValue('underContract');
+    expect(screen.getByRole('button', { name: 'Reset' })).toBeInTheDocument();
+  });
+
   test('opens on the settings saved last time, and asks MFL for nothing else first', async () => {
     window.localStorage.setItem('mfl-data-scout-settings', JSON.stringify({
+      // isFreeAgent is how this was saved before "Under contract" existed: false was every player
       filters: { position: '__GROUP_FORWARDS', ageMax: 20, overallMin: 75, overallMax: null, paceMin: 70, isFreeAgent: false, limit: 50 },
       sort: { field: 'price', direction: 'asc' }
     }));

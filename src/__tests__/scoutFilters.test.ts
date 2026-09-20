@@ -9,12 +9,27 @@ describe('buildListingsQuery', () => {
   })
 
   test('a filter that is switched off is left out of the search', () => {
-    const query = buildListingsQuery({ ...DEFAULT_SCOUT_FILTERS, ageMax: null, paceMin: null, defenseMin: 65, isFreeAgent: false })
+    const query = buildListingsQuery({ ...DEFAULT_SCOUT_FILTERS, ageMax: null, paceMin: null, defenseMin: 65, players: 'all' })
 
     expect(query.has('ageMax')).toBe(false)
     expect(query.has('paceMin')).toBe(false)
     expect(query.has('isFreeAgent')).toBe(false)
     expect(query.get('defenseMin')).toBe('65')
+  })
+
+  test('searches for free agents, only players under contract, or every player', () => {
+    // MFL's one flag: true is players without a club, false is only those under contract, off is everyone
+    expect(buildListingsQuery({ ...DEFAULT_SCOUT_FILTERS, players: 'freeAgents' }).get('isFreeAgent')).toBe('true')
+    expect(buildListingsQuery({ ...DEFAULT_SCOUT_FILTERS, players: 'underContract' }).get('isFreeAgent')).toBe('false')
+    expect(buildListingsQuery({ ...DEFAULT_SCOUT_FILTERS, players: 'all' }).has('isFreeAgent')).toBe(false)
+  })
+
+  test('never sends MFL a filter it does not have', () => {
+    // MFL rejects any parameter it does not know with a 400, so "activeContract" (the MFL site's own
+    // name for the under contract option) must not be passed on
+    for (const players of ['freeAgents', 'underContract', 'all'] as const) {
+      expect(buildListingsQuery({ ...DEFAULT_SCOUT_FILTERS, players }).has('activeContract')).toBe(false)
+    }
   })
 
   test('searches for one position or a whole group of them', () => {
@@ -38,7 +53,8 @@ describe('filtersEqual', () => {
   test('compares every filter', () => {
     expect(filtersEqual(DEFAULT_SCOUT_FILTERS, { ...DEFAULT_SCOUT_FILTERS })).toBe(true)
     expect(filtersEqual(DEFAULT_SCOUT_FILTERS, { ...DEFAULT_SCOUT_FILTERS, physicalMin: 60 })).toBe(false)
-    expect(filtersEqual(DEFAULT_SCOUT_FILTERS, { ...DEFAULT_SCOUT_FILTERS, isFreeAgent: false })).toBe(false)
+    expect(filtersEqual(DEFAULT_SCOUT_FILTERS, { ...DEFAULT_SCOUT_FILTERS, players: 'all' })).toBe(false)
+    expect(filtersEqual(DEFAULT_SCOUT_FILTERS, { ...DEFAULT_SCOUT_FILTERS, players: 'underContract' })).toBe(false)
     expect(filtersEqual(DEFAULT_SCOUT_FILTERS, { ...DEFAULT_SCOUT_FILTERS, limit: 50 })).toBe(false)
     expect(filtersEqual(DEFAULT_SCOUT_FILTERS, { ...DEFAULT_SCOUT_FILTERS, position: 'ST' })).toBe(false)
   })
@@ -46,13 +62,22 @@ describe('filtersEqual', () => {
 
 describe('parseScoutFilters', () => {
   test('keeps saved filters, including ones that were switched off', () => {
-    const saved = { ...DEFAULT_SCOUT_FILTERS, position: '__GROUP_DEFENDERS', ageMax: null, defenseMin: 65, isFreeAgent: false, limit: 50 }
-    expect(parseScoutFilters(JSON.parse(JSON.stringify(saved)))).toEqual(saved)
+    for (const players of ['freeAgents', 'underContract', 'all'] as const) {
+      const saved = { ...DEFAULT_SCOUT_FILTERS, position: '__GROUP_DEFENDERS', ageMax: null, defenseMin: 65, players, limit: 50 }
+      expect(parseScoutFilters(JSON.parse(JSON.stringify(saved)))).toEqual(saved)
+    }
   })
 
   test('falls back to the default for anything missing, mistyped or no longer in its dropdown', () => {
-    expect(parseScoutFilters({ position: 'toString', ageMax: '21', overallMin: 12, paceMin: 52, isFreeAgent: 'yes', limit: 25, physicalMin: 60 }))
+    expect(parseScoutFilters({ position: 'toString', ageMax: '21', overallMin: 12, paceMin: 52, players: 'nobody', isFreeAgent: 'yes', limit: 25, physicalMin: 60 }))
       .toEqual({ ...DEFAULT_SCOUT_FILTERS, physicalMin: 60 })
+  })
+
+  test('keeps the meaning of settings saved when this was a free agents on/off box', () => {
+    expect(parseScoutFilters({ isFreeAgent: true }).players).toBe('freeAgents')
+    // Off was every player, so it must not become "under contract", which is what isFreeAgent=false asks MFL for
+    expect(parseScoutFilters({ isFreeAgent: false }).players).toBe('all')
+    expect(parseScoutFilters({ players: 'underContract', isFreeAgent: true }).players).toBe('underContract')
   })
 
   test('is the defaults when what was saved is not an object at all', () => {

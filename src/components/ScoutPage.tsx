@@ -10,11 +10,13 @@ import {
   FILTER_STATS,
   LISTING_LIMITS,
   NUMBER_FILTER_OPTIONS,
+  PLAYER_SCOPES,
   buildListingsQuery,
   filtersEqual,
   loadScoutSettings,
   saveScoutSettings,
   type NumberFilter,
+  type PlayerScope,
   type ScoutFilters
 } from '../utils/scoutFilters';
 import { getTierColor } from '../utils/ratingUtils';
@@ -289,12 +291,11 @@ export default function ScoutPage() {
           <label htmlFor="scout-players" className={labelClass}>Players</label>
           <select
             id="scout-players"
-            value={draftFilters.isFreeAgent ? 'freeAgents' : 'all'}
-            onChange={e => setDraftFilters(current => ({ ...current, isFreeAgent: e.target.value === 'freeAgents' }))}
+            value={draftFilters.players}
+            onChange={e => setDraftFilters(current => ({ ...current, players: e.target.value as PlayerScope }))}
             className={controlClass}
           >
-            <option value="freeAgents">Free agents</option>
-            <option value="all">All players</option>
+            {PLAYER_SCOPES.map(scope => <option key={scope.value} value={scope.value}>{scope.label}</option>)}
           </select>
         </div>
         <div className={wideFieldClass}>

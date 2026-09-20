@@ -6,9 +6,19 @@ export type FilterStat = typeof FILTER_STATS[number];
 
 // Named after the MFL listing parameter each one becomes. null leaves that filter off.
 export type NumberFilter = 'ageMax' | 'overallMin' | 'overallMax' | `${FilterStat}Min`;
+export type PlayerScope = 'freeAgents' | 'underContract' | 'all';
+
+// What the Players dropdown offers. MFL has the one flag for it: isFreeAgent=true is players without a
+// club, isFreeAgent=false only those under contract, and leaving it off is every player.
+export const PLAYER_SCOPES: Array<{ value: PlayerScope; label: string; isFreeAgent: 'true' | 'false' | null }> = [
+  { value: 'freeAgents', label: 'Free agents', isFreeAgent: 'true' },
+  { value: 'underContract', label: 'Under contract', isFreeAgent: 'false' },
+  { value: 'all', label: 'All players', isFreeAgent: null }
+];
+
 export type ScoutFilters = Record<NumberFilter, number | null> & {
   position: string; // A position, a position group, or ALL_POSITIONS
-  isFreeAgent: boolean; // Only players without a club
+  players: PlayerScope;
   limit: number;
 };
 
@@ -37,12 +47,12 @@ export const DEFAULT_SCOUT_FILTERS: ScoutFilters = {
   dribblingMin: null,
   defenseMin: null,
   physicalMin: null,
-  isFreeAgent: true,
+  players: 'freeAgents',
   limit: 20
 };
 
 export function filtersEqual(a: ScoutFilters, b: ScoutFilters): boolean {
-  return a.position === b.position && a.isFreeAgent === b.isFreeAgent && a.limit === b.limit
+  return a.position === b.position && a.players === b.players && a.limit === b.limit
     && NUMBER_FILTERS.every(filter => a[filter] === b[filter]);
 }
 
@@ -64,8 +74,9 @@ export function buildListingsQuery(filters: ScoutFilters): URLSearchParams {
   // MFL matches any position a player can play, not only their primary one
   const positions = getFilterPositions(filters.position);
   if (positions) query.set('positions', positions.join(','));
-  // Left off rather than sent as false: unticked means every player, not only those with a club
-  if (filters.isFreeAgent) query.set('isFreeAgent', 'true');
+  // Left off for every player: sending false would mean only those under contract
+  const isFreeAgent = PLAYER_SCOPES.find(scope => scope.value === filters.players)?.isFreeAgent;
+  if (isFreeAgent) query.set('isFreeAgent', isFreeAgent);
   query.set('view', 'full');
 
   return query;
@@ -84,7 +95,13 @@ export function parseScoutFilters(raw: unknown): ScoutFilters {
     const value = saved[filter];
     if (value === null || (typeof value === 'number' && NUMBER_FILTER_OPTIONS[filter].includes(value))) filters[filter] = value;
   }
-  if (typeof saved.isFreeAgent === 'boolean') filters.isFreeAgent = saved.isFreeAgent;
+  const scope = PLAYER_SCOPES.find(option => option.value === saved.players);
+  if (scope) {
+    filters.players = scope.value;
+  } else if (typeof saved.isFreeAgent === 'boolean') {
+    // Saved when this was a free agents on/off box, where off meant every player (not those under contract)
+    filters.players = saved.isFreeAgent ? 'freeAgents' : 'all';
+  }
   if (typeof saved.limit === 'number' && LISTING_LIMITS.includes(saved.limit)) filters.limit = saved.limit;
 
   return filters;
