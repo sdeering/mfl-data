@@ -114,18 +114,70 @@ export async function fetchPlayerExperienceHistory(playerId: string): Promise<Pl
   return playerExperienceService.fetchPlayerExperienceHistory(playerId);
 }
 
+// A player ages one year every 6 weeks (42 days)
+const MS_PER_AGE_YEAR = 42 * 24 * 60 * 60 * 1000;
+
+/**
+ * Build a function that maps a timestamp to a fractional age.
+ *
+ * The API reports the real age on its INITIAL and NEW_AGE entries, so those are the
+ * anchors. Between two anchors the age rises at most one year per 42 days, counted
+ * back from the later anchor: the gap from the INITIAL snapshot to the first NEW_AGE
+ * can be many months long and must not be counted as several years. After the last
+ * anchor the age is counted forward from it.
+ */
+function createAgeResolver(sortedData: PlayerExperienceEntry[]) {
+  const anchors = sortedData
+    .filter(entry => entry.values.age !== undefined)
+    .map(entry => ({ date: entry.date, age: entry.values.age as number }));
+
+  // No ages in the data at all: count from the first entry, starting at 0
+  if (anchors.length === 0) {
+    anchors.push({ date: sortedData[0]?.date || 0, age: 0 });
+  }
+
+  return (date: number): number => {
+    const nextIndex = anchors.findIndex(anchor => anchor.date > date);
+
+    if (nextIndex === -1) {
+      const last = anchors[anchors.length - 1];
+      return last.age + (date - last.date) / MS_PER_AGE_YEAR;
+    }
+
+    const next = anchors[nextIndex];
+    const prev = anchors[nextIndex - 1];
+
+    if (!prev) {
+      // Before the first known age
+      return next.age - (next.date - date) / MS_PER_AGE_YEAR;
+    }
+
+    const ageGain = next.age - prev.age;
+    const startDate = Math.max(prev.date, next.date - ageGain * MS_PER_AGE_YEAR);
+    if (date <= startDate) return prev.age;
+    return prev.age + (ageGain * (date - startDate)) / (next.date - startDate);
+  };
+}
+
+/**
+ * The player's age as of the latest entry in the history (any entry, including the
+ * age-only NEW_AGE ones that processProgressionData drops)
+ */
+export function getCurrentAge(experienceData: PlayerExperienceEntry[]): number | undefined {
+  if (experienceData.length === 0) return undefined;
+
+  const sortedData = [...experienceData].sort((a, b) => a.date - b.date);
+  return createAgeResolver(sortedData)(sortedData[sortedData.length - 1].date);
+}
+
 /**
  * Process experience history data for chart display
  */
 export function processProgressionData(experienceData: PlayerExperienceEntry[]) {
   // Sort by date first
   const sortedData = experienceData.sort((a, b) => a.date - b.date);
-  
-  // Find the first entry with an age to establish the baseline
-  const firstAgeEntry = sortedData.find(entry => entry.values.age !== undefined);
-  const baselineAge = firstAgeEntry?.values.age || 0;
-  const baselineDate = firstAgeEntry?.date || sortedData[0]?.date || 0;
-  
+  const getAgeAt = createAgeResolver(sortedData);
+
   // Carry forward values - each entry should have all stats from previous entries
   let currentValues = {
     overall: undefined as number | undefined,
@@ -141,11 +193,6 @@ export function processProgressionData(experienceData: PlayerExperienceEntry[]) 
   const progressionData = sortedData
     .filter(entry => entry.values.overall !== undefined || entry.values.pace !== undefined || entry.values.dribbling !== undefined || entry.values.passing !== undefined || entry.values.shooting !== undefined || entry.values.defense !== undefined || entry.values.physical !== undefined)
     .map((entry, index) => {
-      // Calculate precise age progression: 1 year every 6 weeks (42 days)
-      const daysSinceBaseline = (entry.date - baselineDate) / (1000 * 60 * 60 * 24);
-      const ageProgression = daysSinceBaseline / 42; // 42 days = 6 weeks
-      const calculatedAge = baselineAge + ageProgression;
-      
       // Update current values with any new values from this entry
       if (entry.values.overall !== undefined) currentValues.overall = entry.values.overall;
       if (entry.values.age !== undefined) currentValues.age = entry.values.age;
@@ -159,7 +206,7 @@ export function processProgressionData(experienceData: PlayerExperienceEntry[]) 
       const result = {
         date: new Date(entry.date),
         overall: currentValues.overall!,
-        age: calculatedAge, // Use precise calculated age with decimals
+        age: getAgeAt(entry.date), // Precise age with decimals
         pace: currentValues.pace,
         dribbling: currentValues.dribbling,
         passing: currentValues.passing,

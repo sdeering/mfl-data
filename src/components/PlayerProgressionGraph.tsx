@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { fetchPlayerExperienceHistory, processProgressionData } from '../services/playerExperienceService';
+import { fetchPlayerExperienceHistory, processProgressionData, getCurrentAge } from '../services/playerExperienceService';
 import type { ProgressionDataPoint, StatType } from '../types/playerExperience';
 
 interface PlayerProgressionGraphProps {
@@ -32,6 +32,7 @@ interface PlayerProgressionGraphProps {
 
 export default function PlayerProgressionGraph({ playerId, playerName, playerPositions }: PlayerProgressionGraphProps) {
   const [progressionData, setProgressionData] = useState<ProgressionDataPoint[]>([]);
+  const [currentAge, setCurrentAge] = useState<number | undefined>(undefined);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [enabledStats, setEnabledStats] = useState<Set<StatType>>(new Set(['overall']));
@@ -64,6 +65,7 @@ export default function PlayerProgressionGraph({ playerId, playerName, playerPos
                                if (experienceHistory.success && experienceHistory.data.length > 0) {
           const processedData = processProgressionData(experienceHistory.data);
           setProgressionData(processedData);
+          setCurrentAge(getCurrentAge(experienceHistory.data));
         } else {
           setError(experienceHistory.error || 'No progression data available');
         }
@@ -158,7 +160,9 @@ export default function PlayerProgressionGraph({ playerId, playerName, playerPos
   });
 
   const minAge = Math.floor(Math.min(...progressionData.map(d => d.age || 0)));
-  const maxAge = Math.ceil(Math.max(...progressionData.map(d => d.age || 0)));
+  // The right edge is the player's current age, not the next whole age. currentAge also
+  // covers a birthday that happened after the last stat change (age-only history entries).
+  const maxAge = Math.max(...progressionData.map(d => d.age || 0), currentAge ?? 0);
   const ageRange = maxAge - minAge;
 
   // Helper function to convert data to chart coordinates
@@ -457,7 +461,7 @@ export default function PlayerProgressionGraph({ playerId, playerName, playerPos
           })()}
           
           {/* X-axis labels */}
-          {Array.from({ length: maxAge - minAge + 1 }, (_, i) => minAge + i).map((age) => {
+          {Array.from({ length: Math.floor(maxAge) - minAge + 1 }, (_, i) => minAge + i).map((age) => {
             const x = getChartX(age);
             return (
               <text
