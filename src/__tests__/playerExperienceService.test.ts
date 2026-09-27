@@ -87,6 +87,29 @@ describe('processProgressionData ages', () => {
     expect(data[data.length - 1].age).toBeCloseTo(31.5, 6);
   });
 
+  it('stays within the last real age when no NEW_AGE follows it for months', () => {
+    // Player 364960: minted at 23, one training change 9 months later, never aged
+    const data = processProgressionData([
+      initial('2025-12-22T19:44:42Z', 23, 71),
+      stat('2026-09-25T07:25:35Z', { overall: 72, passing: 71, shooting: 61 }),
+    ]);
+
+    expect(data.map(d => d.age)).toEqual([23, 23.99]);
+  });
+
+  it('keeps later points in order when the last age runs past 42 days', () => {
+    const data = processProgressionData([
+      initial('2026-01-01T00:00:00Z', 23),
+      stat('2026-04-01T00:00:00Z', { overall: 67 }),
+      stat('2026-07-01T00:00:00Z', { overall: 68 }),
+    ]);
+    const ages = data.map(d => d.age);
+
+    expect(ages[1]).toBeGreaterThan(23);
+    expect(ages[2]).toBeGreaterThan(ages[1]);
+    expect(ages[2]).toBeLessThan(24);
+  });
+
   it('falls back to counting from the first entry when the history has no ages', () => {
     const data = processProgressionData([
       stat('2026-01-01T00:00:00Z', { overall: 60 }),
@@ -118,6 +141,11 @@ describe('getCurrentAge', () => {
 
     history.push(stat('2026-10-05T10:20:28Z', { defense: 37 })); // 21 days later
     expect(getCurrentAge(history)).toBeCloseTo(22.5, 6);
+  });
+
+  it('does not reach the next whole age without a NEW_AGE', () => {
+    const history = [initial('2025-12-22T19:44:42Z', 23), stat('2026-09-25T07:25:35Z', { overall: 72 })];
+    expect(Math.floor(getCurrentAge(history)!)).toBe(23);
   });
 
   it('is undefined for an empty history', () => {

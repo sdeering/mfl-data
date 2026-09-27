@@ -116,6 +116,8 @@ export async function fetchPlayerExperienceHistory(playerId: string): Promise<Pl
 
 // A player ages one year every 6 weeks (42 days)
 const MS_PER_AGE_YEAR = 42 * 24 * 60 * 60 * 1000;
+// Without a NEW_AGE entry the age never reaches the next whole year
+const MAX_AGE_FRACTION = 0.99;
 
 /**
  * Build a function that maps a timestamp to a fractional age.
@@ -124,7 +126,8 @@ const MS_PER_AGE_YEAR = 42 * 24 * 60 * 60 * 1000;
  * anchors. Between two anchors the age rises at most one year per 42 days, counted
  * back from the later anchor: the gap from the INITIAL snapshot to the first NEW_AGE
  * can be many months long and must not be counted as several years. After the last
- * anchor the age is counted forward from it.
+ * anchor the player is still that age (only a NEW_AGE entry changes it, and some players
+ * go months without one), so the time since it is spread within that age year.
  */
 function createAgeResolver(sortedData: PlayerExperienceEntry[]) {
   const anchors = sortedData
@@ -136,12 +139,18 @@ function createAgeResolver(sortedData: PlayerExperienceEntry[]) {
     anchors.push({ date: sortedData[0]?.date || 0, age: 0 });
   }
 
+  const lastAnchor = anchors[anchors.length - 1];
+  const lastEntryDate = sortedData[sortedData.length - 1]?.date ?? lastAnchor.date;
+  // At the normal rate one age year is 42 days; if the history runs past that with no
+  // NEW_AGE, squeeze the whole span into the year instead of ticking the age over
+  const lastAgeSpan = Math.max(MS_PER_AGE_YEAR, lastEntryDate - lastAnchor.date);
+
   return (date: number): number => {
     const nextIndex = anchors.findIndex(anchor => anchor.date > date);
 
     if (nextIndex === -1) {
-      const last = anchors[anchors.length - 1];
-      return last.age + (date - last.date) / MS_PER_AGE_YEAR;
+      const fraction = Math.max(0, date - lastAnchor.date) / lastAgeSpan;
+      return lastAnchor.age + Math.min(fraction, MAX_AGE_FRACTION);
     }
 
     const next = anchors[nextIndex];
