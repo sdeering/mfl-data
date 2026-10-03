@@ -1,8 +1,11 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { fetchPlayerMatches } from '../services/playerMatchesService';
+import { fetchPlayerMatches, fetchPlayerSeasonMatches } from '../services/playerMatchesService';
 import type { PlayerMatchStats, PositionSummary } from '../types/playerMatches';
+import { groupMatchesBySeason, type PlayerSeason } from '../utils/playerSeasons';
+
+const formatDay = (timestamp: number) => new Date(timestamp).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
 
 interface PlayerPositionSummaryProps {
   playerId: string;
@@ -13,6 +16,9 @@ export default function PlayerPositionSummary({ playerId, playerName }: PlayerPo
   const [matches, setMatches] = useState<PlayerMatchStats[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // The league summary covers whole seasons, which takes more matches than the last 25
+  const [seasons, setSeasons] = useState<PlayerSeason[] | null>(null);
+  const [seasonsError, setSeasonsError] = useState<string | null>(null);
 
   useEffect(() => {
     const loadMatches = async () => {
@@ -38,6 +44,19 @@ export default function PlayerPositionSummary({ playerId, playerName }: PlayerPo
     if (playerId) {
       loadMatches();
     }
+  }, [playerId]);
+
+  useEffect(() => {
+    if (!playerId) return;
+    let cancelled = false;
+    setSeasons(null);
+    setSeasonsError(null);
+    fetchPlayerSeasonMatches(playerId).then(response => {
+      if (cancelled) return;
+      if (response.success) setSeasons(groupMatchesBySeason(response.data, 2));
+      else setSeasonsError(response.error || 'Failed to load matches');
+    });
+    return () => { cancelled = true; };
   }, [playerId]);
 
   // Calculate position summaries
@@ -160,11 +179,11 @@ export default function PlayerPositionSummary({ playerId, playerName }: PlayerPo
     }
   };
 
-  // Calculate league summaries
-  const calculateLeagueSummaries = () => {
+  // League summaries of a set of matches
+  const calculateLeagueSummaries = (seasonMatches: PlayerMatchStats[]) => {
     const leagueMap = new Map<string, PlayerMatchStats[]>();
     
-    matches.forEach(match => {
+    seasonMatches.forEach(match => {
       // Use match.type instead of competition name for type detection
       const matchType = match.match?.type === 'CUP' ? 'Cup' : 'League';
       const competitionName = match.match?.competition?.name || '';
@@ -205,7 +224,11 @@ export default function PlayerPositionSummary({ playerId, playerName }: PlayerPo
       });
   };
 
-  const leagueSummaries = calculateLeagueSummaries();
+  const seasonLabel = (season: PlayerSeason, index: number) => {
+    if (season.isCurrent) return 'This season';
+    if (index === 1 && seasons?.[0]?.isCurrent) return 'Last season';
+    return `Season from ${formatDay(season.start)}`;
+  };
 
   return (
     <div className="w-full p-4 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
@@ -249,55 +272,81 @@ export default function PlayerPositionSummary({ playerId, playerName }: PlayerPo
         </div>
       )}
 
-               {/* League Summaries */}
-         {leagueSummaries.length > 0 && (
-           <div className="mt-6">
-             <h4 className="text-base text-gray-500 dark:text-gray-400 mb-3">League Summary (last {matches.length} matches)</h4>
-             <div className="space-y-2">
-               {leagueSummaries.map((summary) => {
-                 const [matchType, division] = summary.league.split(' ');
-                 const divisionColor = getDivisionColor(division);
-                 
-                 return (
-                   <div
-                     key={summary.league}
-                     className="p-3 bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600"
-                   >
-                     <div className="flex justify-between items-center">
-                       <div className="flex-1">
-                         <div className="flex items-center space-x-2">
-                           <span className={`text-xs px-2 py-1 rounded ${
-                             matchType === 'Cup' 
-                               ? 'bg-purple-100 dark:bg-purple-900 text-purple-800 dark:text-purple-200' 
-                               : 'bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200'
-                           }`}>
-                             {matchType}
-                           </span>
-                           {division && (
-                             <span className={`text-xs px-2 py-1 rounded font-medium ${divisionColor}`}>
-                               {division}
-                             </span>
-                           )}
-                         </div>
-                         <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                           {summary.matches} matches • {summary.totalGoals} goals • {summary.totalAssists} assists
-                         </p>
-                       </div>
-                       <div className="text-right">
-                         <span className={`text-[20px] font-bold ${getRatingColor(summary.averageRating)}`}>
-                           {formatRating(summary.averageRating)}
-                         </span>
-                         <p className="text-xs text-gray-500 dark:text-gray-400">
-                           avg rating
-                         </p>
-                       </div>
-                     </div>
-                   </div>
-                 );
-               })}
-             </div>
-           </div>
-         )}
+      {/* League Summaries: the last two seasons, each in full */}
+      <div className="mt-6">
+        <h4 className="text-base text-gray-500 dark:text-gray-400 mb-3">League Summary (last 2 seasons)</h4>
+        {seasonsError ? (
+          <p className="text-sm text-gray-500 dark:text-gray-400">{seasonsError}</p>
+        ) : seasons === null ? (
+          <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
+            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+            Loading seasons…
+          </div>
+        ) : seasons.length === 0 ? (
+          <p className="text-sm text-gray-500 dark:text-gray-400">No league matches in the last two seasons</p>
+        ) : (
+          <div className="space-y-4">
+            {seasons.map((season, index) => (
+              <div key={season.start}>
+                <div className="flex flex-wrap items-baseline justify-between gap-x-3 mb-2">
+                  <h5 className="text-sm font-semibold text-gray-900 dark:text-white">
+                    {seasonLabel(season, index)}
+                    <span className="ml-2 font-normal text-gray-500 dark:text-gray-400">
+                      {formatDay(season.start)} – {season.end ? formatDay(season.end) : 'now'} · {season.matches.length} matches
+                    </span>
+                  </h5>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">
+                    {season.leagueMatches} league • {season.cupMatches} cup
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  {calculateLeagueSummaries(season.matches).map((summary) => {
+                    const [matchType, division] = summary.league.split(' ');
+                    const divisionColor = getDivisionColor(division);
+        
+                    return (
+                      <div
+                        key={summary.league}
+                        className="p-3 bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600"
+                      >
+                        <div className="flex justify-between items-center">
+                          <div className="flex-1">
+                            <div className="flex items-center space-x-2">
+                              <span className={`text-xs px-2 py-1 rounded ${
+                                matchType === 'Cup' 
+                                  ? 'bg-purple-100 dark:bg-purple-900 text-purple-800 dark:text-purple-200' 
+                                  : 'bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200'
+                              }`}>
+                                {matchType}
+                              </span>
+                              {division && (
+                                <span className={`text-xs px-2 py-1 rounded font-medium ${divisionColor}`}>
+                                  {division}
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                              {summary.matches} matches • {summary.totalGoals} goals • {summary.totalAssists} assists
+                            </p>
+                          </div>
+                          <div className="text-right">
+                            <span className={`text-[20px] font-bold ${getRatingColor(summary.averageRating)}`}>
+                              {formatRating(summary.averageRating)}
+                            </span>
+                            <p className="text-xs text-gray-500 dark:text-gray-400">
+                              avg rating
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

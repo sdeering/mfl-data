@@ -34,7 +34,8 @@ jest.mock('../services/playerExperienceService', () => ({
 }));
 
 jest.mock('../services/playerMatchesService', () => ({
-  fetchPlayerMatches: jest.fn(() => Promise.resolve({ success: true, data: [] }))
+  fetchPlayerMatches: jest.fn(() => Promise.resolve({ success: true, data: [] })),
+  fetchPlayerSeasonMatches: jest.fn(() => Promise.resolve({ success: true, data: [] }))
 }));
 
 jest.mock('../services/dataService', () => ({

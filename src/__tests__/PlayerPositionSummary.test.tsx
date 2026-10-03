@@ -14,7 +14,8 @@ jest.mock('../contexts/LoadingContext', () => ({
 
 // Mock the playerMatchesService
 jest.mock('../services/playerMatchesService', () => ({
-  fetchPlayerMatches: jest.fn()
+  fetchPlayerMatches: jest.fn(),
+  fetchPlayerSeasonMatches: jest.fn()
 }));
 
 const mockMatchStats: PlayerMatchStats[] = [
@@ -250,11 +251,15 @@ describe('PlayerPositionSummary', () => {
     jest.clearAllMocks();
     
     // Mock successful API response
-    const { fetchPlayerMatches } = require('../services/playerMatchesService');
+    const { fetchPlayerMatches, fetchPlayerSeasonMatches } = require('../services/playerMatchesService');
     fetchPlayerMatches.mockResolvedValue({
       success: true,
       data: mockMatchStats
     });
+    // The league summary's seasons come from the same matches in these tests (like the real one, it never throws)
+    fetchPlayerSeasonMatches.mockImplementation((playerId: string) =>
+      fetchPlayerMatches(playerId).catch((error: Error) => ({ success: false, data: [], error: error.message }))
+    );
   });
 
   describe('Position Summary Calculations', () => {
@@ -325,7 +330,7 @@ describe('PlayerPositionSummary', () => {
       );
 
       await waitFor(() => {
-        expect(screen.getByText('League Summary (last 5 matches)')).toBeInTheDocument();
+        expect(screen.getByText('League Summary (last 2 seasons)')).toBeInTheDocument();
       });
 
       // League ICE: 3 matches, average rating = (7.5 + 6.8 + 7.1) / 3 = 7.13
@@ -724,7 +729,8 @@ describe('PlayerPositionSummary', () => {
       const { fetchPlayerMatches } = require('../services/playerMatchesService');
       fetchPlayerMatches.mockResolvedValue({
         success: true,
-        data: cupMatches
+        // A league match too: the league summary is by season, and a season is known by its league
+        data: [...cupMatches, mockMatchStats[0]]
       });
 
       render(
@@ -890,7 +896,7 @@ describe('PlayerPositionSummary', () => {
       await waitFor(() => {
         expect(screen.getByText('Match Position Ratings')).toBeInTheDocument();
         expect(screen.getByText('Position Summary (last 5 matches)')).toBeInTheDocument();
-        expect(screen.getByText('League Summary (last 5 matches)')).toBeInTheDocument();
+        expect(screen.getByText('League Summary (last 2 seasons)')).toBeInTheDocument();
       });
     });
 

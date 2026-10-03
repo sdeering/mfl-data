@@ -10,8 +10,10 @@ export interface PlayerMatchStats {
     homeScore: number;
     awayScore: number;
     competition: {
+      id?: number;
       name: string;
       code: string;
+      startingDate?: number; // When the competition was set to start; the first match can be a little earlier
     };
     startDate: number;
   };

@@ -107,3 +107,24 @@ export const fetchPlayerMatches = async (playerId: string): Promise<PlayerMatche
   
   return requestPromise;
 };
+
+/**
+ * The player's matches over their last two seasons, newest first (several MFL pages, fetched by the
+ * server). Only used in the browser.
+ */
+export const fetchPlayerSeasonMatches = async (playerId: string): Promise<PlayerMatchesResponse> => {
+  try {
+    const response = await fetch(`/api/players/${playerId}/season-matches`, { headers: { Accept: 'application/json' } });
+    const body = await response.json().catch(() => null);
+    if (!response.ok || !body?.success) {
+      throw new Error(
+        response.status === 429
+          ? `MFL is limiting requests right now — try again in about ${Math.max(1, Math.ceil((body?.retryAfterSeconds ?? 600) / 60))} minutes.`
+          : body?.error || `Failed to load matches (${response.status})`
+      );
+    }
+    return { success: true, data: body.data };
+  } catch (error) {
+    return { success: false, data: [], error: error instanceof Error ? error.message : 'Failed to load matches' };
+  }
+};
