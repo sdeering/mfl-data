@@ -9,15 +9,12 @@ import {
   DEFAULT_SCOUT_FILTERS,
   FILTER_STATS,
   LISTING_LIMITS,
-  OFF_PRIMARY_OPTIONS,
   NUMBER_FILTER_OPTIONS,
-  PLAYER_SCOPES,
   buildListingsQuery,
   filtersEqual,
   loadScoutSettings,
   saveScoutSettings,
   type NumberFilter,
-  type PlayerScope,
   type ScoutFilters
 } from '../utils/scoutFilters';
 import { getTierColor } from '../utils/ratingUtils';
@@ -189,10 +186,10 @@ export default function ScoutPage() {
   }, [listings, histories, loadedAt]);
 
   // Applied as it is picked: it narrows the listings already loaded, so there is nothing to ask MFL
-  const offPrimaryMin = draftFilters.offPrimaryMin;
+  const { betterOffPrimary } = draftFilters;
   const shownRows = useMemo(
-    () => (offPrimaryMin === null ? rows : rows.filter(row => getOffPrimaryGain(row.positionRatings) >= offPrimaryMin)),
-    [rows, offPrimaryMin]
+    () => (betterOffPrimary ? rows.filter(row => getOffPrimaryGain(row.positionRatings) > 0) : rows),
+    [rows, betterOffPrimary]
   );
 
   const sortedRows = useMemo(() => {
@@ -296,29 +293,32 @@ export default function ScoutPage() {
             </select>
           </div>
         ))}
-        <div className={wideFieldClass}>
-          <label htmlFor="scout-players" className={labelClass}>Players</label>
-          <select
-            id="scout-players"
-            value={draftFilters.players}
-            onChange={e => setDraftFilters(current => ({ ...current, players: e.target.value as PlayerScope }))}
-            className={controlClass}
-          >
-            {PLAYER_SCOPES.map(scope => <option key={scope.value} value={scope.value}>{scope.label}</option>)}
-          </select>
+        {/* The tick boxes sit as tall as the dropdowns, so the row stays level */}
+        <div className={fieldClass}>
+          <label htmlFor="scout-free-agent" className={labelClass}>Free agent</label>
+          <div className="flex items-center justify-center h-[38px]">
+            <input
+              id="scout-free-agent"
+              type="checkbox"
+              title="Only players without a club. Untick for every player, under contract or not."
+              checked={draftFilters.isFreeAgent}
+              onChange={e => setDraftFilters(current => ({ ...current, isFreeAgent: e.target.checked }))}
+              className="h-4 w-4 rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
+            />
+          </div>
         </div>
         <div className={fieldClass}>
           <label htmlFor="scout-off-primary" className={labelClass}>Off Pri</label>
-          <select
-            id="scout-off-primary"
-            title="Players who rate higher at another position than their primary one, by at least this much. Narrows the loaded listings straight away."
-            value={draftFilters.offPrimaryMin ?? ''}
-            onChange={e => setDraftFilters(current => ({ ...current, offPrimaryMin: e.target.value === '' ? null : Number(e.target.value) }))}
-            className={controlClass}
-          >
-            <option value="">Any</option>
-            {OFF_PRIMARY_OPTIONS.map(option => <option key={option} value={option}>+{option}</option>)}
-          </select>
+          <div className="flex items-center justify-center h-[38px]">
+            <input
+              id="scout-off-primary"
+              type="checkbox"
+              title="Only players who rate higher at another position than their primary one. Narrows the loaded listings straight away."
+              checked={betterOffPrimary}
+              onChange={e => setDraftFilters(current => ({ ...current, betterOffPrimary: e.target.checked }))}
+              className="h-4 w-4 rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
+            />
+          </div>
         </div>
         <div className={wideFieldClass}>
           <label htmlFor="scout-limit" className={labelClass}>Listings</label>
@@ -495,7 +495,7 @@ export default function ScoutPage() {
           </div>
           {sortedRows.length === 0 && (
             <p className="px-4 py-6 text-center text-sm text-gray-600 dark:text-gray-400">
-              None of these listings rate +{offPrimaryMin} or more at another position than their primary one.
+              None of these listings rate higher at another position than their primary one.
             </p>
           )}
         </div>

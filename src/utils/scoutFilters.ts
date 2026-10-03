@@ -6,26 +6,16 @@ export type FilterStat = typeof FILTER_STATS[number];
 
 // Named after the MFL listing parameter each one becomes. null leaves that filter off.
 export type NumberFilter = 'ageMax' | 'overallMin' | 'overallMax' | `${FilterStat}Min`;
-export type PlayerScope = 'freeAgents' | 'underContract' | 'all';
-
-// What the Players dropdown offers. MFL has the one flag for it: isFreeAgent=true is players without a
-// club, isFreeAgent=false only those under contract, and leaving it off is every player.
-export const PLAYER_SCOPES: Array<{ value: PlayerScope; label: string; isFreeAgent: 'true' | 'false' | null }> = [
-  { value: 'freeAgents', label: 'Free agents', isFreeAgent: 'true' },
-  { value: 'underContract', label: 'Under contract', isFreeAgent: 'false' },
-  { value: 'all', label: 'All players', isFreeAgent: null }
-];
 
 export type ScoutFilters = Record<NumberFilter, number | null> & {
   position: string; // A position, a position group, or ALL_POSITIONS
-  players: PlayerScope;
+  // Only players without a club. Off is every player, under contract or not.
+  isFreeAgent: boolean;
   limit: number;
-  // Only players who rate at least this much higher at another position than their primary. MFL can't
-  // search for it, so it narrows the listings already loaded. null leaves it off.
-  offPrimaryMin: number | null;
+  // Only players who rate higher at another position than their primary. MFL can't search for it,
+  // so it narrows the listings already loaded.
+  betterOffPrimary: boolean;
 };
-
-export const OFF_PRIMARY_OPTIONS = [1, 2, 3, 5];
 
 export const NUMBER_FILTERS: NumberFilter[] = ['ageMax', 'overallMin', 'overallMax', ...FILTER_STATS.map(stat => `${stat}Min` as const)];
 
@@ -52,13 +42,13 @@ export const DEFAULT_SCOUT_FILTERS: ScoutFilters = {
   dribblingMin: null,
   defenseMin: null,
   physicalMin: null,
-  players: 'freeAgents',
+  isFreeAgent: true,
   limit: 20,
-  offPrimaryMin: null
+  betterOffPrimary: false
 };
 
 export function filtersEqual(a: ScoutFilters, b: ScoutFilters): boolean {
-  return a.position === b.position && a.players === b.players && a.limit === b.limit && a.offPrimaryMin === b.offPrimaryMin
+  return a.position === b.position && a.isFreeAgent === b.isFreeAgent && a.limit === b.limit && a.betterOffPrimary === b.betterOffPrimary
     && NUMBER_FILTERS.every(filter => a[filter] === b[filter]);
 }
 
@@ -80,9 +70,8 @@ export function buildListingsQuery(filters: ScoutFilters): URLSearchParams {
   // MFL matches any position a player can play, not only their primary one
   const positions = getFilterPositions(filters.position);
   if (positions) query.set('positions', positions.join(','));
-  // Left off for every player: sending false would mean only those under contract
-  const isFreeAgent = PLAYER_SCOPES.find(scope => scope.value === filters.players)?.isFreeAgent;
-  if (isFreeAgent) query.set('isFreeAgent', isFreeAgent);
+  // Left off for every player: MFL takes isFreeAgent=false as only those under contract
+  if (filters.isFreeAgent) query.set('isFreeAgent', 'true');
   query.set('view', 'full');
 
   return query;
@@ -101,15 +90,14 @@ export function parseScoutFilters(raw: unknown): ScoutFilters {
     const value = saved[filter];
     if (value === null || (typeof value === 'number' && NUMBER_FILTER_OPTIONS[filter].includes(value))) filters[filter] = value;
   }
-  const scope = PLAYER_SCOPES.find(option => option.value === saved.players);
-  if (scope) {
-    filters.players = scope.value;
+  if (saved.players === 'freeAgents' || saved.players === 'underContract' || saved.players === 'all') {
+    // Saved when this was a Free agents / Under contract / All players dropdown
+    filters.isFreeAgent = saved.players === 'freeAgents';
   } else if (typeof saved.isFreeAgent === 'boolean') {
-    // Saved when this was a free agents on/off box, where off meant every player (not those under contract)
-    filters.players = saved.isFreeAgent ? 'freeAgents' : 'all';
+    filters.isFreeAgent = saved.isFreeAgent;
   }
   if (typeof saved.limit === 'number' && LISTING_LIMITS.includes(saved.limit)) filters.limit = saved.limit;
-  if (typeof saved.offPrimaryMin === 'number' && OFF_PRIMARY_OPTIONS.includes(saved.offPrimaryMin)) filters.offPrimaryMin = saved.offPrimaryMin;
+  if (typeof saved.betterOffPrimary === 'boolean') filters.betterOffPrimary = saved.betterOffPrimary;
 
   return filters;
 }

@@ -675,7 +675,7 @@ export default function ClubPlayersPage({ clubId }: ClubPlayersPageProps) {
                             className="mr-2"
                             title={isPrimary ? 'Primary position' : diff > 0 ? `+${diff} vs primary position` : undefined}
                           >
-                            <span className={isPrimary ? 'underline' : undefined}>{position}</span>{' '}
+                            {position}{' '}
                             <span className="font-semibold" style={{ color: getTierTextColorValue(rating) }}>{rating}</span>
                             {diff > 0 && (
                               <span className="ml-0.5 text-xs text-green-600 dark:text-green-400">
