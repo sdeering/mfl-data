@@ -4,13 +4,14 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useWallet } from '../contexts/WalletContext';
 import { useRouter } from 'next/navigation';
 import { supabaseDataService } from '../services/clientDataService';
-import { MFLPlayer } from '../types/mflApi';
+import { MFLPlayer, MFLPosition } from '../types/mflApi';
 import { useSupabaseSyncUI } from '../contexts/SupabaseSyncContext';
 import { OverallRatingTooltip } from './OverallRatingTooltip';
 // Removed market value sync UI on agency page
 import * as XLSX from 'xlsx';
 import { PlayerFilters, FilterState, applyFilters } from './PlayerFilters';
 import { loadAppSettings, isRetiredPlayer } from '../utils/appSettings';
+import { calculateAllPositionOVRs } from '../utils/ruleBasedPositionCalculator';
 
 const AgencyPage: React.FC = () => {
   const { isConnected, account } = useWallet();
@@ -193,7 +194,14 @@ const AgencyPage: React.FC = () => {
       // Market value removed from export
       
       // Get position ratings and primary position
-      const positionRatings = playerMarketValueDetails?.position_ratings || {};
+      const m = player.metadata;
+      const positionRatings = calculateAllPositionOVRs({
+        id: player.id,
+        name: `${m.firstName} ${m.lastName}`,
+        attributes: { PAC: m.pace, SHO: m.shooting, PAS: m.passing, DRI: m.dribbling, DEF: m.defense, PHY: m.physical, GK: m.goalkeeping || 0 },
+        positions: (m.positions || []) as MFLPosition[],
+        overall: m.overall
+      }).results;
       const primaryPosition = player.metadata.positions?.[0] || 'N/A';
       
       // Define position order
@@ -228,9 +236,9 @@ const AgencyPage: React.FC = () => {
       
       // Add position rating columns at the end
       positionOrder.forEach(position => {
-        const rating = positionRatings[position];
-        if (rating && typeof rating === 'object' && rating.rating !== undefined) {
-          (exportObj as any)[`${position} Rating`] = rating.rating;
+        const rating = positionRatings?.[position as MFLPosition];
+        if (rating?.success) {
+          (exportObj as any)[`${position} Rating`] = rating.ovr;
         } else {
           (exportObj as any)[`${position} Rating`] = 'N/A';
         }

@@ -1,4 +1,5 @@
-import type { MFLPlayer, MFLMatch } from '../types/mflApi'
+import type { MFLPlayer } from '../types/mflApi'
+import type { MFLMatch } from './matchesService'
 import { applyRetiredPlayersSetting } from '../utils/appSettings'
 
 /**
