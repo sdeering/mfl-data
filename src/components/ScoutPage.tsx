@@ -452,7 +452,7 @@ export default function ScoutPage() {
                       {positionRatings.map(({ position, rating, isPrimary, diff }) => (
                         <React.Fragment key={position}>
                           <span className="mr-1.5" title={isPrimary ? 'Primary position' : diff > 0 ? `+${diff} vs primary position` : undefined}>
-                            <span className={isPrimary ? 'underline' : undefined}>{position}</span> {renderRating(rating, true)}
+                            {position} {renderRating(rating, true)}
                             {diff > 0 && (
                               <span className="ml-0.5 text-xs text-green-600 dark:text-green-400">
                                 +{diff}
