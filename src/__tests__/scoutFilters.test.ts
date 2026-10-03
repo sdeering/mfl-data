@@ -63,13 +63,13 @@ describe('filtersEqual', () => {
 describe('parseScoutFilters', () => {
   test('keeps saved filters, including ones that were switched off', () => {
     for (const players of ['freeAgents', 'underContract', 'all'] as const) {
-      const saved = { ...DEFAULT_SCOUT_FILTERS, position: '__GROUP_DEFENDERS', ageMax: null, defenseMin: 65, players, limit: 50 }
+      const saved = { ...DEFAULT_SCOUT_FILTERS, position: '__GROUP_DEFENDERS', ageMax: null, defenseMin: 65, players, limit: 50, offPrimaryMin: 2 }
       expect(parseScoutFilters(JSON.parse(JSON.stringify(saved)))).toEqual(saved)
     }
   })
 
   test('falls back to the default for anything missing, mistyped or no longer in its dropdown', () => {
-    expect(parseScoutFilters({ position: 'toString', ageMax: '21', overallMin: 12, paceMin: 52, players: 'nobody', isFreeAgent: 'yes', limit: 25, physicalMin: 60 }))
+    expect(parseScoutFilters({ position: 'toString', ageMax: '21', overallMin: 12, paceMin: 52, players: 'nobody', isFreeAgent: 'yes', limit: 25, physicalMin: 60, offPrimaryMin: 4 }))
       .toEqual({ ...DEFAULT_SCOUT_FILTERS, physicalMin: 60 })
   })
 

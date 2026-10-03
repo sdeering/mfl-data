@@ -20,7 +20,12 @@ export type ScoutFilters = Record<NumberFilter, number | null> & {
   position: string; // A position, a position group, or ALL_POSITIONS
   players: PlayerScope;
   limit: number;
+  // Only players who rate at least this much higher at another position than their primary. MFL can't
+  // search for it, so it narrows the listings already loaded. null leaves it off.
+  offPrimaryMin: number | null;
 };
+
+export const OFF_PRIMARY_OPTIONS = [1, 2, 3, 5];
 
 export const NUMBER_FILTERS: NumberFilter[] = ['ageMax', 'overallMin', 'overallMax', ...FILTER_STATS.map(stat => `${stat}Min` as const)];
 
@@ -48,11 +53,12 @@ export const DEFAULT_SCOUT_FILTERS: ScoutFilters = {
   defenseMin: null,
   physicalMin: null,
   players: 'freeAgents',
-  limit: 20
+  limit: 20,
+  offPrimaryMin: null
 };
 
 export function filtersEqual(a: ScoutFilters, b: ScoutFilters): boolean {
-  return a.position === b.position && a.players === b.players && a.limit === b.limit
+  return a.position === b.position && a.players === b.players && a.limit === b.limit && a.offPrimaryMin === b.offPrimaryMin
     && NUMBER_FILTERS.every(filter => a[filter] === b[filter]);
 }
 
@@ -103,6 +109,7 @@ export function parseScoutFilters(raw: unknown): ScoutFilters {
     filters.players = saved.isFreeAgent ? 'freeAgents' : 'all';
   }
   if (typeof saved.limit === 'number' && LISTING_LIMITS.includes(saved.limit)) filters.limit = saved.limit;
+  if (typeof saved.offPrimaryMin === 'number' && OFF_PRIMARY_OPTIONS.includes(saved.offPrimaryMin)) filters.offPrimaryMin = saved.offPrimaryMin;
 
   return filters;
 }

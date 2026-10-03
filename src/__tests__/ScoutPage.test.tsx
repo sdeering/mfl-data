@@ -92,13 +92,41 @@ describe('ScoutPage', () => {
     await screen.findByText('Rising Test');
 
     expect(cells('Rising Test')[2]?.trim()).toBe('ST 71'); // At their primary position a player rates their overall
-    expect(cells('Steady Test')[2]).toMatch(/^ST \d+ CF \d+ CB \d+ $/); // Reads as words, not "ST 71CF 66"
+    // Reads as words, not "ST 71CF 66"; each other position shows its difference to the primary
+    expect(cells('Steady Test')[2]).toMatch(/^ST \d+ CF \d+-\d+ CB \d+-\d+ $/);
     const [primary, similar, unfamiliar] = cells('Steady Test')[2]!.match(/[A-Z]+ \d+/g)!;
     expect(primary).toBe('ST 71');
     expect(similar).toMatch(/^CF \d+$/);
     expect(unfamiliar).toMatch(/^CB \d+$/);
     // A striker who can fill in at centre back is far weaker there than at centre forward
     expect(Number(unfamiliar.slice(3))).toBeLessThan(Number(similar.slice(3)));
+    expect(cells('Steady Test')[2]).toContain(`CF ${similar.slice(3)}${Number(similar.slice(3)) - 71}`);
+  });
+
+  test('lists the positions best rating first', async () => {
+    render(<ScoutPage />);
+    await screen.findByText('Rising Test');
+
+    const ranked = cells('Steady Test')[2]!.match(/[A-Z]+ \d+/g)!.map(r => Number(r.split(' ')[1]));
+    expect(ranked).toEqual([...ranked].sort((a, b) => b - a)); // Best rating first
+  });
+
+  test('narrows the loaded listings to players who rate higher at another position, without searching MFL', async () => {
+    // A striker's stats listed as a centre back: they rate higher up front than at their primary CB
+    mockListings({ success: true, data: [listing(1, 'Steady', 50, daysAgo(0.01), ['ST', 'CF', 'CB']), listing(3, 'Misplaced', 60, daysAgo(2), ['CB', 'ST'])] });
+    render(<ScoutPage />);
+    await screen.findByText('Misplaced Test');
+    const searchesOnLoad = (global.fetch as jest.Mock).mock.calls.length;
+    expect(cells('Misplaced Test')[2]).toMatch(/^ST \d+\+\d+ CB \d+ $/);
+
+    fireEvent.change(screen.getByLabelText('Off Pri'), { target: { value: '1' } });
+    expect(screen.getByText('Misplaced Test')).toBeInTheDocument();
+    expect(screen.queryByText('Steady Test')).not.toBeInTheDocument();
+    expect(screen.getByText(/^1 of 2 ·/)).toBeInTheDocument();
+    expect(global.fetch).toHaveBeenCalledTimes(searchesOnLoad);
+
+    fireEvent.change(screen.getByLabelText('Off Pri'), { target: { value: '' } });
+    expect(screen.getByText('Steady Test')).toBeInTheDocument();
   });
 
   test('opens with the biggest 30-day riser first and sorts by any column', async () => {

@@ -9,6 +9,7 @@ import { OverallRatingTooltip } from './OverallRatingTooltip';
 import { PlayerFilters, FilterState, applyFilters } from './PlayerFilters';
 import { MFLPlayer, MFLPosition } from '../types/mflApi';
 import { calculatePositionOVR } from '../utils/ruleBasedPositionCalculator';
+import { rankPositionRatings } from '../utils/positionRatingOrder';
 import ClubTrainingTab from './ClubTrainingTab';
 
 interface ClubPlayersPageProps {
@@ -665,14 +666,24 @@ export default function ClubPlayersPage({ clubId }: ClubPlayersPageProps) {
                         {player.metadata.age}
                       </td>
                       <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-900 dark:text-white">
-                        {player.metadata.positions?.length ? player.metadata.positions.map(pos => {
-                          const rating = getPositionRating(player, pos as MFLPosition);
-                          return (
-                            <span key={pos} className="mr-2">
-                              {pos} <span className="font-semibold" style={{ color: getTierTextColorValue(rating) }}>{rating}</span>
-                            </span>
-                          );
-                        }) : 'N/A'}
+                        {player.metadata.positions?.length ? rankPositionRatings(
+                          player.metadata.positions,
+                          pos => getPositionRating(player, pos as MFLPosition)
+                        ).map(({ position, rating, isPrimary, diff }) => (
+                          <span
+                            key={position}
+                            className="mr-2"
+                            title={isPrimary ? 'Primary position' : `${diff > 0 ? '+' : ''}${diff} vs primary position`}
+                          >
+                            <span className={isPrimary ? 'underline' : undefined}>{position}</span>{' '}
+                            <span className="font-semibold" style={{ color: getTierTextColorValue(rating) }}>{rating}</span>
+                            {!isPrimary && diff !== 0 && (
+                              <span className={`ml-0.5 text-xs ${diff > 0 ? 'text-green-600 dark:text-green-400' : 'text-gray-500 dark:text-gray-400'}`}>
+                                {diff > 0 ? `+${diff}` : diff}
+                              </span>
+                            )}
+                          </span>
+                        )) : 'N/A'}
                       </td>
                       <td className="px-3 py-2 whitespace-nowrap w-20 text-center">
                         {renderAttributeValue(player, player.metadata.pace)}

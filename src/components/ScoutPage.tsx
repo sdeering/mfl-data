@@ -9,6 +9,7 @@ import {
   DEFAULT_SCOUT_FILTERS,
   FILTER_STATS,
   LISTING_LIMITS,
+  OFF_PRIMARY_OPTIONS,
   NUMBER_FILTER_OPTIONS,
   PLAYER_SCOPES,
   buildListingsQuery,
@@ -22,6 +23,7 @@ import {
 import { getTierColor } from '../utils/ratingUtils';
 import { getOverallPointsSince } from '../utils/preciseOverallGain';
 import { calculatePositionOVR } from '../utils/ruleBasedPositionCalculator';
+import { getOffPrimaryGain, rankPositionRatings, type RankedPositionRating } from '../utils/positionRatingOrder';
 
 // Rise in precise (2-decimal) overall over each period
 const OVERALL_COLUMNS = [
@@ -45,7 +47,7 @@ const isSortField = (field: string): field is SortField => (SORT_FIELDS as strin
 interface ScoutRow {
   listing: MFLListing;
   name: string;
-  positionRatings: Array<{ position: MFLPosition; rating: number }>; // Every position the player can play
+  positionRatings: RankedPositionRating<MFLPosition>[]; // Every position the player can play, best rating first
   overallPoints: Record<OverallKey, number> | null; // null until the player's history has loaded
 }
 
@@ -176,7 +178,7 @@ export default function ScoutPage() {
       return {
         listing,
         name: `${listing.player.metadata.firstName} ${listing.player.metadata.lastName}`,
-        positionRatings: listing.player.metadata.positions.map(position => ({ position, rating: getPositionRating(listing.player, position) })),
+        positionRatings: rankPositionRatings(listing.player.metadata.positions, position => getPositionRating(listing.player, position)),
         overallPoints: entries
           ? Object.fromEntries(
               OVERALL_COLUMNS.map(column => [column.key, getOverallPointsSince(listing.player, entries, getWindowStart(column.days, loadedAt))])
@@ -185,6 +187,13 @@ export default function ScoutPage() {
       };
     });
   }, [listings, histories, loadedAt]);
+
+  // Applied as it is picked: it narrows the listings already loaded, so there is nothing to ask MFL
+  const offPrimaryMin = draftFilters.offPrimaryMin;
+  const shownRows = useMemo(
+    () => (offPrimaryMin === null ? rows : rows.filter(row => getOffPrimaryGain(row.positionRatings) >= offPrimaryMin)),
+    [rows, offPrimaryMin]
+  );
 
   const sortedRows = useMemo(() => {
     const getValue = (row: ScoutRow): string | number => {
@@ -202,7 +211,7 @@ export default function ScoutPage() {
     };
     const direction = sortDirection === 'asc' ? 1 : -1;
 
-    return [...rows].sort((a, b) => {
+    return [...shownRows].sort((a, b) => {
       const aValue = getValue(a);
       const bValue = getValue(b);
       const result = typeof aValue === 'string' && typeof bValue === 'string'
@@ -211,7 +220,7 @@ export default function ScoutPage() {
       // Ties keep the marketplace order: newest listing first
       return result * direction || b.listing.createdDateTime - a.listing.createdDateTime;
     });
-  }, [rows, sortField, sortDirection]);
+  }, [shownRows, sortField, sortDirection]);
 
   const handleSort = (field: SortField) => {
     if (field === sortField) {
@@ -298,6 +307,19 @@ export default function ScoutPage() {
             {PLAYER_SCOPES.map(scope => <option key={scope.value} value={scope.value}>{scope.label}</option>)}
           </select>
         </div>
+        <div className={fieldClass}>
+          <label htmlFor="scout-off-primary" className={labelClass}>Off Pri</label>
+          <select
+            id="scout-off-primary"
+            title="Players who rate higher at another position than their primary one, by at least this much. Narrows the loaded listings straight away."
+            value={draftFilters.offPrimaryMin ?? ''}
+            onChange={e => setDraftFilters(current => ({ ...current, offPrimaryMin: e.target.value === '' ? null : Number(e.target.value) }))}
+            className={controlClass}
+          >
+            <option value="">Any</option>
+            {OFF_PRIMARY_OPTIONS.map(option => <option key={option} value={option}>+{option}</option>)}
+          </select>
+        </div>
         <div className={wideFieldClass}>
           <label htmlFor="scout-limit" className={labelClass}>Listings</label>
           <select
@@ -355,7 +377,7 @@ export default function ScoutPage() {
             <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
               Listings
               <span className="ml-2 text-sm font-normal text-gray-500 dark:text-gray-400">
-                {listings.length} · rise in exact overall over each period
+                {shownRows.length === listings.length ? listings.length : `${shownRows.length} of ${listings.length}`} · rise in exact overall over each period
               </span>
             </h2>
 
@@ -427,10 +449,15 @@ export default function ScoutPage() {
                     </td>
                     <td className={numberCellClass}>{listing.player.metadata.age}</td>
                     <td className="px-3 py-2 whitespace-nowrap text-gray-700 dark:text-gray-300">
-                      {positionRatings.map(({ position, rating }) => (
+                      {positionRatings.map(({ position, rating, isPrimary, diff }) => (
                         <React.Fragment key={position}>
-                          <span className="mr-1.5">
-                            {position} {renderRating(rating, true)}
+                          <span className="mr-1.5" title={isPrimary ? 'Primary position' : `${diff > 0 ? '+' : ''}${diff} vs primary position`}>
+                            <span className={isPrimary ? 'underline' : undefined}>{position}</span> {renderRating(rating, true)}
+                            {!isPrimary && diff !== 0 && (
+                              <span className={`ml-0.5 text-xs ${diff > 0 ? 'text-green-600 dark:text-green-400' : 'text-gray-500 dark:text-gray-400'}`}>
+                                {diff > 0 ? `+${diff}` : diff}
+                              </span>
+                            )}
                           </span>{' '}
                         </React.Fragment>
                       ))}
@@ -466,6 +493,11 @@ export default function ScoutPage() {
               </tbody>
             </table>
           </div>
+          {sortedRows.length === 0 && (
+            <p className="px-4 py-6 text-center text-sm text-gray-600 dark:text-gray-400">
+              None of these listings rate +{offPrimaryMin} or more at another position than their primary one.
+            </p>
+          )}
         </div>
       )}
     </div>
