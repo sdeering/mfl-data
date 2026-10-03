@@ -35,6 +35,9 @@ interface PlayerFiltersProps {
   showSidebarFilters?: boolean;
   onToggleSidebarFilters?: () => void;
   calculatePositionRating?: (player: MFLPlayer, position: string) => number;
+  // Pages listing owned players pass these to offer an "Include retired players" tick box
+  includeRetired?: boolean;
+  onIncludeRetiredChange?: (includeRetired: boolean) => void;
 }
 
 export const PlayerFilters: React.FC<PlayerFiltersProps> = ({
@@ -43,6 +46,8 @@ export const PlayerFilters: React.FC<PlayerFiltersProps> = ({
   showSidebarFilters = false,
   onToggleSidebarFilters,
   calculatePositionRating,
+  includeRetired = false,
+  onIncludeRetiredChange,
 }) => {
   const [localFilters, setLocalFilters] = useState<FilterState>(filters);
 
@@ -125,6 +130,19 @@ export const PlayerFilters: React.FC<PlayerFiltersProps> = ({
 
       {/* Filter Content */}
       <div className={`grid grid-cols-2 gap-3 ${showSidebarFilters ? '' : 'hidden'}`}>
+        {/* Retired Players */}
+        {onIncludeRetiredChange && (
+          <label className="col-span-2 flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={includeRetired}
+              onChange={(e) => onIncludeRetiredChange(e.target.checked)}
+              className="h-4 w-4 rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500 cursor-pointer"
+            />
+            Include retired players
+          </label>
+        )}
+
         {/* Card Type Filter */}
         <div className="col-span-2">
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Card type</label>

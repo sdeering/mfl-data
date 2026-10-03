@@ -10,6 +10,7 @@ import { OverallRatingTooltip } from './OverallRatingTooltip';
 // Removed market value sync UI on agency page
 import * as XLSX from 'xlsx';
 import { PlayerFilters, FilterState, applyFilters } from './PlayerFilters';
+import { loadAppSettings, isRetiredPlayer } from '../utils/appSettings';
 
 const AgencyPage: React.FC = () => {
   const { isConnected, account } = useWallet();
@@ -33,6 +34,11 @@ const AgencyPage: React.FC = () => {
   const prevIsSyncingRef = useRef(false);
   const hasAutoSyncedRef = useRef(false);
   const [showFilters, setShowFilters] = useState(false);
+  // Starts from the "hide retired players" setting (read once mounted, as it is saved in the browser)
+  const [includeRetired, setIncludeRetired] = useState(false);
+  useEffect(() => {
+    setIncludeRetired(!loadAppSettings().hideRetiredPlayers);
+  }, []);
   const [filters, setFilters] = useState<FilterState>({
     filterPosition: 'all',
     selectedCardTypes: [],
@@ -356,7 +362,8 @@ const AgencyPage: React.FC = () => {
     try {
       // Use Supabase data service instead of MFL API
       console.log('🔍 Fetching agency players from database...');
-      const playerData = await supabaseDataService.getAgencyPlayers(account);
+      // Retired players are loaded too; the "Include retired players" filter decides whether they show
+      const playerData = await supabaseDataService.getAgencyPlayers(account, { includeRetired: true });
       console.log('📊 Fetched players from database:', playerData.length, 'players');
       
       if (playerData.length === 0) {
@@ -431,7 +438,7 @@ const AgencyPage: React.FC = () => {
 
   // Filter and sort players based on search term, filters, and sort settings
   useEffect(() => {
-    let filtered = players;
+    let filtered = includeRetired ? players : players.filter(player => !isRetiredPlayer(player));
     
     // Apply filters first
     filtered = applyFilters(filtered, filters);
@@ -464,7 +471,7 @@ const AgencyPage: React.FC = () => {
     
     // Reset to first page when search term or filters change
     setCurrentPage(1);
-  }, [searchTerm, players, sortField, sortDirection, filters]);
+  }, [searchTerm, players, sortField, sortDirection, filters, includeRetired]);
 
   // Update displayed players based on current page
   useEffect(() => {
@@ -711,6 +718,8 @@ const AgencyPage: React.FC = () => {
                       filters={filters}
                       onFiltersChange={setFilters}
                       showSidebarFilters={true}
+                      includeRetired={includeRetired}
+                      onIncludeRetiredChange={setIncludeRetired}
                     />
                   </div>
                 )}

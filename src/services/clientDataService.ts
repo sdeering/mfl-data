@@ -49,7 +49,8 @@ class ClientDataService {
     })
   }
 
-  async getAgencyPlayers(walletAddress: string): Promise<MFLPlayer[]> {
+  // Retired players follow the "hide retired players" setting unless the caller filters them itself
+  async getAgencyPlayers(walletAddress: string, options: { includeRetired?: boolean } = {}): Promise<MFLPlayer[]> {
     const cacheKey = `agency_players_${walletAddress}`
     const AGENCY_PLAYERS_CACHE_TTL = 24 * 60 * 60 * 1000 // 24 hours
     const players = await this.getCachedData<MFLPlayer[]>(cacheKey, async () => {
@@ -58,7 +59,7 @@ class ClientDataService {
       return res.json()
     }, AGENCY_PLAYERS_CACHE_TTL)
     // Applied after the cache so that changing the setting takes effect without a refetch
-    return applyRetiredPlayersSetting(players)
+    return options.includeRetired ? players : applyRetiredPlayersSetting(players)
   }
 
   async getMatchesData(walletAddress: string, matchType?: 'upcoming' | 'previous') {
