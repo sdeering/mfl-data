@@ -12,6 +12,11 @@ import { fetchPlayerSaleHistory } from './playerSaleHistoryService'
 import { fetchPlayerExperienceHistory, processProgressionData } from './playerExperienceService'
 import { fetchPlayerMatches } from './playerMatchesService'
 
+// Opponent syncing fetches every opponent's recent matches and each match's formation, up to 7
+// opponents per club and 8 MFL requests each, with no pacing - enough to trip MFL's token-wide
+// rate limit block. Kept off until it is paced.
+const OPPONENT_SYNC_ENABLED = false
+
 export interface SyncProgress {
   dataType: string
   status: SyncStatus
@@ -550,6 +555,11 @@ class SyncService {
   private async syncOpponentMatchesData(walletAddress: string, options: SyncOptions = {}) {
     const dataType = 'opponent_matches'
 
+    if (!OPPONENT_SYNC_ENABLED) {
+      this.updateProgress(dataType, SYNC_STATUS.COMPLETED, 100, 'Opponent sync is switched off')
+      return
+    }
+
     try {
       console.log('🔄 Starting opponent matches sync for wallet:', walletAddress)
       this.updateProgress(dataType, SYNC_STATUS.IN_PROGRESS, 0, 'Fetching opponent matches data...')
@@ -603,16 +613,16 @@ class SyncService {
         const next24Hours = new Date(now.getTime() + 24 * 60 * 60 * 1000)
 
         const matchesInNext24Hours = upcomingMatches.filter(match => {
-          if (!match.matchDate) return false
-          const matchDate = new Date(match.matchDate)
+          if (!match.startDate) return false
+          const matchDate = new Date(match.startDate)
           return !isNaN(matchDate.getTime()) && matchDate >= now && matchDate <= next24Hours
         })
 
         // Debug: Show some match dates to understand the timing
         if (upcomingMatches.length > 0) {
           const firstMatch = upcomingMatches[0]
-          if (firstMatch.matchDate) {
-            const firstMatchDate = new Date(firstMatch.matchDate)
+          if (firstMatch.startDate) {
+            const firstMatchDate = new Date(firstMatch.startDate)
             if (!isNaN(firstMatchDate.getTime())) {
               console.log(`📅 First pass - Match date debug for ${clubData.club.name}:`, {
                 now: now.toISOString(),
@@ -622,7 +632,7 @@ class SyncService {
                 hoursFromNow: (firstMatchDate.getTime() - now.getTime()) / (1000 * 60 * 60)
               })
             } else {
-              console.log(`⚠️ Invalid match date for ${clubData.club.name}:`, firstMatch.matchDate)
+              console.log(`⚠️ Invalid match date for ${clubData.club.name}:`, firstMatch.startDate)
             }
           } else {
             console.log(`⚠️ No match date found for ${clubData.club.name}`)
@@ -663,16 +673,16 @@ class SyncService {
         const next24Hours = new Date(now.getTime() + 24 * 60 * 60 * 1000)
 
         const matchesInNext24Hours = upcomingMatches.filter(match => {
-          if (!match.matchDate) return false
-          const matchDate = new Date(match.matchDate)
+          if (!match.startDate) return false
+          const matchDate = new Date(match.startDate)
           return !isNaN(matchDate.getTime()) && matchDate >= now && matchDate <= next24Hours
         })
 
         // Debug: Show some match dates to understand the timing
         if (upcomingMatches.length > 0) {
           const firstMatch = upcomingMatches[0]
-          if (firstMatch.matchDate) {
-            const firstMatchDate = new Date(firstMatch.matchDate)
+          if (firstMatch.startDate) {
+            const firstMatchDate = new Date(firstMatch.startDate)
             if (!isNaN(firstMatchDate.getTime())) {
               console.log(`📅 Match date debug for ${clubData.club.name}:`, {
                 now: now.toISOString(),
@@ -682,7 +692,7 @@ class SyncService {
                 hoursFromNow: (firstMatchDate.getTime() - now.getTime()) / (1000 * 60 * 60)
               })
             } else {
-              console.log(`⚠️ Invalid match date for ${clubData.club.name}:`, firstMatch.matchDate)
+              console.log(`⚠️ Invalid match date for ${clubData.club.name}:`, firstMatch.startDate)
             }
           } else {
             console.log(`⚠️ No match date found for ${clubData.club.name}`)
