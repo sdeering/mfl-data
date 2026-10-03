@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { loadProgressionHistories, type PlayerHistories, type ProgressionLoadProgress } from '../services/playerProgressionService';
 import type { MFLListing, MFLPosition } from '../types/mflApi';
 import { ALL_POSITIONS, POSITIONS, POSITION_GROUPS } from '../utils/positionOptions';
@@ -88,6 +88,10 @@ export default function ScoutPage() {
   const [progress, setProgress] = useState<ProgressionLoadProgress | null>(null);
   const [loadedAt, setLoadedAt] = useState(() => Date.now());
   const [reloadKey, setReloadKey] = useState(0);
+  // Players whose progression has been loaded since the listings were, so narrowing the table and
+  // widening it again doesn't ask for them twice
+  const loadedHistoryIds = useRef<Set<number>>(new Set());
+  const [isCheckingHistories, setIsCheckingHistories] = useState(false);
 
   // Editing a filter only changes the draft; nothing is asked of MFL until it is searched for
   const [draftFilters, setDraftFilters] = useState<ScoutFilters>(DEFAULT_SCOUT_FILTERS);
@@ -116,7 +120,7 @@ export default function ScoutPage() {
     saveScoutSettings({ filters: draftFilters, sort: { field: sortField, direction: sortDirection } });
   }, [hasReadSettings, draftFilters, sortField, sortDirection]);
 
-  // Load the listings, then the progression history of every listed player
+  // Load the listings. Progression is loaded below, only for the players on show.
   useEffect(() => {
     if (!filters) return;
     const controller = new AbortController();
@@ -137,19 +141,10 @@ export default function ScoutPage() {
         }
 
         const loaded: MFLListing[] = body.data;
+        loadedHistoryIds.current = new Set(); // A new search checks every player's progression afresh
         setListings(loaded);
         setLoadedAt(Date.now());
         setIsLoadingListings(false);
-
-        await loadProgressionHistories(
-          loaded.map(listing => listing.player.id),
-          update => {
-            if (controller.signal.aborted) return;
-            setHistories(current => ({ ...current, ...update.histories }));
-            setProgress(update);
-          },
-          controller.signal
-        );
       } catch (err) {
         if (controller.signal.aborted) return;
         console.error('Failed to load scouting data:', err);
@@ -192,6 +187,40 @@ export default function ScoutPage() {
     [rows, betterOffPrimary]
   );
 
+  // Load the progression of the players on show (each one costs a paced MFL request if it is out of
+  // date), and of any more that come into view when a filter is changed
+  const shownIds = useMemo(() => shownRows.map(row => row.listing.player.id).join(','), [shownRows]);
+  useEffect(() => {
+    if (isLoadingListings) return;
+    const missing = shownIds.split(',').filter(Boolean).map(Number).filter(id => !loadedHistoryIds.current.has(id));
+    if (missing.length === 0) return;
+
+    const controller = new AbortController();
+    setProgress(null);
+    setIsCheckingHistories(true);
+    loadProgressionHistories(
+      missing,
+      update => {
+        if (controller.signal.aborted) return;
+        setHistories(current => ({ ...current, ...update.histories }));
+        setProgress(update);
+        setIsCheckingHistories(false);
+        if (update.done) missing.forEach(id => loadedHistoryIds.current.add(id));
+      },
+      controller.signal
+    ).catch(err => {
+      if (controller.signal.aborted) return;
+      console.error('Failed to load progression:', err);
+      setError(err instanceof Error ? err.message : 'Failed to load progression');
+      setIsCheckingHistories(false);
+    });
+
+    return () => {
+      controller.abort();
+      setIsCheckingHistories(false);
+    };
+  }, [shownIds, loadedAt, isLoadingListings]);
+
   const sortedRows = useMemo(() => {
     const getValue = (row: ScoutRow): string | number => {
       const { metadata } = row.listing.player;
@@ -231,7 +260,7 @@ export default function ScoutPage() {
 
   const sortArrow = (field: SortField) => (sortField === field ? (sortDirection === 'asc' ? ' ↑' : ' ↓') : '');
   const isRefreshing = !!progress && !progress.done;
-  const isLoadingHistories = !isLoadingListings && !error && listings.length > 0 && !progress;
+  const isLoadingHistories = isCheckingHistories && !progress;
   const isBusy = isLoadingListings || isRefreshing;
   const isFiltered = !filtersEqual(draftFilters, DEFAULT_SCOUT_FILTERS) || (filters !== null && !filtersEqual(filters, DEFAULT_SCOUT_FILTERS));
   const pending = <span className="text-gray-400 dark:text-gray-500">…</span>;

@@ -128,6 +128,26 @@ describe('ScoutPage', () => {
     expect(screen.getByText('Steady Test')).toBeInTheDocument();
   });
 
+  test('loads progression only for the players on show, and the rest when they come into view', async () => {
+    window.localStorage.setItem('mfl-data-scout-settings', JSON.stringify({ filters: { betterOffPrimary: true }, sort: null }));
+    mockListings({ success: true, data: [listing(1, 'Steady', 50, daysAgo(0.01), ['ST', 'CF', 'CB']), listing(3, 'Misplaced', 60, daysAgo(2), ['CB', 'ST'])] });
+    render(<ScoutPage />);
+    await screen.findByText('Misplaced Test');
+
+    await waitFor(() => expect(mockLoadHistories).toHaveBeenCalledTimes(1));
+    expect(mockLoadHistories.mock.calls[0][0]).toEqual([3]); // Steady is filtered out, so not loaded
+
+    fireEvent.click(screen.getByLabelText('Off Pri'));
+    await screen.findByText('Steady Test');
+    await waitFor(() => expect(mockLoadHistories).toHaveBeenCalledTimes(2));
+    expect(mockLoadHistories.mock.calls[1][0]).toEqual([1]); // Only the one not loaded yet
+
+    // Narrowing and widening again asks for no one twice
+    fireEvent.click(screen.getByLabelText('Off Pri'));
+    fireEvent.click(screen.getByLabelText('Off Pri'));
+    expect(mockLoadHistories).toHaveBeenCalledTimes(2);
+  });
+
   test('opens with the biggest 30-day riser first and sorts by any column', async () => {
     render(<ScoutPage />);
     await screen.findByText('Rising Test');
