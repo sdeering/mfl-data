@@ -451,11 +451,11 @@ export default function ScoutPage() {
                     <td className="px-3 py-2 whitespace-nowrap text-gray-700 dark:text-gray-300">
                       {positionRatings.map(({ position, rating, isPrimary, diff }) => (
                         <React.Fragment key={position}>
-                          <span className="mr-1.5" title={isPrimary ? 'Primary position' : `${diff > 0 ? '+' : ''}${diff} vs primary position`}>
+                          <span className="mr-1.5" title={isPrimary ? 'Primary position' : diff > 0 ? `+${diff} vs primary position` : undefined}>
                             <span className={isPrimary ? 'underline' : undefined}>{position}</span> {renderRating(rating, true)}
-                            {!isPrimary && diff !== 0 && (
-                              <span className={`ml-0.5 text-xs ${diff > 0 ? 'text-green-600 dark:text-green-400' : 'text-gray-500 dark:text-gray-400'}`}>
-                                {diff > 0 ? `+${diff}` : diff}
+                            {diff > 0 && (
+                              <span className="ml-0.5 text-xs text-green-600 dark:text-green-400">
+                                +{diff}
                               </span>
                             )}
                           </span>{' '}

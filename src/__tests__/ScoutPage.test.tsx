@@ -92,15 +92,14 @@ describe('ScoutPage', () => {
     await screen.findByText('Rising Test');
 
     expect(cells('Rising Test')[2]?.trim()).toBe('ST 71'); // At their primary position a player rates their overall
-    // Reads as words, not "ST 71CF 66"; each other position shows its difference to the primary
-    expect(cells('Steady Test')[2]).toMatch(/^ST \d+ CF \d+-\d+ CB \d+-\d+ $/);
+    // Reads as words, not "ST 71CF 66". Positions rated below the primary show no difference.
+    expect(cells('Steady Test')[2]).toMatch(/^ST \d+ CF \d+ CB \d+ $/);
     const [primary, similar, unfamiliar] = cells('Steady Test')[2]!.match(/[A-Z]+ \d+/g)!;
     expect(primary).toBe('ST 71');
     expect(similar).toMatch(/^CF \d+$/);
     expect(unfamiliar).toMatch(/^CB \d+$/);
     // A striker who can fill in at centre back is far weaker there than at centre forward
     expect(Number(unfamiliar.slice(3))).toBeLessThan(Number(similar.slice(3)));
-    expect(cells('Steady Test')[2]).toContain(`CF ${similar.slice(3)}${Number(similar.slice(3)) - 71}`);
   });
 
   test('lists the positions best rating first', async () => {
