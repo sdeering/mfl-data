@@ -8,7 +8,8 @@ export async function GET(request: NextRequest) {
   try {
     console.log('🔍 Verifying sync data in database...')
     
-    const results = {
+    type Check = { found: boolean; count: number; error: string | null }
+    const results: Record<'userInfo' | 'clubs' | 'agencyPlayers' | 'players' | 'marketValues', Check> = {
       userInfo: { found: false, count: 0, error: null },
       clubs: { found: false, count: 0, error: null },
       agencyPlayers: { found: false, count: 0, error: null },

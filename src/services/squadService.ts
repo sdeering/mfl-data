@@ -1,4 +1,4 @@
-import { MFLPlayer } from '../types/mfl';
+import type { MFLPlayer } from '../types/mflApi';
 
 export interface SquadPlayer {
   player: MFLPlayer;

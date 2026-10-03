@@ -30,7 +30,7 @@ export function clearMarketValueCache(): void {
 export interface MarketValueCalculationResult {
   success: boolean;
   marketValue?: number;
-  confidence?: string;
+  confidence?: MarketValueEstimate['confidence'];
   details?: any;
   error?: string;
 }

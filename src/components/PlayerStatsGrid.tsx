@@ -216,7 +216,7 @@ export const PlayerStatsGrid: React.FC<PlayerStatsGridProps> = ({ player, onAttr
                       onClick={() => updateAttribute(stat.label, -1)}
                       className="w-6 h-6 flex items-center justify-center text-gray-700 dark:text-gray-300 text-sm font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed opacity-30 hover:opacity-100 hover:bg-gray-200 dark:hover:bg-gray-700"
                       style={{ border: 0, background: 'none' }}
-                      disabled={stat.value <= stat.originalValue}
+                      disabled={'originalValue' in stat && stat.value <= stat.originalValue}
                     >
                       −
                     </button>

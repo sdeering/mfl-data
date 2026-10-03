@@ -1975,7 +1975,7 @@ class SyncService {
     if (this.onProgressCallback) {
       this.onProgressCallback({
         dataType: 'sync_cancelled',
-        status: 'cancelled',
+        status: SYNC_STATUS.CANCELLED,
         progress: 0,
         message: 'Sync cancelled by user'
       })

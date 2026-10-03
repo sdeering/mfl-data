@@ -4,11 +4,12 @@ import { selectOne, selectMaybeOne, updateWhere, deleteWhere } from '../../../..
 // GET /api/squads/[id] - Get a specific squad
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const { data: squad, error } = await selectOne('squads', {
-      where: { id: params.id }
+      where: { id }
     });
 
     if (error) {
@@ -32,9 +33,10 @@ export async function GET(
 // PUT /api/squads/[id] - Update a squad
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const body = await request.json();
     const { walletAddress, squadName, formationId, players } = body;
 
@@ -48,7 +50,7 @@ export async function PUT(
 
     // Check if squad exists and belongs to the wallet
     const { data: existingSquad, error: fetchError } = await selectOne('squads', {
-      where: { id: params.id, wallet_address: walletAddress }
+      where: { id, wallet_address: walletAddress }
     });
 
     if (fetchError || !existingSquad) {
@@ -60,7 +62,7 @@ export async function PUT(
 
     // Check if new squad name conflicts with existing squads (excluding current one)
     const { data: nameConflict } = await selectMaybeOne('squads', {
-      where: { wallet_address: walletAddress, squad_name: squadName, id: { neq: params.id } }
+      where: { wallet_address: walletAddress, squad_name: squadName, id: { neq: id } }
     });
 
     if (nameConflict) {
@@ -75,7 +77,7 @@ export async function PUT(
       squad_name: squadName,
       formation_id: formationId,
       players: players
-    }, { id: params.id });
+    }, { id });
 
     if (error) {
       console.error('Error updating squad:', error);
@@ -98,9 +100,10 @@ export async function PUT(
 // DELETE /api/squads/[id] - Delete a squad
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const { searchParams } = new URL(request.url);
     const walletAddress = searchParams.get('walletAddress');
 
@@ -113,7 +116,7 @@ export async function DELETE(
 
     // Check if squad exists and belongs to the wallet
     const { data: existingSquad, error: fetchError } = await selectOne('squads', {
-      where: { id: params.id, wallet_address: walletAddress }
+      where: { id, wallet_address: walletAddress }
     });
 
     if (fetchError || !existingSquad) {
@@ -124,7 +127,7 @@ export async function DELETE(
     }
 
     // Delete squad
-    const { error } = await deleteWhere('squads', { id: params.id });
+    const { error } = await deleteWhere('squads', { id });
 
     if (error) {
       console.error('Error deleting squad:', error);

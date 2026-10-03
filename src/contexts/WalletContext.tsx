@@ -62,7 +62,7 @@ export const WalletProvider: React.FC<WalletProviderProps> = ({ children }) => {
         const currentUser = await fcl.currentUser.snapshot();
         if (currentUser.loggedIn) {
           setUser(currentUser);
-          setAccount(currentUser.addr);
+          setAccount(currentUser.addr ?? null);
           setIsConnected(true);
         }
       } catch (error) {

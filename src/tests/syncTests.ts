@@ -57,23 +57,20 @@ class SyncTestRunner {
     console.log('\n🔍 Testing User Info Sync...')
     
     try {
-      const result = await SYNC_SERVICE.syncUserInfo(TEST_WALLET, { forceRefresh: true })
+      // A failed sync throws (recorded below) or stores nothing, which the database check reports
+      await SYNC_SERVICE['syncUserInfo'](TEST_WALLET, { forceRefresh: true })
+
+      // Verify user info was stored
+      const { data: userInfo, error } = await selectOne(TABLES.USERS, {
+        where: { wallet_address: TEST_WALLET }
+      })
       
-      if (result.success) {
-        // Verify user info was stored
-        const { data: userInfo, error } = await selectOne(TABLES.USERS, {
-          where: { wallet_address: TEST_WALLET }
-        })
-        
-        if (error) {
-          this.addResult('User Info Sync - Database Check', false, error.message)
-        } else if (userInfo) {
-          this.addResult('User Info Sync', true, 'User info synced and stored successfully', userInfo)
-        } else {
-          this.addResult('User Info Sync - Database Check', false, 'No user info found in database')
-        }
+      if (error) {
+        this.addResult('User Info Sync - Database Check', false, error.message)
+      } else if (userInfo) {
+        this.addResult('User Info Sync', true, 'User info synced and stored successfully', userInfo)
       } else {
-        this.addResult('User Info Sync', false, result.error)
+        this.addResult('User Info Sync - Database Check', false, 'No user info found in database')
       }
     } catch (error) {
       this.addResult('User Info Sync', false, error instanceof Error ? error.message : 'Unknown error')
@@ -84,23 +81,20 @@ class SyncTestRunner {
     console.log('\n🔍 Testing Club Data Sync...')
     
     try {
-      const result = await SYNC_SERVICE.syncClubData(TEST_WALLET, { forceRefresh: true })
+      // A failed sync throws (recorded below) or stores nothing, which the database check reports
+      await SYNC_SERVICE['syncClubData'](TEST_WALLET, { forceRefresh: true })
+
+      // Verify clubs were stored
+      const { data: clubs, error } = await selectAll(TABLES.CLUBS, {
+        where: { wallet_address: TEST_WALLET }
+      })
       
-      if (result.success) {
-        // Verify clubs were stored
-        const { data: clubs, error } = await selectAll(TABLES.CLUBS, {
-          where: { wallet_address: TEST_WALLET }
-        })
-        
-        if (error) {
-          this.addResult('Club Data Sync - Database Check', false, error.message)
-        } else if (clubs && clubs.length > 0) {
-          this.addResult('Club Data Sync', true, `Synced ${clubs.length} clubs successfully`, clubs)
-        } else {
-          this.addResult('Club Data Sync - Database Check', false, 'No clubs found in database')
-        }
+      if (error) {
+        this.addResult('Club Data Sync - Database Check', false, error.message)
+      } else if (clubs && clubs.length > 0) {
+        this.addResult('Club Data Sync', true, `Synced ${clubs.length} clubs successfully`, clubs)
       } else {
-        this.addResult('Club Data Sync', false, result.error)
+        this.addResult('Club Data Sync - Database Check', false, 'No clubs found in database')
       }
     } catch (error) {
       this.addResult('Club Data Sync', false, error instanceof Error ? error.message : 'Unknown error')
@@ -111,36 +105,33 @@ class SyncTestRunner {
     console.log('\n🔍 Testing Agency Players Sync...')
     
     try {
-      const result = await SYNC_SERVICE.syncAgencyPlayers(TEST_WALLET, { forceRefresh: true })
+      // A failed sync throws (recorded below) or stores nothing, which the database check reports
+      await SYNC_SERVICE['syncAgencyPlayers'](TEST_WALLET, { forceRefresh: true })
+
+      // Verify agency players were stored
+      const { data: agencyPlayers, error } = await selectAll(TABLES.AGENCY_PLAYERS, {
+        where: { wallet_address: TEST_WALLET }
+      })
       
-      if (result.success) {
-        // Verify agency players were stored
-        const { data: agencyPlayers, error } = await selectAll(TABLES.AGENCY_PLAYERS, {
-          where: { wallet_address: TEST_WALLET }
+      if (error) {
+        this.addResult('Agency Players Sync - Database Check', false, error.message)
+      } else if (agencyPlayers && agencyPlayers.length > 0) {
+        this.addResult('Agency Players Sync', true, `Synced ${agencyPlayers.length} agency players successfully`, agencyPlayers.slice(0, 3))
+        
+        // Verify players table was populated
+        const { data: players, error: playersError } = await selectAll(TABLES.PLAYERS, {
+          limit: 5
         })
         
-        if (error) {
-          this.addResult('Agency Players Sync - Database Check', false, error.message)
-        } else if (agencyPlayers && agencyPlayers.length > 0) {
-          this.addResult('Agency Players Sync', true, `Synced ${agencyPlayers.length} agency players successfully`, agencyPlayers.slice(0, 3))
-          
-          // Verify players table was populated
-          const { data: players, error: playersError } = await selectAll(TABLES.PLAYERS, {
-            limit: 5
-          })
-          
-          if (playersError) {
-            this.addResult('Agency Players Sync - Players Table Check', false, playersError.message)
-          } else if (players && players.length > 0) {
-            this.addResult('Agency Players Sync - Players Table Check', true, `Players table populated with ${players.length} players`, players)
-          } else {
-            this.addResult('Agency Players Sync - Players Table Check', false, 'Players table not populated')
-          }
+        if (playersError) {
+          this.addResult('Agency Players Sync - Players Table Check', false, playersError.message)
+        } else if (players && players.length > 0) {
+          this.addResult('Agency Players Sync - Players Table Check', true, `Players table populated with ${players.length} players`, players)
         } else {
-          this.addResult('Agency Players Sync - Database Check', false, 'No agency players found in database')
+          this.addResult('Agency Players Sync - Players Table Check', false, 'Players table not populated')
         }
       } else {
-        this.addResult('Agency Players Sync', false, result.error)
+        this.addResult('Agency Players Sync - Database Check', false, 'No agency players found in database')
       }
     } catch (error) {
       this.addResult('Agency Players Sync', false, error instanceof Error ? error.message : 'Unknown error')
@@ -151,32 +142,29 @@ class SyncTestRunner {
     console.log('\n🔍 Testing Market Values Sync...')
     
     try {
-      const result = await SYNC_SERVICE.syncAgencyPlayerMarketValues(TEST_WALLET, { forceRefresh: true })
+      // A failed sync throws (recorded below) or stores nothing, which the database check reports
+      await SYNC_SERVICE['syncAgencyPlayerMarketValues'](TEST_WALLET, { forceRefresh: true })
+
+      // Verify market values were stored
+      const { data: marketValues, error } = await selectAll(TABLES.MARKET_VALUES, {
+        where: { wallet_address: TEST_WALLET },
+        orderBy: { column: 'market_value', ascending: false }
+      })
       
-      if (result.success) {
-        // Verify market values were stored
-        const { data: marketValues, error } = await selectAll(TABLES.MARKET_VALUES, {
-          where: { wallet_address: TEST_WALLET },
-          orderBy: { column: 'market_value', ascending: false }
-        })
+      if (error) {
+        this.addResult('Market Values Sync - Database Check', false, error.message)
+      } else if (marketValues && marketValues.length > 0) {
+        this.addResult('Market Values Sync', true, `Synced ${marketValues.length} market values successfully`, marketValues.slice(0, 3))
         
-        if (error) {
-          this.addResult('Market Values Sync - Database Check', false, error.message)
-        } else if (marketValues && marketValues.length > 0) {
-          this.addResult('Market Values Sync', true, `Synced ${marketValues.length} market values successfully`, marketValues.slice(0, 3))
-          
-          // Verify market values are reasonable
-          const validValues = marketValues.filter(mv => mv.market_value > 0 && mv.market_value < 1000000)
-          if (validValues.length === marketValues.length) {
-            this.addResult('Market Values Sync - Value Validation', true, 'All market values are within reasonable range')
-          } else {
-            this.addResult('Market Values Sync - Value Validation', false, `Some market values are invalid: ${marketValues.length - validValues.length} out of ${marketValues.length}`)
-          }
+        // Verify market values are reasonable
+        const validValues = marketValues.filter(mv => mv.market_value > 0 && mv.market_value < 1000000)
+        if (validValues.length === marketValues.length) {
+          this.addResult('Market Values Sync - Value Validation', true, 'All market values are within reasonable range')
         } else {
-          this.addResult('Market Values Sync - Database Check', false, 'No market values found in database')
+          this.addResult('Market Values Sync - Value Validation', false, `Some market values are invalid: ${marketValues.length - validValues.length} out of ${marketValues.length}`)
         }
       } else {
-        this.addResult('Market Values Sync', false, result.error)
+        this.addResult('Market Values Sync - Database Check', false, 'No market values found in database')
       }
     } catch (error) {
       this.addResult('Market Values Sync', false, error instanceof Error ? error.message : 'Unknown error')
@@ -187,47 +175,44 @@ class SyncTestRunner {
     console.log('\n🔍 Testing Full Sync Flow...')
     
     try {
-      const result = await SYNC_SERVICE.syncAllData(TEST_WALLET, { forceRefresh: true })
+      // A failed sync throws (recorded below) or stores nothing, which the database check reports
+      await SYNC_SERVICE.syncAllData(TEST_WALLET, { forceRefresh: true })
+
+      this.addResult('Full Sync Flow', true, 'Complete sync flow executed successfully')
       
-      if (result.success) {
-        this.addResult('Full Sync Flow', true, 'Complete sync flow executed successfully')
-        
-        // Verify all data is present
-        const { data: userInfo } = await selectOne(TABLES.USERS, {
-          where: { wallet_address: TEST_WALLET }
-        })
+      // Verify all data is present
+      const { data: userInfo } = await selectOne(TABLES.USERS, {
+        where: { wallet_address: TEST_WALLET }
+      })
 
-        const { data: clubs } = await selectAll(TABLES.CLUBS, {
-          where: { wallet_address: TEST_WALLET }
-        })
+      const { data: clubs } = await selectAll(TABLES.CLUBS, {
+        where: { wallet_address: TEST_WALLET }
+      })
 
-        const { data: agencyPlayers } = await selectAll(TABLES.AGENCY_PLAYERS, {
-          where: { wallet_address: TEST_WALLET }
-        })
+      const { data: agencyPlayers } = await selectAll(TABLES.AGENCY_PLAYERS, {
+        where: { wallet_address: TEST_WALLET }
+      })
 
-        const { data: marketValues } = await selectAll(TABLES.MARKET_VALUES, {
-          where: { wallet_address: TEST_WALLET }
+      const { data: marketValues } = await selectAll(TABLES.MARKET_VALUES, {
+        where: { wallet_address: TEST_WALLET }
+      })
+      
+      const allDataPresent = userInfo && clubs && clubs.length > 0 && agencyPlayers && agencyPlayers.length > 0 && marketValues && marketValues.length > 0
+      
+      if (allDataPresent) {
+        this.addResult('Full Sync Flow - Data Completeness', true, 'All data types present after full sync', {
+          userInfo: !!userInfo,
+          clubs: clubs?.length || 0,
+          agencyPlayers: agencyPlayers?.length || 0,
+          marketValues: marketValues?.length || 0
         })
-        
-        const allDataPresent = userInfo && clubs && clubs.length > 0 && agencyPlayers && agencyPlayers.length > 0 && marketValues && marketValues.length > 0
-        
-        if (allDataPresent) {
-          this.addResult('Full Sync Flow - Data Completeness', true, 'All data types present after full sync', {
-            userInfo: !!userInfo,
-            clubs: clubs?.length || 0,
-            agencyPlayers: agencyPlayers?.length || 0,
-            marketValues: marketValues?.length || 0
-          })
-        } else {
-          this.addResult('Full Sync Flow - Data Completeness', false, 'Some data missing after full sync', {
-            userInfo: !!userInfo,
-            clubs: clubs?.length || 0,
-            agencyPlayers: agencyPlayers?.length || 0,
-            marketValues: marketValues?.length || 0
-          })
-        }
       } else {
-        this.addResult('Full Sync Flow', false, result.error)
+        this.addResult('Full Sync Flow - Data Completeness', false, 'Some data missing after full sync', {
+          userInfo: !!userInfo,
+          clubs: clubs?.length || 0,
+          agencyPlayers: agencyPlayers?.length || 0,
+          marketValues: marketValues?.length || 0
+        })
       }
     } catch (error) {
       this.addResult('Full Sync Flow', false, error instanceof Error ? error.message : 'Unknown error')

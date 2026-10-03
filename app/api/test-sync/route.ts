@@ -9,7 +9,7 @@ export async function POST(request: NextRequest) {
     
     // Test: Full Sync (this will test all components)
     console.log('🔍 Testing full sync...')
-    let fullSyncResult = { success: false, error: null }
+    let fullSyncResult: { success: boolean; error: string | null } = { success: false, error: null }
     
     try {
       await syncService.syncAllData(TEST_WALLET, { forceRefresh: true })

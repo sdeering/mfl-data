@@ -98,6 +98,8 @@ function calculateSquadStats(squad: Squad, players: MFLPlayer[]) {
     return {
       averageOverall: 0,
       totalPlayers: 0,
+      top11Average: 0,
+      top16Average: 0,
       chemistry: 0,
       formationEffectiveness: 0,
       positionCoverage: 0,
@@ -344,7 +346,7 @@ interface DraggablePlayerCardProps {
   onAdd: (player: MFLPlayer) => void;
   onRemove?: (player: MFLPlayer) => void;
   isInSquad?: boolean;
-  savedSquads?: Squad[];
+  savedSquads?: SavedSquad[];
   currentSquad?: Squad;
 }
 
@@ -367,7 +369,7 @@ function DraggablePlayerCard({ player, onAdd, onRemove, isInSquad = false, saved
     const appearances: string[] = [];
     savedSquads.forEach(squad => {
       // Skip if this is the current squad being viewed
-      if (currentSquad && squad.squad_name === currentSquad.squad_name) {
+      if (currentSquad && squad.squad_name === currentSquad.name) {
         return;
       }
       const playerInSquad = Object.values(squad.players).some(sp => sp.player.id === playerId);

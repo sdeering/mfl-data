@@ -52,8 +52,8 @@ export default function SyncDebugTest() {
           console.log('Sync progress:', progress);
           setSyncStatus({
             message: progress.message || 'Syncing data...',
-            progress: 20 + (progress.percentage || 0) * 0.6, // 20-80% range
-            currentItem: progress.currentItem
+            progress: 20 + (progress.progress || 0) * 0.6, // 20-80% range
+            currentItem: progress.dataType
           });
         }
       });

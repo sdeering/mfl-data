@@ -97,11 +97,11 @@ class ClubsService {
     }
   }
 
-  formatClubName(club: MFLClub): string {
+  formatClubName(club: Pick<MFLClub, 'name'>): string {
     return club.name || 'Unknown Club';
   }
 
-  formatCityCountry(club: MFLClub): string {
+  formatCityCountry(club: Pick<MFLClub, 'city' | 'country'>): string {
     return `${club.city}, ${club.country}`;
   }
 

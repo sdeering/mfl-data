@@ -1,6 +1,7 @@
 import { TABLES } from '../lib/database'
 import { selectAll, selectOne, selectMaybeOne, upsertOne, upsertMany } from '../lib/db-helpers'
-import type { MFLMatch, MFLPlayer, MFLClub } from '../types/mflApi'
+import type { MFLPlayer, MFLClub } from '../types/mflApi'
+import type { MFLMatch } from './matchesService'
 
 /**
  * Optimized data service for database operations

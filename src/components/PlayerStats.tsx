@@ -2,6 +2,7 @@ import React from 'react';
 import { formatHeight } from '@/src/utils/heightConverter';
 import { getCountryFlag, formatCountryName } from '@/src/utils/countryFlags';
 import type { MFLPlayer } from '@/src/types/mflApi';
+import type { MarketValueEstimate } from '@/src/utils/marketValueCalculator';
 
 // Function to get tier color based on rating value (same as PlayerStatsGrid)
 const getTierColor = (rating: number) => {
@@ -46,31 +47,7 @@ const getTierColor = (rating: number) => {
 
 interface PlayerStatsProps {
   player: MFLPlayer;
-  marketValueEstimate?: {
-    estimatedValue: number;
-    confidence: 'high' | 'medium' | 'low';
-    breakdown: {
-      comparableListings: number;
-      recentSales: number;
-      ageAdjustment: number;
-      overallAdjustment: number;
-      positionPremium: number;
-      progressionPremium: number;
-      retirementPenalty: number;
-      newlyMintPremium: number;
-      pacePenalty: number;
-      pacePremium: number;
-      heightAdjustment: number;
-      totalAdjustments: number;
-    };
-    details: {
-      comparableListings: any[];
-      recentSales: any[];
-      comparableAverage: number;
-      recentSalesAverage: number;
-      baseValue: number;
-    };
-  } | null;
+  marketValueEstimate?: MarketValueEstimate | null;
   progressionData?: any[] | null;
   matchCount?: number;
   isCalculatingMarketValue?: boolean;

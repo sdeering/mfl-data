@@ -72,7 +72,8 @@ export const SYNC_STATUS = {
   PENDING: 'pending',
   IN_PROGRESS: 'in_progress',
   COMPLETED: 'completed',
-  FAILED: 'failed'
+  FAILED: 'failed',
+  CANCELLED: 'cancelled' // Stopped by the user
 } as const
 
 export type SyncStatus = typeof SYNC_STATUS[keyof typeof SYNC_STATUS]

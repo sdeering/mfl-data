@@ -4,7 +4,6 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useWallet } from '../contexts/WalletContext';
 import { supabaseDataService } from '../services/clientDataService';
-import { useLoading } from '../contexts/LoadingContext';
 
 // Import the clubsService for utility functions
 import { clubsService } from '../services/clubsService';
@@ -27,7 +26,6 @@ interface ClubData {
 export default function ClubsPageSupabase() {
   const router = useRouter();
   const { isConnected, account } = useWallet();
-  const { setLoading } = useLoading();
   const [clubs, setClubs] = useState<ClubData[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');

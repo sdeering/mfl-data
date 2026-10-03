@@ -4,12 +4,10 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useWallet } from '../contexts/WalletContext';
 import { clubsService, MFLClubData } from '../services/clubsService';
-import { useLoading } from '../contexts/LoadingContext';
 
 export default function ClubsPage() {
   const router = useRouter();
   const { isConnected, account } = useWallet();
-  const { setLoading } = useLoading();
   const [clubs, setClubs] = useState<MFLClubData[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');

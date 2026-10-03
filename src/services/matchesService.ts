@@ -61,6 +61,7 @@ export interface MFLMatch {
 
 class MatchesService {
   private cache = new Map<string, { data: MFLMatch[]; timestamp: number }>();
+  private formationCache = new Map<string, { data: string | null; timestamp: number }>();
   private readonly CACHE_DURATION = 6 * 60 * 60 * 1000; // 6 hours
   private readonly OPPONENT_CACHE_DURATION = 12 * 60 * 60 * 1000; // 12 hours for opponent matches
 
@@ -135,7 +136,7 @@ class MatchesService {
   // Public method to get cached formation data synchronously
   getCachedFormationData(matchId: string): string | null {
     const cacheKey = `match_formation_${matchId}`;
-    const cached = this.cache.get(cacheKey);
+    const cached = this.formationCache.get(cacheKey);
     if (cached && this.isOpponentCacheValid(cached.timestamp)) {
       console.log(`🎯 CACHE HIT: Returning cached formation for ${cacheKey}`);
       return cached.data;
@@ -315,7 +316,7 @@ class MatchesService {
           
           // Log all unique team names in past matches
           const allTeamNames = new Set();
-          response.data.forEach(match => {
+          response.data.forEach((match: MFLMatch) => {
             allTeamNames.add(match.homeTeamName);
             allTeamNames.add(match.awayTeamName);
           });
@@ -445,7 +446,7 @@ class MatchesService {
           
           // Log all unique team names in upcoming matches
           const allTeamNames = new Set();
-          response.data.forEach(match => {
+          response.data.forEach((match: MFLMatch) => {
             allTeamNames.add(match.homeTeamName);
             allTeamNames.add(match.awayTeamName);
           });
@@ -624,7 +625,7 @@ class MatchesService {
 
   async fetchMatchFormation(matchId: string): Promise<string | null> {
     const cacheKey = `match_formation_${matchId}`;
-    const cached = this.cache.get(cacheKey);
+    const cached = this.formationCache.get(cacheKey);
 
     if (cached && this.isOpponentCacheValid(cached.timestamp)) {
       return cached.data;
@@ -637,9 +638,7 @@ class MatchesService {
       const { home, away } = await this.fetchMatchFormations(matchId);
       const formation = home ?? away ?? null;
 
-      // This cache is typed for MFLMatch[]; formation data has always been
-      // stored here too (pre-existing, unrelated to this change).
-      this.cache.set(cacheKey, { data: formation as any, timestamp: Date.now() });
+      this.formationCache.set(cacheKey, { data: formation, timestamp: Date.now() });
       return formation;
     } catch (error) {
       console.error('Error fetching match formation:', error);
@@ -783,6 +782,7 @@ class MatchesService {
 
   clearCache(): void {
     this.cache.clear();
+    this.formationCache.clear();
   }
 }
 

@@ -315,7 +315,6 @@ class HTTPClient {
       };
       // Only set cache control on real browser fetch; node-fetch/Jest may not support or tests assert exact options
       if (isBrowserRuntime) {
-        // @ts-expect-error cache is valid in browser fetch
         (fetchInit as any).cache = 'no-store';
       }
 
