@@ -1393,8 +1393,19 @@ export default function SquadBuilderPage() {
       filtered.sort((a, b) => (((a.metadata as any)[map[sidebarSortKey]] ?? 0) - ((b.metadata as any)[map[sidebarSortKey]] ?? 0)) * dir);
     }
     setFilteredPlayers(filtered);
-    setSidebarPage(0);
   }, [searchTerm, filterPosition, players, debouncedAttr, debouncedAttrMax, debouncedOverallMin, debouncedOverallMax, debouncedPositionRatingMin, debouncedPositionRatingMax, selectedCardTypes, sidebarSortKey, sidebarSortDir, hideSelectedInSidebar, squad.players, savedSquads]);
+
+  // Back to the first page when the search, filters or sort change. Not when the squad
+  // changes: picking a player on page 2 must leave the list on page 2
+  useEffect(() => {
+    setSidebarPage(0);
+  }, [searchTerm, filterPosition, players, debouncedAttr, debouncedAttrMax, debouncedOverallMin, debouncedOverallMax, debouncedPositionRatingMin, debouncedPositionRatingMax, selectedCardTypes, sidebarSortKey, sidebarSortDir, hideSelectedInSidebar]);
+
+  // Hiding selected players shrinks the list, so keep the page within range
+  useEffect(() => {
+    const lastPage = Math.max(0, Math.ceil(filteredPlayers.length / pageSize) - 1);
+    setSidebarPage(page => Math.min(page, lastPage));
+  }, [filteredPlayers]);
 
   // Handle formation change
   const handleFormationChange = (formation: Formation) => {
