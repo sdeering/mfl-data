@@ -10,6 +10,7 @@ import { supabaseDataService } from '../../src/services/clientDataService';
 import { MFLPlayer } from '../../src/types/mflApi';
 import { getSquads, saveSquad, updateSquad, deleteSquad, loadSquad, SavedSquad } from '../../src/services/squadService';
 import { useToast, ToastContainer } from '../../src/components/Toast';
+import RetirementIcon from '../../src/components/RetirementIcon';
 import {
   DndContext,
   DragEndEvent,
@@ -424,6 +425,7 @@ function DraggablePlayerCard({ player, onAdd, onRemove, isInSquad = false, saved
               {player.metadata.firstName} {player.metadata.lastName}
               <span className="text-[10px] text-gray-500 dark:text-gray-400">({player.id})</span>
             </span>
+            <RetirementIcon retirementYears={player.metadata.retirementYears} />
             <a
               href={`/players/${player.id}`}
               target="_blank"
@@ -2356,6 +2358,7 @@ export default function SquadBuilderPage() {
                               <div className="leading-tight">
                                 <div className="flex items-center gap-2">
                                   <span>{p.metadata.firstName} {p.metadata.lastName}</span>
+                                  <RetirementIcon retirementYears={p.metadata.retirementYears} />
                                   <a 
                                     href={`/players/${p.id}`}
                                     target="_blank"
@@ -2743,8 +2746,9 @@ export default function SquadBuilderPage() {
                               const pr = getRating(pl.id.toString(), pos, pl);
                               return (
                                 <div key={`${pos}-${pl.id}`} className="text-xs flex items-center justify-between">
-                                  <span className="text-gray-900 dark:text-white truncate">
+                                  <span className="text-gray-900 dark:text-white truncate flex items-center gap-1">
                                     {pl.metadata.firstName} {pl.metadata.lastName}
+                                    <RetirementIcon retirementYears={pl.metadata.retirementYears} className="w-3 h-3" />
                                   </span>
                                   <span className="ml-2 text-gray-600 dark:text-gray-300">{pr}</span>
                                 </div>
