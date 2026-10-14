@@ -51,9 +51,12 @@ interface PlayerStatsProps {
   progressionData?: any[] | null;
   matchCount?: number;
   isCalculatingMarketValue?: boolean;
+  // Set when showing the player as minted: agency, team and market value are swapped
+  // for the mint date, since only the current ones are known
+  mintedOn?: string;
 }
 
-export default function PlayerStats({ player, marketValueEstimate, progressionData, matchCount, isCalculatingMarketValue }: PlayerStatsProps) {
+export default function PlayerStats({ player, marketValueEstimate, progressionData, matchCount, isCalculatingMarketValue, mintedOn }: PlayerStatsProps) {
   const {
     metadata: {
       overall,
@@ -184,10 +187,12 @@ export default function PlayerStats({ player, marketValueEstimate, progressionDa
       value: positions.join(', '), 
       isPositions: true 
     },
+    { label: 'Minted', value: mintedOn, isMintOnly: true },
     { 
       label: 'Agency', 
       value: player.ownedBy.name || (player.ownedBy.walletAddress ? `${player.ownedBy.walletAddress.slice(0, 8)}...${player.ownedBy.walletAddress.slice(-6)}` : undefined), 
-      isAgency: true 
+      isAgency: true,
+      isCurrentOnly: true
     },
     { 
       label: 'Team', 
@@ -195,7 +200,8 @@ export default function PlayerStats({ player, marketValueEstimate, progressionDa
       isTeam: true, 
       teamId: player.activeContract?.club?.id,
       isFreeAgent: !player.activeContract,
-      isDevCentre: player.activeContract && !player.activeContract.club?.name
+      isDevCentre: player.activeContract && !player.activeContract.club?.name,
+      isCurrentOnly: true
     },
     {
       label: 'Market Value Est',
@@ -206,14 +212,15 @@ export default function PlayerStats({ player, marketValueEstimate, progressionDa
       confidence: marketValueEstimate?.estimatedValue === 0 ? undefined : marketValueEstimate?.confidence,
       breakdown: marketValueEstimate?.breakdown,
       details: marketValueEstimate?.details,
-      isCalculating: isCalculatingMarketValue
+      isCalculating: isCalculatingMarketValue,
+      isCurrentOnly: true
     },
     {
       label: 'Tags',
       value: generateTags(),
       isTags: true
     }
-  ];
+  ].filter(stat => (mintedOn ? !stat.isCurrentOnly : !stat.isMintOnly));
 
 
 

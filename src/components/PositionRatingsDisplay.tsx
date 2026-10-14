@@ -66,9 +66,11 @@ interface PositionRatingsDisplayProps {
       goalkeeping?: number;
     };
   };
+  // Average match rating per position, from the player's matches
+  showMatchRatings?: boolean;
 }
 
-export default function PositionRatingsDisplay({ player }: PositionRatingsDisplayProps) {
+export default function PositionRatingsDisplay({ player, showMatchRatings = true }: PositionRatingsDisplayProps) {
   const [showAllPositions, setShowAllPositions] = useState(false);
   const [matchPositionRatings, setMatchPositionRatings] = useState<PositionSummary[]>([]);
   const [isLoadingMatches, setIsLoadingMatches] = useState(true);
@@ -216,7 +218,7 @@ export default function PositionRatingsDisplay({ player }: PositionRatingsDispla
       {/* Position Ratings Grid */}
       <div className="grid grid-cols-1 gap-3">
         {displayedRatings.map((rating, index) => {
-          const matchRating = matchPositionRatings.find(mr => mr.position === rating.position);
+          const matchRating = showMatchRatings ? matchPositionRatings.find(mr => mr.position === rating.position) : undefined;
           return (
             <PositionRatingItem 
               key={`${rating.position}-${index}`} 

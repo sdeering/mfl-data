@@ -1,4 +1,4 @@
-import { processProgressionData, getCurrentAge } from '../services/playerExperienceService';
+import { processProgressionData, getCurrentAge, getMintSnapshot } from '../services/playerExperienceService';
 import type { PlayerExperienceEntry } from '../types/playerExperience';
 
 const DAY = 24 * 60 * 60 * 1000;
@@ -159,5 +159,30 @@ describe('getCurrentAge', () => {
     getCurrentAge(history);
 
     expect(history.map(e => e.date)).toEqual(snapshot);
+  });
+});
+
+describe('getMintSnapshot', () => {
+  const minted = (iso: string): PlayerExperienceEntry => ({ ...initial(iso, 21, 83), reasonType: 'INITIAL' });
+
+  it('returns the INITIAL entry, whatever the order of the history', () => {
+    const history = [
+      { ...stat('2025-03-01T00:00:00Z', { passing: 79 }), reasonType: 'MATCH' },
+      { ...newAge('2025-01-27T00:00:00Z', 22), reasonType: 'NEW_AGE' },
+      minted('2024-12-17T15:10:35Z'),
+    ];
+
+    expect(getMintSnapshot(history)).toEqual({
+      date: at('2024-12-17T15:10:35Z'),
+      values: { age: 21, overall: 83, pace: 53, dribbling: 72, passing: 51, shooting: 70, defense: 27, physical: 52 },
+    });
+  });
+
+  it('is null when the history has no INITIAL entry', () => {
+    expect(getMintSnapshot([{ ...stat('2025-03-01T00:00:00Z', { passing: 79 }), reasonType: 'MATCH' }])).toBeNull();
+  });
+
+  it('is null for an empty history', () => {
+    expect(getMintSnapshot([])).toBeNull();
   });
 });

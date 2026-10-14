@@ -35,12 +35,6 @@ export const metadata: Metadata = {
   icons: {
     icon: [
       { url: '/favicon.ico', sizes: '48x48', type: 'image/x-icon' },
-      { url: 'https://mflplayer.info/icon.png?9513720e6414b231', sizes: '1647x1444', type: 'image/png' },
-      { url: 'https://mflplayer.info/icon0.svg?ccb46ac2bafe8a38', sizes: 'any', type: 'image/svg+xml' },
-      { url: 'https://mflplayer.info/icon1.png?2a8ae5c5b762ebe8', sizes: '96x96', type: 'image/png' },
-    ],
-    apple: [
-      { url: 'https://mflplayer.info/apple-icon.png?86b913e9c98b194e', sizes: '180x180', type: 'image/png' },
     ],
   },
   openGraph: {

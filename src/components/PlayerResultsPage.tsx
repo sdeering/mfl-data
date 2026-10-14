@@ -1,10 +1,11 @@
 "use client";
 
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { mflApi } from '../services/mflApi';
 import { getPlayerMarketValue, type MarketValueCalculationResult } from '../services/marketValueService';
-import { fetchPlayerExperienceHistory, processProgressionData } from '../services/playerExperienceService';
+import { fetchPlayerExperienceHistory, processProgressionData, getMintSnapshot, MFL_HISTORY_START, type MintSnapshot } from '../services/playerExperienceService';
 import { fetchPlayerMatches } from '../services/playerMatchesService';
 import { calculateAllPositionOVRs } from '../utils/ruleBasedPositionCalculator';
 import type { MFLPlayer } from '../types/mflApi';
@@ -26,6 +27,9 @@ interface PlayerResultsPageProps {
   initialPlayer?: MFLPlayer | null;
   initialError?: string | null;
 }
+
+const formatMintDate = (timestamp: number) =>
+  new Date(timestamp).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
 
 // Function to add player to recent searches
 const addToRecentSearches = (player: MFLPlayer) => {
@@ -77,6 +81,53 @@ const PlayerResultsPage: React.FC<PlayerResultsPageProps> = ({ propPlayerId, ini
   });
   const { setIsLoading: setGlobalLoading } = useLoading();
   const hasFetchedRef = useRef<string | null>(null); // Track which playerId we've fetched
+
+  // ?view=mint shows the player's stats as they were when first minted.
+  // searchParams is null outside the app router (e.g. in tests)
+  const isMintView = searchParams?.get('view') === 'mint';
+  // The INITIAL entry of the player's history; null when MFL has none
+  const [mint, setMint] = useState<{ playerId: number; snapshot: MintSnapshot | null } | null>(null);
+  const mintSnapshot = mint && mint.playerId === player?.id ? mint.snapshot : undefined;
+  const isLoadingMint = isMintView && !!player && mintSnapshot === undefined;
+  // A snapshot from MFL's backfill is the earliest record, which may postdate the mint
+  const isBackfilledMint = !!mintSnapshot && mintSnapshot.date < MFL_HISTORY_START;
+
+  useEffect(() => {
+    if (!isMintView || !player || mint?.playerId === player.id) return;
+
+    let cancelled = false;
+    fetchPlayerExperienceHistory(player.id.toString()).then(response => {
+      if (cancelled) return;
+      setMint({ playerId: player.id, snapshot: response.success ? getMintSnapshot(response.data) : null });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [isMintView, player, mint?.playerId]);
+
+  // The player as shown: as minted in the mint view, otherwise as they are now
+  const displayPlayer = useMemo(() => {
+    if (!player || !isMintView || !mintSnapshot) return player;
+
+    const values = mintSnapshot.values;
+    return {
+      ...player,
+      metadata: {
+        ...player.metadata,
+        age: values.age ?? player.metadata.age,
+        overall: values.overall ?? player.metadata.overall,
+        pace: values.pace ?? player.metadata.pace,
+        shooting: values.shooting ?? player.metadata.shooting,
+        passing: values.passing ?? player.metadata.passing,
+        dribbling: values.dribbling ?? player.metadata.dribbling,
+        defense: values.defense ?? player.metadata.defense,
+        physical: values.physical ?? player.metadata.physical,
+        goalkeeping: values.goalkeeping ?? player.metadata.goalkeeping,
+        // A new mint is nowhere near retirement
+        retirementYears: undefined,
+      },
+    };
+  }, [player, isMintView, mintSnapshot]);
   
   // Track modified attributes for training simulation
   const [modifiedAttributes, setModifiedAttributes] = useState<{
@@ -95,25 +146,25 @@ const PlayerResultsPage: React.FC<PlayerResultsPageProps> = ({ propPlayerId, ini
   
   // Create modified player object for position ratings
   const modifiedPlayer = useMemo(() => {
-    if (!player) return null;
+    if (!displayPlayer) return null;
     
     if (Object.keys(modifiedAttributes).length === 0) {
-      return player;
+      return displayPlayer;
     }
     
     return {
-      ...player,
+      ...displayPlayer,
       metadata: {
-        ...player.metadata,
-        pace: modifiedAttributes.pace ?? player.metadata.pace,
-        shooting: modifiedAttributes.shooting ?? player.metadata.shooting,
-        passing: modifiedAttributes.passing ?? player.metadata.passing,
-        dribbling: modifiedAttributes.dribbling ?? player.metadata.dribbling,
-        defense: modifiedAttributes.defense ?? player.metadata.defense,
-        physical: modifiedAttributes.physical ?? player.metadata.physical,
+        ...displayPlayer.metadata,
+        pace: modifiedAttributes.pace ?? displayPlayer.metadata.pace,
+        shooting: modifiedAttributes.shooting ?? displayPlayer.metadata.shooting,
+        passing: modifiedAttributes.passing ?? displayPlayer.metadata.passing,
+        dribbling: modifiedAttributes.dribbling ?? displayPlayer.metadata.dribbling,
+        defense: modifiedAttributes.defense ?? displayPlayer.metadata.defense,
+        physical: modifiedAttributes.physical ?? displayPlayer.metadata.physical,
       }
     };
-  }, [player, modifiedAttributes]);
+  }, [displayPlayer, modifiedAttributes]);
 
 
   const calculateMarketValueForPlayer = useCallback(async (player: MFLPlayer) => {
@@ -358,15 +409,15 @@ const PlayerResultsPage: React.FC<PlayerResultsPageProps> = ({ propPlayerId, ini
   }, [propPlayerId]);
 
 
-  // Loading state - only show while fetching initial player data
-  if (isLoading && loadingStates.playerData) {
+  // Loading state - only show while fetching initial player data (or its mint stats)
+  if ((isLoading && loadingStates.playerData) || isLoadingMint) {
     return (
       <div className="min-h-screen">
         <div className="p-6 bg-white dark:bg-[#111827]">
           <div className="flex items-center justify-center h-64">
             <div className="text-center">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
-              <p className="text-gray-600 dark:text-gray-400">Loading player data...</p>
+              <p className="text-gray-600 dark:text-gray-400">{isLoadingMint ? 'Loading mint stats...' : 'Loading player data...'}</p>
             </div>
           </div>
         </div>
@@ -426,19 +477,45 @@ const PlayerResultsPage: React.FC<PlayerResultsPageProps> = ({ propPlayerId, ini
     <div className="min-h-screen bg-white dark:bg-[#111827]">
       {/* Main Content Area - Responsive Layout */}
               <div className="px-4 lg:px-0 mt-5 bg-white dark:bg-[#111827] rounded-lg">
-        {player ? (
+        {player && displayPlayer ? (
           <>
+            {/* Mint view notice */}
+            {isMintView && (
+              <div className="max-w-2xl mx-auto mb-6 px-4 py-3 rounded-lg border border-purple-200 dark:border-purple-800 bg-purple-50 dark:bg-purple-900/20 text-sm text-purple-900 dark:text-purple-100 flex flex-wrap items-center justify-between gap-3">
+                {mintSnapshot && isBackfilledMint ? (
+                  <div>
+                    <p className="font-semibold">Viewing this player&apos;s earliest recorded stats, from {formatMintDate(mintSnapshot.date)}</p>
+                    <p className="mt-1 text-purple-800 dark:text-purple-200">
+                      MFL only started recording stat history in November 2024, so a player minted before then may have changed between its mint and this record.
+                    </p>
+                  </div>
+                ) : mintSnapshot ? (
+                  <p className="font-semibold">Viewing this player as minted on {formatMintDate(mintSnapshot.date)}</p>
+                ) : (
+                  <p className="font-semibold">MFL has no mint record for this player, so these are its current stats.</p>
+                )}
+                <Link
+                  href={`/players/${player.id}`}
+                  className="px-3 py-1.5 rounded-lg bg-purple-600 text-white font-medium hover:bg-purple-700 transition-colors whitespace-nowrap"
+                >
+                  View current player
+                </Link>
+              </div>
+            )}
+
             {/* Row 1 - Main player information */}
             <div key={`player-${player.id}`} className="flex flex-wrap justify-center gap-6 lg:gap-[30px] h-full mb-6">
               {/* Column 1 - Player Card (Mobile: First, Desktop: Second) */}
               <div className="w-full lg:w-[375px] lg:flex-shrink-0 flex flex-col order-1 lg:order-2">
                 <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4 text-center hidden">Player Card</h2>
                 <div className="flex flex-col items-center space-y-4 p-[5px]">
-                  <PlayerImage player={player!} />
+                  <PlayerImage player={displayPlayer} />
                   {/* Player Stats Grid */}
                   <div className="w-full mt-4">
+                    {/* Keyed by view so training changes don't carry between current and mint */}
                     <PlayerStatsGrid 
-                      player={player!} 
+                      key={isMintView ? 'mint' : 'current'}
+                      player={displayPlayer} 
                       onAttributesChange={setModifiedAttributes}
                     />
                   </div>
@@ -449,7 +526,7 @@ const PlayerResultsPage: React.FC<PlayerResultsPageProps> = ({ propPlayerId, ini
               <div className="w-full lg:w-[350px] lg:flex-shrink-0 order-2 lg:order-3">
                 <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-[5px] p-[5px]">Position Ratings</h2>
                 <div className="w-full p-[5px]">
-                  <PositionRatingsDisplay player={modifiedPlayer || player} />
+                  <PositionRatingsDisplay player={modifiedPlayer || displayPlayer} showMatchRatings={!isMintView} />
                 </div>
               </div>
 
@@ -457,20 +534,27 @@ const PlayerResultsPage: React.FC<PlayerResultsPageProps> = ({ propPlayerId, ini
               <div className="w-full lg:w-[350px] lg:flex-shrink-0 order-3 lg:order-1">
                 <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4 hidden">Player Information</h2>
                 <div className="w-full bg-white dark:bg-[#111827] p-[5px]">
-                  <PlayerStats 
-                    player={player!} 
-                    marketValueEstimate={marketValueEstimate}
-                    progressionData={progressionData}
-                    matchCount={matchCount}
-                    isCalculatingMarketValue={isCalculatingMarketValue}
-                  />
+                  {isMintView && mintSnapshot ? (
+                    <PlayerStats 
+                      player={displayPlayer} 
+                      mintedOn={`${isBackfilledMint ? 'By ' : ''}${formatMintDate(mintSnapshot.date)}`}
+                    />
+                  ) : (
+                    <PlayerStats 
+                      player={player!} 
+                      marketValueEstimate={marketValueEstimate}
+                      progressionData={progressionData}
+                      matchCount={matchCount}
+                      isCalculatingMarketValue={isCalculatingMarketValue}
+                    />
+                  )}
                 </div>
               </div>
 
 
             </div>
 
-            {/* Row 2 - External Links (Full width) */}
+            {/* Row 2 - External links and the mint view toggle (Full width) */}
             {player!.id && (
               <div className="w-full mb-6">
                 <div className="w-full p-[5px]">
@@ -485,15 +569,6 @@ const PlayerResultsPage: React.FC<PlayerResultsPageProps> = ({ propPlayerId, ini
                       </svg>
                     </button>
                     <button
-                      onClick={() => window.open(`https://mflplayer.info/player/${player!.id}`, '_blank')}
-                      className="flex-1 min-w-[140px] px-3 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg border border-gray-200 dark:border-gray-600 hover:bg-gray-200 dark:hover:bg-gray-600 hover:text-gray-900 dark:hover:text-white transition-all duration-200 font-medium text-sm flex items-center justify-center space-x-2 cursor-pointer whitespace-nowrap"
-                    >
-                      <span>mflplayer.info</span>
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                      </svg>
-                    </button>
-                    <button
                       onClick={() => window.open(`https://mfl-assistant.com/search?q=${encodeURIComponent(`${player!.metadata.firstName} ${player!.metadata.lastName}`)}`, '_blank')}
                       className="flex-1 min-w-[160px] px-3 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg border border-gray-200 dark:border-gray-600 hover:bg-gray-200 dark:hover:bg-gray-600 hover:text-gray-900 dark:hover:text-white transition-all duration-200 font-medium text-sm flex items-center justify-center space-x-2 cursor-pointer whitespace-nowrap"
                     >
@@ -502,15 +577,12 @@ const PlayerResultsPage: React.FC<PlayerResultsPageProps> = ({ propPlayerId, ini
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
                       </svg>
                     </button>
-                    <button
-                      onClick={() => window.open(`https://mflstats.com/players?player=${player!.id}`, '_blank')}
-                      className="flex-1 min-w-[140px] px-3 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg border border-gray-200 dark:border-gray-600 hover:bg-gray-200 dark:hover:bg-gray-600 hover:text-gray-900 dark:hover:text-white transition-all duration-200 font-medium text-sm flex items-center justify-center space-x-2 cursor-pointer whitespace-nowrap"
+                    <Link
+                      href={isMintView ? `/players/${player.id}` : `/players/${player.id}?view=mint`}
+                      className="flex-1 min-w-[160px] px-3 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg border border-gray-200 dark:border-gray-600 hover:bg-gray-200 dark:hover:bg-gray-600 hover:text-gray-900 dark:hover:text-white transition-all duration-200 font-medium text-sm flex items-center justify-center cursor-pointer whitespace-nowrap"
                     >
-                      <span>mflstats.com</span>
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                      </svg>
-                    </button>
+                      {isMintView ? 'View current player' : 'View player mint'}
+                    </Link>
                   </div>
                 </div>
               </div>
@@ -523,11 +595,14 @@ const PlayerResultsPage: React.FC<PlayerResultsPageProps> = ({ propPlayerId, ini
                   playerId={player.id.toString()} 
                   playerName={`${player.metadata.firstName} ${player.metadata.lastName}`}
                   playerPositions={player.metadata.positions}
+                  asOf={isMintView && mintSnapshot ? mintSnapshot.date : undefined}
                 />
               </div>
             </div>
 
-            {/* Row 4 - Sale History, Position Summary, and Recent Matches (Three columns) */}
+            {/* Row 4 - Sale History, Position Summary, and Recent Matches (Three columns).
+                All of it comes after the mint, so the mint view leaves it out */}
+            {!isMintView && (
             <div className="flex flex-wrap gap-4 mb-6">
               {/* Sale History */}
               <div className="w-full lg:w-[400px]">
@@ -561,6 +636,7 @@ const PlayerResultsPage: React.FC<PlayerResultsPageProps> = ({ propPlayerId, ini
                 </div>
               </div>
             </div>
+            )}
           </>
         ) : (
           <div className="flex items-center justify-center h-64">

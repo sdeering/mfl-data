@@ -11,26 +11,6 @@
       "src": "/favicon.ico",
       "sizes": "256x256",
       "type": "image/x-icon"
-    },
-    {
-      "src": "https://mflplayer.info/icon.png",
-      "sizes": "1647x1444",
-      "type": "image/png"
-    },
-    {
-      "src": "https://mflplayer.info/icon0.svg",
-      "sizes": "any",
-      "type": "image/svg+xml"
-    },
-    {
-      "src": "https://mflplayer.info/icon1.png",
-      "sizes": "96x96",
-      "type": "image/png"
-    },
-    {
-      "src": "https://mflplayer.info/apple-icon.png",
-      "sizes": "180x180",
-      "type": "image/png"
     }
   ]
 }

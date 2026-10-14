@@ -4,6 +4,7 @@
 
 export interface PlayerExperienceEntry {
   date: number; // Unix timestamp
+  reasonType?: string; // INITIAL, NEW_AGE, MATCH or TRAINING
   values: {
     age?: number;
     overall?: number;

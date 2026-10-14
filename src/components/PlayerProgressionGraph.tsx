@@ -8,6 +8,8 @@ interface PlayerProgressionGraphProps {
   playerId: string;
   playerName: string;
   playerPositions?: string[];
+  // Only plot the history up to this timestamp (the mint view passes the mint date)
+  asOf?: number;
 }
 
   const STAT_COLORS = {
@@ -30,7 +32,7 @@ interface PlayerProgressionGraphProps {
     physical: 'PHY'
   };
 
-export default function PlayerProgressionGraph({ playerId, playerName, playerPositions }: PlayerProgressionGraphProps) {
+export default function PlayerProgressionGraph({ playerId, playerName, playerPositions, asOf }: PlayerProgressionGraphProps) {
   const [progressionData, setProgressionData] = useState<ProgressionDataPoint[]>([]);
   const [currentAge, setCurrentAge] = useState<number | undefined>(undefined);
   const [isLoading, setIsLoading] = useState(true);
@@ -61,11 +63,14 @@ export default function PlayerProgressionGraph({ playerId, playerName, playerPos
 
       try {
         const experienceHistory = await fetchPlayerExperienceHistory(playerId);
+        const entries = asOf === undefined
+          ? experienceHistory.data
+          : experienceHistory.data.filter(entry => entry.date <= asOf);
         
-                               if (experienceHistory.success && experienceHistory.data.length > 0) {
-          const processedData = processProgressionData(experienceHistory.data);
+                               if (experienceHistory.success && entries.length > 0) {
+          const processedData = processProgressionData(entries);
           setProgressionData(processedData);
-          setCurrentAge(getCurrentAge(experienceHistory.data));
+          setCurrentAge(getCurrentAge(entries));
         } else {
           setError(experienceHistory.error || 'No progression data available');
         }
@@ -79,7 +84,7 @@ export default function PlayerProgressionGraph({ playerId, playerName, playerPos
     if (playerId) {
       loadProgressionData();
     }
-  }, [playerId]);
+  }, [playerId, asOf]);
 
   const toggleStat = (stat: StatType) => {
     const newEnabledStats = new Set(enabledStats);

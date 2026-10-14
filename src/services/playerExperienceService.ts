@@ -179,6 +179,26 @@ export function getCurrentAge(experienceData: PlayerExperienceEntry[]): number |
   return createAgeResolver(sortedData)(sortedData[sortedData.length - 1].date);
 }
 
+// MFL started recording stat history in November 2024. Players minted before then
+// have an INITIAL entry from that backfill (13 or 26 Nov 2024), not from their mint.
+export const MFL_HISTORY_START = Date.UTC(2024, 11, 1);
+
+export interface MintSnapshot {
+  date: number;
+  values: PlayerExperienceEntry['values'];
+}
+
+/**
+ * The player's stats when first minted: the INITIAL entry of the history, which
+ * carries the age, overall and every attribute
+ */
+export function getMintSnapshot(experienceData: PlayerExperienceEntry[]): MintSnapshot | null {
+  const initial = experienceData.find(entry => entry.reasonType === 'INITIAL');
+  if (!initial || initial.values.overall === undefined) return null;
+
+  return { date: initial.date, values: initial.values };
+}
+
 /**
  * Process experience history data for chart display
  */
