@@ -73,7 +73,8 @@ export function buildListingsQuery(filters: ScoutFilters): URLSearchParams {
   for (const filter of NUMBER_FILTERS) {
     const value = filters[filter];
     if (value === null || !Number.isFinite(value)) continue;
-    query.set(filter, String(Math.min(99, Math.max(0, Math.round(value)))));
+    // Ratings and ages top out at 99; a price in dollars does not
+    query.set(filter, String(Math.min(filter === 'priceMax' ? 100000 : 99, Math.max(0, Math.round(value)))));
   }
   // MFL matches any position a player can play, not only their primary one
   const positions = getFilterPositions(filters.position);

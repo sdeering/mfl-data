@@ -11,6 +11,7 @@ describe('buildListingsQuery', () => {
   test('a maximum price is sent to MFL in dollars, and one that is not offered is dropped', () => {
     expect(buildListingsQuery(DEFAULT_SCOUT_FILTERS).has('priceMax')).toBe(false)
     expect(buildListingsQuery({ ...DEFAULT_SCOUT_FILTERS, priceMax: 50 }).get('priceMax')).toBe('50')
+    expect(buildListingsQuery({ ...DEFAULT_SCOUT_FILTERS, priceMax: 300 }).get('priceMax')).toBe('300') // Not capped at 99 like a rating
     expect(parseScoutFilters({ priceMax: 50 }).priceMax).toBe(50)
     expect(parseScoutFilters({ priceMax: 51 }).priceMax).toBeNull()
   })
