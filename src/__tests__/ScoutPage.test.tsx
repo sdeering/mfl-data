@@ -8,6 +8,11 @@ import type { PlayerExperienceEntry } from '../types/playerExperience';
 jest.mock('../services/playerProgressionService', () => ({
   loadProgressionHistories: jest.fn()
 }));
+let mockAccount: string | null = null;
+jest.mock('../contexts/WalletContext', () => ({
+  useWallet: () => ({ account: mockAccount })
+}));
+
 const mockLoadHistories = loadProgressionHistories as jest.Mock;
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -43,6 +48,7 @@ const cells = (playerName: string) => within(screen.getByText(playerName).closes
 describe('ScoutPage', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockAccount = null;
     window.localStorage.clear(); // The page remembers its settings, which would carry into the next test
     mockListings({ success: true, data: [listing(1, 'Steady', 50, daysAgo(0.01), ['ST', 'CF', 'CB']), listing(2, 'Rising', 120, daysAgo(1))] });
     mockLoadHistories.mockImplementation(async (playerIds: number[], onProgress: (update: unknown) => void) => {
@@ -279,5 +285,56 @@ describe('ScoutPage', () => {
 
     expect(await screen.findByText(/MFL is limiting requests right now — try again in about 9 minutes/)).toBeInTheDocument();
     expect(mockLoadHistories).not.toHaveBeenCalled();
+  });
+
+  describe('presets', () => {
+    const searches = () => (global.fetch as jest.Mock).mock.calls
+      .filter(call => String(call[0]).startsWith('/api/listings'))
+      .map(call => Object.fromEntries(new URL(call[0], 'http://localhost').searchParams));
+
+    test('saves the filters and sort order in the browser, and restores both when picked', async () => {
+      jest.spyOn(window, 'prompt').mockReturnValue('Cheap youngsters');
+      render(<ScoutPage />);
+      await screen.findByText('Rising Test');
+
+      fireEvent.change(screen.getByLabelText('Max age'), { target: { value: '19' } });
+      fireEvent.click(screen.getByText('Price'));
+      fireEvent.click(screen.getByRole('button', { name: 'Save current' }));
+      expect(await screen.findByRole('option', { name: 'Cheap youngsters' })).toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Reset' }));
+      await waitFor(() => expect(screen.getByLabelText('Max age')).toHaveValue('23'));
+      fireEvent.click(screen.getByText('+OVR 30D')); // Reset leaves the sort alone
+      expect(screen.queryByText(/Price [↑↓]/)).not.toBeInTheDocument();
+
+      const before = searches().length;
+      fireEvent.change(screen.getByLabelText('Preset'), { target: { value: screen.getByRole('option', { name: 'Cheap youngsters' }).getAttribute('value') } });
+      await waitFor(() => expect(searches().length).toBe(before + 1));
+      expect(searches().at(-1)).toMatchObject({ ageMax: '19' });
+      expect(screen.getByLabelText('Max age')).toHaveValue('19');
+      expect(screen.getByText(/Price [↑↓]/)).toBeInTheDocument();
+    });
+
+    test('keeps presets on the server when a wallet is connected', async () => {
+      mockAccount = '0xabc';
+      jest.spyOn(window, 'prompt').mockReturnValue('Mine');
+      const listingsBody = { success: true, data: [listing(1, 'Steady', 50, daysAgo(0.01))] };
+      global.fetch = jest.fn(async (url: string, init?: RequestInit) => {
+        if (String(url).startsWith('/api/scout-presets')) {
+          if (init?.method === 'POST') return { ok: true, json: async () => ({ preset: JSON.parse(String(init.body)).preset }) };
+          return { ok: true, json: async () => ({ presets: [] }) };
+        }
+        return { ok: true, status: 200, json: async () => listingsBody };
+      }) as jest.Mock;
+
+      render(<ScoutPage />);
+      await screen.findByText('Steady Test');
+      fireEvent.click(screen.getByRole('button', { name: 'Save current' }));
+
+      expect(await screen.findByRole('option', { name: 'Mine' })).toBeInTheDocument();
+      const post = (global.fetch as jest.Mock).mock.calls.find(call => call[1]?.method === 'POST');
+      expect(JSON.parse(post[1].body)).toMatchObject({ walletAddress: '0xabc', preset: { name: 'Mine', sort: { field: 'overall30', direction: 'desc' } } });
+      expect(JSON.parse(window.localStorage.getItem('mfl-data-scout-presets') ?? '[]')).toEqual([]);
+    });
   });
 });

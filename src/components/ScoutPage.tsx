@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useWallet } from '../contexts/WalletContext';
 import { loadProgressionHistories, type PlayerHistories, type ProgressionLoadProgress } from '../services/playerProgressionService';
 import type { MFLListing, MFLPosition } from '../types/mflApi';
 import { ALL_POSITIONS, POSITIONS, POSITION_GROUPS } from '../utils/positionOptions';
@@ -12,9 +13,15 @@ import {
   NUMBER_FILTER_OPTIONS,
   buildListingsQuery,
   filtersEqual,
+  deleteWalletPreset,
+  fetchWalletPresets,
+  loadScoutPresets,
   loadScoutSettings,
+  saveScoutPresets,
+  saveWalletPreset,
   saveScoutSettings,
   type NumberFilter,
+  type ScoutPreset,
   type ScoutFilters
 } from '../utils/scoutFilters';
 import { getTierColor } from '../utils/ratingUtils';
@@ -113,6 +120,48 @@ export default function ScoutPage() {
     setFilters(saved?.filters ?? DEFAULT_SCOUT_FILTERS);
   }, []);
 
+  // Filter and sort combinations saved by name. With a wallet connected they are kept on the server, so
+  // they follow the user between devices; otherwise they stay in this browser. Read once mounted, like
+  // the settings above.
+  const { account } = useWallet();
+  const [presets, setPresets] = useState<ScoutPreset[]>([]);
+  const [presetId, setPresetId] = useState('');
+  const [presetError, setPresetError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const local = loadScoutPresets();
+    setPresetId('');
+    if (!account) {
+      setPresets(local);
+      return;
+    }
+
+    let cancelled = false;
+    (async () => {
+      const remote = await fetchWalletPresets(account);
+      if (cancelled) return;
+      if (!remote) {
+        setPresets([]);
+        setPresetError('Could not load your saved presets');
+        return;
+      }
+      setPresetError(null);
+      // Presets made in this browser before a wallet was connected move to the wallet
+      const names = new Set(remote.map(p => p.name.toLowerCase()));
+      const moved = (await Promise.all(local.filter(p => !names.has(p.name.toLowerCase())).map(p => saveWalletPreset(account, p))))
+        .filter((p): p is ScoutPreset => p !== null);
+      if (cancelled) return;
+      if (moved.length === local.length) saveScoutPresets([]);
+      setPresets([...remote, ...moved]);
+    })();
+    return () => { cancelled = true; };
+  }, [account]);
+
+  const updatePresets = (next: ScoutPreset[]) => {
+    setPresets(next);
+    if (!account) saveScoutPresets(next);
+  };
+
   // Remember every change as it is made - there is nothing to press to save
   const hasReadSettings = filters !== null;
   useEffect(() => {
@@ -161,6 +210,54 @@ export default function ScoutPage() {
     setDraftFilters(next);
     setFilters(next);
     setReloadKey(key => key + 1); // Searching again with the same filters checks for new listings
+  };
+
+  const applyPreset = (id: string) => {
+    setPresetId(id);
+    const preset = presets.find(p => p.id === id);
+    if (!preset) return;
+    if (isSortField(preset.sort.field)) {
+      setSortField(preset.sort.field);
+      setSortDirection(preset.sort.direction);
+    }
+    search(preset.filters);
+  };
+
+  const savePreset = async () => {
+    const current = presets.find(p => p.id === presetId);
+    const name = window.prompt('Name this preset', current?.name ?? '')?.trim();
+    if (!name) return;
+    // Reusing a name updates that preset instead of making a duplicate
+    const existing = presets.find(p => p.name.toLowerCase() === name.toLowerCase());
+    let preset: ScoutPreset = {
+      id: existing?.id ?? `${Date.now()}`,
+      name: existing?.name ?? name,
+      filters: draftFilters,
+      sort: { field: sortField, direction: sortDirection }
+    };
+    if (account) {
+      const stored = await saveWalletPreset(account, preset);
+      if (!stored) {
+        setPresetError('Could not save the preset');
+        return;
+      }
+      preset = stored;
+    }
+    setPresetError(null);
+    updatePresets(existing ? presets.map(p => (p.id === preset.id ? preset : p)) : [...presets, preset]);
+    setPresetId(preset.id);
+  };
+
+  const deletePreset = async () => {
+    const preset = presets.find(p => p.id === presetId);
+    if (!preset || !window.confirm(`Delete the preset "${preset.name}"?`)) return;
+    if (account && !(await deleteWalletPreset(account, preset.id))) {
+      setPresetError('Could not delete the preset');
+      return;
+    }
+    setPresetError(null);
+    updatePresets(presets.filter(p => p.id !== presetId));
+    setPresetId('');
   };
 
   const rows = useMemo<ScoutRow[]>(() => {
@@ -280,6 +377,33 @@ export default function ScoutPage() {
         <p className="text-gray-600 dark:text-gray-400 mt-2">
           The newest marketplace listings that match your filters, with how much each player’s overall has risen over the last 7, 30 and 90 days
         </p>
+      </div>
+
+      {/* Presets - saved filters and sort order, applied as soon as one is picked */}
+      <div className="flex flex-wrap items-center gap-2 mb-3">
+        <label htmlFor="scout-preset" className="text-xs font-medium text-gray-500 dark:text-gray-400">Preset</label>
+        <select
+          id="scout-preset"
+          value={presetId}
+          onChange={e => applyPreset(e.target.value)}
+          disabled={presets.length === 0}
+          className={`${controlClass} !w-auto min-w-[10rem]`}
+        >
+          <option value="">{presets.length === 0 ? 'None saved yet' : 'Choose a preset…'}</option>
+          {presets.map(preset => <option key={preset.id} value={preset.id}>{preset.name}</option>)}
+        </select>
+        <button type="button" onClick={savePreset} title="Save the current filters and sort order under a name" className="px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700">
+          Save current
+        </button>
+        {presetId && (
+          <button type="button" onClick={deletePreset} className="px-1 py-2 text-sm text-red-600 dark:text-red-400 hover:underline">
+            Delete
+          </button>
+        )}
+        <span className="text-xs text-gray-500 dark:text-gray-400">
+          {account ? 'Saved to your wallet' : 'Saved in this browser — connect your wallet to keep them across devices'}
+        </span>
+        {presetError && <span className="text-xs text-red-600 dark:text-red-400" role="alert">{presetError}</span>}
       </div>
 
       {/* Filters - applied on Search, so MFL is only asked once per change of mind */}

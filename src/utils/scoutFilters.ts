@@ -136,3 +136,71 @@ export function saveScoutSettings(settings: ScoutSettings): void {
     // Remembering the settings is a convenience; the page works the same without it
   }
 }
+
+const SCOUT_PRESETS_KEY = 'mfl-data-scout-presets';
+
+export interface ScoutPreset {
+  id: string;
+  name: string;
+  filters: ScoutFilters;
+  sort: { field: string; direction: 'asc' | 'desc' };
+}
+
+/** The presets saved in this browser, in the order they were made. */
+export function loadScoutPresets(): ScoutPreset[] {
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(SCOUT_PRESETS_KEY) ?? '[]');
+    if (!Array.isArray(parsed)) return [];
+
+    return parsed.flatMap((preset): ScoutPreset[] => {
+      const { id, name, sort } = preset ?? {};
+      if (typeof id !== 'string' || typeof name !== 'string' || typeof sort?.field !== 'string') return [];
+      if (sort.direction !== 'asc' && sort.direction !== 'desc') return [];
+      return [{ id, name, filters: parseScoutFilters(preset.filters), sort: { field: sort.field, direction: sort.direction } }];
+    });
+  } catch {
+    return []; // Storage is blocked or what was saved is not JSON
+  }
+}
+
+export function saveScoutPresets(presets: ScoutPreset[]): void {
+  try {
+    window.localStorage.setItem(SCOUT_PRESETS_KEY, JSON.stringify(presets));
+  } catch {
+    // Presets are a convenience; the page works the same without them
+  }
+}
+
+/** The presets saved for a wallet, or null if they could not be reached. */
+export async function fetchWalletPresets(walletAddress: string): Promise<ScoutPreset[] | null> {
+  try {
+    const res = await fetch(`/api/scout-presets?${new URLSearchParams({ walletAddress })}`);
+    if (!res.ok) return null;
+    return (await res.json()).presets as ScoutPreset[];
+  } catch {
+    return null;
+  }
+}
+
+/** Saves a preset for a wallet. Returns it as stored (a same-named preset keeps its id), or null on failure. */
+export async function saveWalletPreset(walletAddress: string, preset: ScoutPreset): Promise<ScoutPreset | null> {
+  try {
+    const res = await fetch('/api/scout-presets', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ walletAddress, preset })
+    });
+    return res.ok ? (await res.json()).preset as ScoutPreset : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function deleteWalletPreset(walletAddress: string, id: string): Promise<boolean> {
+  try {
+    const res = await fetch(`/api/scout-presets?${new URLSearchParams({ walletAddress, id })}`, { method: 'DELETE' });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}

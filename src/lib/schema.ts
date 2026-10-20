@@ -221,6 +221,17 @@ CREATE TABLE IF NOT EXISTS api_usage_daily (
   PRIMARY KEY (date, source, endpoint)
 );
 
+-- Scout page presets (filters and sort order) saved per wallet
+CREATE TABLE IF NOT EXISTS scout_presets (
+  id TEXT PRIMARY KEY,
+  wallet_address TEXT NOT NULL,
+  name TEXT NOT NULL,
+  data TEXT NOT NULL,
+  created_at TEXT DEFAULT (datetime('now')),
+  updated_at TEXT DEFAULT (datetime('now')),
+  UNIQUE(wallet_address, name)
+);
+
 -- Schema version tracking
 CREATE TABLE IF NOT EXISTS schema_version (
   version INTEGER PRIMARY KEY,
@@ -253,6 +264,7 @@ CREATE INDEX IF NOT EXISTS idx_sync_status_data_type ON sync_status(data_type);
 CREATE INDEX IF NOT EXISTS idx_sync_status_status ON sync_status(status);
 CREATE INDEX IF NOT EXISTS idx_squads_wallet_address ON squads(wallet_address);
 CREATE INDEX IF NOT EXISTS idx_squads_formation ON squads(formation_id);
+CREATE INDEX IF NOT EXISTS idx_scout_presets_wallet_address ON scout_presets(wallet_address);
 `
 
 let _initialized = false
