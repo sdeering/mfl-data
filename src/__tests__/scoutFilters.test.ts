@@ -8,6 +8,19 @@ describe('buildListingsQuery', () => {
     )
   })
 
+  test('a maximum price is sent to MFL in dollars, and one that is not offered is dropped', () => {
+    expect(buildListingsQuery(DEFAULT_SCOUT_FILTERS).has('priceMax')).toBe(false)
+    expect(buildListingsQuery({ ...DEFAULT_SCOUT_FILTERS, priceMax: 50 }).get('priceMax')).toBe('50')
+    expect(parseScoutFilters({ priceMax: 50 }).priceMax).toBe(50)
+    expect(parseScoutFilters({ priceMax: 51 }).priceMax).toBeNull()
+  })
+
+  test('newly minted is kept off the MFL search and round-trips through storage', () => {
+    expect(buildListingsQuery({ ...DEFAULT_SCOUT_FILTERS, newlyMinted: true }).toString()).toBe(buildListingsQuery(DEFAULT_SCOUT_FILTERS).toString())
+    expect(parseScoutFilters({ newlyMinted: true }).newlyMinted).toBe(true)
+    expect(parseScoutFilters({ newlyMinted: 'yes' }).newlyMinted).toBe(false)
+  })
+
   test('a filter that is switched off is left out of the search', () => {
     const query = buildListingsQuery({ ...DEFAULT_SCOUT_FILTERS, ageMax: null, paceMin: null, defenseMin: 65, isFreeAgent: false })
 

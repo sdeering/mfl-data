@@ -7,7 +7,7 @@ const STAT_FILTERS = ['age', 'overall', 'pace', 'shooting', 'passing', 'dribblin
 
 // Only MFL's own listing filters are passed on, so this can't be used to reach anything else with our token
 const ALLOWED_PARAMS = new Set([
-  'limit', 'type', 'status', 'sorts', 'sortsOrders', 'view', 'isFreeAgent', 'positions', 'beforeListingId',
+  'limit', 'type', 'status', 'sorts', 'sortsOrders', 'view', 'isFreeAgent', 'positions', 'beforeListingId', 'priceMax',
   ...STAT_FILTERS.flatMap(stat => [`${stat}Min`, `${stat}Max`])
 ])
 

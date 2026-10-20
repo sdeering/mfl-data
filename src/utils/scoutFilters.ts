@@ -5,7 +5,7 @@ export const FILTER_STATS = ['pace', 'shooting', 'passing', 'dribbling', 'defens
 export type FilterStat = typeof FILTER_STATS[number];
 
 // Named after the MFL listing parameter each one becomes. null leaves that filter off.
-export type NumberFilter = 'ageMax' | 'overallMin' | 'overallMax' | `${FilterStat}Min`;
+export type NumberFilter = 'ageMax' | 'overallMin' | 'overallMax' | 'priceMax' | `${FilterStat}Min`;
 
 export type ScoutFilters = Record<NumberFilter, number | null> & {
   position: string; // A position, a position group, or ALL_POSITIONS
@@ -15,16 +15,22 @@ export type ScoutFilters = Record<NumberFilter, number | null> & {
   // Only players who rate higher at another position than their primary. MFL can't search for it,
   // so it narrows the listings already loaded.
   betterOffPrimary: boolean;
+  // Only players who have yet to play a game, so freshly minted. MFL can't search for it either, so
+  // each listed player is checked and the ones who have played are hidden.
+  newlyMinted: boolean;
 };
 
-export const NUMBER_FILTERS: NumberFilter[] = ['ageMax', 'overallMin', 'overallMax', ...FILTER_STATS.map(stat => `${stat}Min` as const)];
+export const NUMBER_FILTERS: NumberFilter[] = ['ageMax', 'overallMin', 'overallMax', 'priceMax', ...FILTER_STATS.map(stat => `${stat}Min` as const)];
 
 const range = (from: number, to: number, step = 1) => Array.from({ length: Math.floor((to - from) / step) + 1 }, (_, i) => from + i * step);
+
+// Listing prices to cap at, in dollars
+const PRICE_MAX_OPTIONS = [5, 10, 15, 20, 25, 30, 40, 50, 75, 100, 150, 200, 250, 300, 400, 500, 750, 1000];
 
 // What each dropdown offers. Age and overall are picked exactly, since a band like 70-82 matters;
 // stat minimums are rough cut-offs.
 export const NUMBER_FILTER_OPTIONS = Object.fromEntries(
-  NUMBER_FILTERS.map(filter => [filter, filter === 'ageMax' ? range(16, 40) : filter.startsWith('overall') ? range(40, 99) : range(20, 95, 5)])
+  NUMBER_FILTERS.map(filter => [filter, filter === 'priceMax' ? PRICE_MAX_OPTIONS : filter === 'ageMax' ? range(16, 40) : filter.startsWith('overall') ? range(40, 99) : range(20, 95, 5)])
 ) as Record<NumberFilter, number[]>;
 
 // Every listed player costs a paced MFL request the first time their history is loaded
@@ -36,6 +42,7 @@ export const DEFAULT_SCOUT_FILTERS: ScoutFilters = {
   ageMax: 23,
   overallMin: 70,
   overallMax: 82,
+  priceMax: null,
   paceMin: 50,
   shootingMin: null,
   passingMin: 50,
@@ -44,11 +51,12 @@ export const DEFAULT_SCOUT_FILTERS: ScoutFilters = {
   physicalMin: null,
   isFreeAgent: true,
   limit: 20,
-  betterOffPrimary: false
+  betterOffPrimary: false,
+  newlyMinted: false
 };
 
 export function filtersEqual(a: ScoutFilters, b: ScoutFilters): boolean {
-  return a.position === b.position && a.isFreeAgent === b.isFreeAgent && a.limit === b.limit && a.betterOffPrimary === b.betterOffPrimary
+  return a.position === b.position && a.isFreeAgent === b.isFreeAgent && a.limit === b.limit && a.betterOffPrimary === b.betterOffPrimary && a.newlyMinted === b.newlyMinted
     && NUMBER_FILTERS.every(filter => a[filter] === b[filter]);
 }
 
@@ -98,6 +106,7 @@ export function parseScoutFilters(raw: unknown): ScoutFilters {
   }
   if (typeof saved.limit === 'number' && LISTING_LIMITS.includes(saved.limit)) filters.limit = saved.limit;
   if (typeof saved.betterOffPrimary === 'boolean') filters.betterOffPrimary = saved.betterOffPrimary;
+  if (typeof saved.newlyMinted === 'boolean') filters.newlyMinted = saved.newlyMinted;
 
   return filters;
 }
@@ -203,4 +212,18 @@ export async function deleteWalletPreset(walletAddress: string, id: string): Pro
   } catch {
     return false;
   }
+}
+
+export interface PlayedCheck {
+  played: Record<number, boolean>; // Whether each player has played a game
+  rateLimitedSeconds?: number; // Set when MFL asked us to back off before the rest could be checked
+}
+
+/** Whether each of these players (a few at a time) has played a game. */
+export async function fetchPlayed(playerIds: number[], signal?: AbortSignal): Promise<PlayedCheck> {
+  const res = await fetch(`/api/scout/played?${new URLSearchParams({ ids: playerIds.join(',') })}`, { signal });
+  const body = await res.json().catch(() => null);
+  if (res.status === 429) return { played: body?.played ?? {}, rateLimitedSeconds: body?.retryAfterSeconds ?? 600 };
+  if (!res.ok || !body?.success) throw new Error(body?.error ?? 'Failed to check games played');
+  return { played: body.played };
 }

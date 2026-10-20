@@ -287,6 +287,42 @@ describe('ScoutPage', () => {
     expect(mockLoadHistories).not.toHaveBeenCalled();
   });
 
+  describe('newly minted', () => {
+    test('hides players who have played a game, and loads progression only for the rest', async () => {
+      global.fetch = jest.fn(async (url: string) => {
+        if (String(url).startsWith('/api/scout/played')) {
+          return { ok: true, status: 200, json: async () => ({ success: true, played: { 1: false, 2: true } }) };
+        }
+        return { ok: true, status: 200, json: async () => ({ success: true, data: [listing(1, 'Steady', 50, daysAgo(0.01)), listing(2, 'Rising', 120, daysAgo(1))] }) };
+      }) as jest.Mock;
+
+      render(<ScoutPage />);
+      await screen.findByText('Rising Test');
+      expect(global.fetch).not.toHaveBeenCalledWith(expect.stringContaining('/api/scout/played'), expect.anything());
+
+      fireEvent.click(screen.getByLabelText('New mint'));
+      await waitFor(() => expect(screen.queryByText('Rising Test')).not.toBeInTheDocument());
+      expect(screen.getByText('Steady Test')).toBeInTheDocument();
+      expect((global.fetch as jest.Mock).mock.calls.filter(call => String(call[0]).startsWith('/api/scout/played'))).toHaveLength(1);
+      expect(String((global.fetch as jest.Mock).mock.calls.find(call => String(call[0]).startsWith('/api/scout/played'))[0])).toContain('ids=1%2C2');
+    });
+
+    test('says so when MFL is rate limiting, instead of showing an empty table without a reason', async () => {
+      global.fetch = jest.fn(async (url: string) => {
+        if (String(url).startsWith('/api/scout/played')) {
+          return { ok: false, status: 429, json: async () => ({ success: false, retryAfterSeconds: 540, played: {} }) };
+        }
+        return { ok: true, status: 200, json: async () => ({ success: true, data: [listing(1, 'Steady', 50, daysAgo(0.01))] }) };
+      }) as jest.Mock;
+
+      render(<ScoutPage />);
+      await screen.findByText('Steady Test');
+      fireEvent.click(screen.getByLabelText('New mint'));
+
+      expect(await screen.findByText(/MFL is limiting requests right now, so some players could not be checked/)).toBeInTheDocument();
+    });
+  });
+
   describe('presets', () => {
     const searches = () => (global.fetch as jest.Mock).mock.calls
       .filter(call => String(call[0]).startsWith('/api/listings'))

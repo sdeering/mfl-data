@@ -14,6 +14,7 @@ import {
   buildListingsQuery,
   filtersEqual,
   deleteWalletPreset,
+  fetchPlayed,
   fetchWalletPresets,
   loadScoutPresets,
   loadScoutSettings,
@@ -41,6 +42,7 @@ const NUMBER_SELECTS: Array<{ filter: NumberFilter; label: string; title: string
   { filter: 'ageMax', label: 'Max age', title: 'Oldest age to include' },
   { filter: 'overallMin', label: 'Min OVR', title: 'Lowest overall to include' },
   { filter: 'overallMax', label: 'Max OVR', title: 'Highest overall to include' },
+  { filter: 'priceMax', label: 'Max price', title: 'Highest listing price to include, in dollars' },
   ...FILTER_STATS.map(stat => ({ filter: `${stat}Min` as const, label: `Min ${STAT_LABELS[stat]}`, title: `Lowest ${STAT_NAMES[stat].toLowerCase()} to include` }))
 ];
 
@@ -210,6 +212,8 @@ export default function ScoutPage() {
     setDraftFilters(next);
     setFilters(next);
     setReloadKey(key => key + 1); // Searching again with the same filters checks for new listings
+    // Someone may have played since; a player who has played stays that way
+    setPlayed(current => Object.fromEntries(Object.entries(current).filter(([, hasPlayed]) => hasPlayed)));
   };
 
   const applyPreset = (id: string) => {
@@ -278,10 +282,56 @@ export default function ScoutPage() {
   }, [listings, histories, loadedAt]);
 
   // Applied as it is picked: it narrows the listings already loaded, so there is nothing to ask MFL
-  const { betterOffPrimary } = draftFilters;
+  const { betterOffPrimary, newlyMinted } = draftFilters;
+
+  // Whether each listed player has played a game, checked only while "Newly minted" is ticked. Anyone
+  // not checked yet stays hidden. Each check is a paced MFL request, so it is made once per player.
+  const [played, setPlayed] = useState<Record<number, boolean>>({});
+  const [playedNotice, setPlayedNotice] = useState<string | null>(null);
+  const [isCheckingPlayed, setIsCheckingPlayed] = useState(false);
+  const playedRef = useRef(played); // Read by the check below without restarting it after every batch
+  playedRef.current = played;
+  const listedIds = useMemo(() => listings.map(listing => listing.player.id), [listings]);
+  useEffect(() => {
+    if (!newlyMinted || isLoadingListings) return;
+    const unchecked = listedIds.filter(id => playedRef.current[id] === undefined);
+    if (unchecked.length === 0) return;
+
+    const controller = new AbortController();
+    (async () => {
+      setIsCheckingPlayed(true);
+      setPlayedNotice(null);
+      try {
+        for (let i = 0; i < unchecked.length; i += 5) {
+          const result = await fetchPlayed(unchecked.slice(i, i + 5), controller.signal);
+          if (controller.signal.aborted) return;
+          setPlayed(current => ({ ...current, ...result.played }));
+          if (result.rateLimitedSeconds !== undefined) {
+            const minutes = Math.max(1, Math.ceil(result.rateLimitedSeconds / 60));
+            setPlayedNotice(`MFL is limiting requests right now, so some players could not be checked. Search again in about ${minutes} minute${minutes > 1 ? 's' : ''}.`);
+            return;
+          }
+        }
+      } catch (err) {
+        if (controller.signal.aborted) return;
+        console.error('Failed to check games played:', err);
+        setPlayedNotice('Could not check which players have played a game');
+      } finally {
+        if (!controller.signal.aborted) setIsCheckingPlayed(false);
+      }
+    })();
+    return () => {
+      controller.abort();
+      setIsCheckingPlayed(false);
+    };
+  }, [newlyMinted, isLoadingListings, listedIds, reloadKey]);
+
   const shownRows = useMemo(
-    () => (betterOffPrimary ? rows.filter(row => getOffPrimaryGain(row.positionRatings) > 0) : rows),
-    [rows, betterOffPrimary]
+    () => rows.filter(row =>
+      (!betterOffPrimary || getOffPrimaryGain(row.positionRatings) > 0)
+      && (!newlyMinted || played[row.listing.player.id] === false)
+    ),
+    [rows, betterOffPrimary, newlyMinted, played]
   );
 
   // Load the progression of the players on show (each one costs a paced MFL request if it is out of
@@ -442,7 +492,7 @@ export default function ScoutPage() {
               className={controlClass}
             >
               <option value="">Any</option>
-              {NUMBER_FILTER_OPTIONS[filter].map(option => <option key={option} value={option}>{option}</option>)}
+              {NUMBER_FILTER_OPTIONS[filter].map(option => <option key={option} value={option}>{filter === 'priceMax' ? `$${option}` : option}</option>)}
             </select>
           </div>
         ))}
@@ -469,6 +519,19 @@ export default function ScoutPage() {
               title="Only players who rate higher at another position than their primary one. Narrows the loaded listings straight away."
               checked={betterOffPrimary}
               onChange={e => setDraftFilters(current => ({ ...current, betterOffPrimary: e.target.checked }))}
+              className="h-4 w-4 rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
+            />
+          </div>
+        </div>
+        <div className={fieldClass}>
+          <label htmlFor="scout-minted" className={labelClass}>New mint</label>
+          <div className="flex items-center justify-center h-[38px]">
+            <input
+              id="scout-minted"
+              type="checkbox"
+              title="Only players who have yet to play a game. Each listed player is checked with MFL, which takes a few seconds."
+              checked={newlyMinted}
+              onChange={e => setDraftFilters(current => ({ ...current, newlyMinted: e.target.checked }))}
               className="h-4 w-4 rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
             />
           </div>
@@ -533,6 +596,13 @@ export default function ScoutPage() {
                 {shownRows.length === listings.length ? listings.length : `${shownRows.length} of ${listings.length}`} · rise in exact overall over each period
               </span>
             </h2>
+
+            {isCheckingPlayed && (
+              <p className="mt-3 text-xs text-gray-500 dark:text-gray-400" role="status">
+                Checking which players have yet to play a game… {listedIds.filter(id => played[id] !== undefined).length} / {listedIds.length}
+              </p>
+            )}
+            {playedNotice && <p className="mt-3 text-xs text-amber-700 dark:text-amber-400" role="status">{playedNotice}</p>}
 
             {(isLoadingHistories || isRefreshing) && (
               <div className="mt-3" role="status">
