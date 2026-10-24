@@ -66,6 +66,14 @@ const SITES = [
     link: 'text-indigo-600 dark:text-indigo-400 hover:text-indigo-500 dark:hover:text-indigo-300',
     description: 'Flowty is a marketplace where you can buy and sell your MFL reward packs, useful for turning $MFL into USD, or to buy fresh players for your Agency (your paying a premium, but get the pack open excitement).',
   },
+  {
+    name: 'The Agent Hub',
+    initials: 'AH',
+    url: 'https://the-agent-hub.com/',
+    tile: 'bg-teal-400/16 text-teal-600 dark:text-teal-400',
+    link: 'text-teal-600 dark:text-teal-400 hover:text-teal-500 dark:hover:text-teal-300',
+    description: 'Useful for running your agency from one place: twelve tools including My HQ, a rewards calculator, squad builder, schedule planner, player and club marketplaces and club delegation. Sign in with Dapper or enter a Flow wallet address to see them for your agency.',
+  },
 ];
 
 const COACH_TOOLS = [
