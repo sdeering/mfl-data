@@ -140,7 +140,7 @@ export default function ClubTrainingTab({ clubId }: ClubTrainingTabProps) {
                 <td className={`${tdClass} text-sm font-semibold text-fg-2`}>
                   {coach.pricing ? `${coach.pricing.revenueShare / 100}%` : '—'}
                 </td>
-                <td className={`${tdClass} text-sm font-semibold text-fg-2`}>
+                <td className={`${tdClass} text-sm font-semibold ${coach.pricing ? 'text-price' : 'text-fg-2'}`}>
                   {coach.pricing ? `${coach.pricing.upfrontMflPrice} $MFL` : '—'}
                 </td>
               </tr>

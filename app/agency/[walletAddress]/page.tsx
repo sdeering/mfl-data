@@ -542,7 +542,7 @@ export default function DynamicAgencyPage() {
                                 );
                               }
                               return (
-                                <span className="font-semibold text-pos-ink">
+                                <span className="font-semibold text-price">
                                   ${marketValue.toLocaleString()}
                                 </span>
                               );

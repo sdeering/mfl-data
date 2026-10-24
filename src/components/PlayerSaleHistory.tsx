@@ -46,7 +46,7 @@ function MarketValueEstimateCard({ estimate, showHeightAdjustment }: { estimate:
 
       {/* Main Estimate - Centered */}
       <div className="text-center mb-4">
-        <div className="font-display text-[34px] font-extrabold leading-none tracking-[-0.02em] tabular-nums text-accent-ink">
+        <div className="font-display text-[34px] font-extrabold leading-none tracking-[-0.02em] tabular-nums text-price">
           ${estimate.estimatedValue.toLocaleString()}
         </div>
         <div className="text-sm text-muted mt-2">
@@ -274,7 +274,7 @@ export default function PlayerSaleHistory({ playerId, playerName, playerMetadata
               </p>
             </div>
             <div className="text-right">
-              <span className="font-display text-lg font-extrabold tabular-nums text-accent-ink">
+              <span className="font-display text-lg font-extrabold tabular-nums text-price">
                 ${formatPrice(sale.price)}
               </span>
               <p className="m-0 mt-0.5 text-xs font-medium text-fg-3">

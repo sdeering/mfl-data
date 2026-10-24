@@ -40,7 +40,6 @@ import {
   btnPrimary,
   btnSecondary,
   labelClass,
-  linkClass,
   rowClass,
   sortableThClass,
   tableClass,
@@ -688,7 +687,7 @@ export default function ScoutPage() {
                           target="_blank"
                           rel="noopener noreferrer"
                           title="Open on MFL"
-                          className={linkClass}
+                          className="text-price hover:underline underline-offset-2"
                         >
                           ${listing.price.toLocaleString()}
                         </a>

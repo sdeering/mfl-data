@@ -1,6 +1,6 @@
 import React from 'react';
 import { formatHeight } from '@/src/utils/heightConverter';
-import { getCountryFlag, formatCountryName } from '@/src/utils/countryFlags';
+import { formatCountryName } from '@/src/utils/countryFlags';
 import type { MFLPlayer } from '@/src/types/mflApi';
 import type { MarketValueEstimate } from '@/src/utils/marketValueCalculator';
 
@@ -218,7 +218,15 @@ export default function PlayerStats({ player, marketValueEstimate, progressionDa
                 <>
                   {stat.isCountry ? (
                     <span className={`${valueClass} flex items-center gap-2`}>
-                      <span className="text-lg leading-none">{getCountryFlag(stat.value as string)}</span>
+                      {/* MFL's own flag images, as on the player card (Windows has no emoji flags) */}
+                      <img
+                        src={`https://app.playmfl.com/img/flags/${stat.value}.svg`}
+                        alt=""
+                        width={20}
+                        height={14}
+                        className="w-5 h-3.5 rounded-[3px] object-cover shadow-[0_0_0_1px_rgba(255,255,255,.12)]"
+                        onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                      />
                       {formatCountryName(stat.value as string)}
                     </span>
                   ) : stat.isAgency ? (
@@ -252,7 +260,7 @@ export default function PlayerStats({ player, marketValueEstimate, progressionDa
                         </div>
                       ) : (
                         <>
-                          <span className={valueClass}>
+                          <span className={String(stat.value).startsWith('$') ? 'text-[15px] font-bold text-price' : valueClass}>
                             {stat.value}
                           </span>
                           {stat.confidence && (

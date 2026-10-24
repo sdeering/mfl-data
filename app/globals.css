@@ -49,6 +49,7 @@
   --violet-line: #3a2a4d;
   --pos-ink: #a8ecc1;
   --pos-line: #2c5a3f;
+  --price: #22c55e;
   --tile-tint: #1a2410;
   --badge-bg: rgba(198, 244, 50, 0.12);
   --badge-line: rgba(198, 244, 50, 0.3);
@@ -118,6 +119,7 @@ html.light {
   --violet-line: #e1ccf5;
   --pos-ink: #166534;
   --pos-line: #bfdcc6;
+  --price: #15803d;
   --tile-tint: #eef6dc;
   --badge-bg: #c6f432;
   --badge-line: #a9d41f;
@@ -169,6 +171,7 @@ html.light {
   --color-violet-line: var(--violet-line);
   --color-pos-ink: var(--pos-ink);
   --color-pos-line: var(--pos-line);
+  --color-price: var(--price);
   --color-tile-tint: var(--tile-tint);
   --color-rt-cyan: var(--rt-cyan);
   --color-rt-pink: var(--rt-pink);
