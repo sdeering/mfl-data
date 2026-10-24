@@ -24,20 +24,22 @@ function ToastComponent({ toast, onRemove }: ToastProps) {
     return () => clearTimeout(timer);
   }, [toast.id, toast.duration, onRemove]);
 
+  // The coloured edge down the left of the toast, and its icon colour
   const getToastStyles = () => {
     switch (toast.type) {
       case 'success':
-        return 'bg-green-50 dark:bg-green-900/30 border-green-200 dark:border-green-800 text-green-800 dark:text-green-200';
+        return { edge: 'bg-accent', icon: 'text-accent-ink' };
       case 'error':
-        return 'bg-red-50 dark:bg-red-900/30 border-red-200 dark:border-red-800 text-red-800 dark:text-red-200';
+        return { edge: 'bg-red-500', icon: 'text-danger-ink' };
       case 'warning':
-        return 'bg-yellow-50 dark:bg-yellow-900/30 border-yellow-200 dark:border-yellow-800 text-yellow-800 dark:text-yellow-200';
+        return { edge: 'bg-warn-ink', icon: 'text-warn-ink' };
       case 'info':
-        return 'bg-blue-50 dark:bg-blue-900/30 border-blue-200 dark:border-blue-800 text-blue-800 dark:text-blue-200';
+        return { edge: 'bg-line-hover', icon: 'text-muted' };
       default:
-        return 'bg-gray-50 dark:bg-gray-900/30 border-gray-200 dark:border-gray-800 text-gray-800 dark:text-gray-200';
+        return { edge: 'bg-line-2', icon: 'text-muted' };
     }
   };
+  const styles = getToastStyles();
 
   const getIcon = () => {
     switch (toast.type) {
@@ -71,25 +73,26 @@ function ToastComponent({ toast, onRemove }: ToastProps) {
   };
 
   return (
-    <div className={`max-w-md md:max-w-lg w-full border rounded-lg shadow-lg pointer-events-auto ${getToastStyles()}`}>
-      <div className="p-4">
+    <div className="relative max-w-md md:max-w-lg w-full overflow-hidden rounded-2xl border border-line-2 bg-panel text-fg shadow-[0_20px_50px_rgba(0,0,0,.45)] pointer-events-auto">
+      <span className={`absolute inset-y-0 left-0 w-1 ${styles.edge}`} aria-hidden="true" />
+      <div className="py-3.5 pl-5 pr-4">
         <div className="flex items-start">
-          <div className="flex-shrink-0">
+          <div className={`flex-shrink-0 ${styles.icon}`}>
             {getIcon()}
           </div>
           <div className="ml-3 w-0 flex-1">
-            <p className="text-sm font-medium">
+            <p className="m-0 text-sm font-bold text-fg">
               {toast.title}
             </p>
             {toast.message && (
-              <p className="mt-1 text-sm opacity-90">
+              <p className="m-0 mt-1 text-sm text-muted">
                 {toast.message}
               </p>
             )}
           </div>
           <div className="ml-4 flex-shrink-0 flex">
             <button
-              className="inline-flex text-current opacity-70 hover:opacity-100 focus:outline-none focus:opacity-100"
+              className="inline-flex text-muted cursor-pointer transition-colors hover:text-fg focus:outline-none focus:text-fg"
               onClick={() => onRemove(toast.id)}
             >
               <span className="sr-only">Close</span>

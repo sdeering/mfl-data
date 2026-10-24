@@ -2,37 +2,37 @@
 export const getTierColor = (rating: number) => {
   if (rating >= 95) {
     return {
-      bg: 'bg-[#87f6f8]',
+      bg: 'bg-[#86f0f2]',
       text: 'text-black',
       border: 'border-[var(--tier-common-foreground)]/15'
     };
   } else if (rating >= 85) {
     return {
-      bg: 'bg-[#fa53ff]',
+      bg: 'bg-[#ee5bf2]',
       text: 'text-white',
       border: 'border-[var(--tier-common-foreground)]/15'
     };
   } else if (rating >= 75) {
     return {
-      bg: 'bg-[#0047ff]',
+      bg: 'bg-[#2f5bff]',
       text: 'text-white',
       border: 'border-[var(--tier-common-foreground)]/15'
     };
   } else if (rating >= 65) {
     return {
-      bg: 'bg-[#71ff30]',
+      bg: 'bg-[#8ae63a]',
       text: 'text-black',
       border: 'border border-[#b9b9b9]'
     };
   } else if (rating >= 55) {
     return {
-      bg: 'bg-[#ecd17f]',
+      bg: 'bg-[#e9cf86]',
       text: 'text-black',
       border: 'border-[var(--tier-common-foreground)]/15'
     };
   } else {
     return {
-      bg: 'bg-[#9f9f9f]',
+      bg: 'bg-[#454d49]',
       text: 'text-white',
       border: 'border-[var(--tier-common-foreground)]/15'
     };

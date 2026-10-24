@@ -24,7 +24,7 @@ const SunIcon: React.FC<{ className?: string }> = ({ className = '' }) => (
 const MoonIcon: React.FC<{ className?: string }> = ({ className = '' }) => (
   <svg
     data-testid="moon-icon"
-    className={`w-5 h-5 text-blue-400 transition-transform duration-300 transform rotate-180 ${className}`}
+    className={`w-5 h-5 text-[#facc15] transition-transform duration-300 transform rotate-180 ${className}`}
     fill="currentColor"
     viewBox="0 0 20 20"
     xmlns="http://www.w3.org/2000/svg"
@@ -51,6 +51,8 @@ const variantClasses = {
   default: 'bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 border border-gray-300 dark:border-gray-600',
   minimal: 'bg-transparent border-0 hover:bg-gray-50 dark:hover:bg-gray-900',
   filled: 'bg-blue-500 hover:bg-blue-600 dark:bg-blue-600 dark:hover:bg-blue-700 text-white',
+  // Round see-through button, as in the site header
+  glass: 'w-10 h-10 flex-none border border-[rgba(var(--glass-rgb),.12)] bg-[rgba(var(--glass-rgb),.05)] hover:bg-[rgba(var(--glass-rgb),.12)]',
 };
 
 export interface ThemeToggleProps {
@@ -59,7 +61,7 @@ export interface ThemeToggleProps {
   /** Size variant */
   size?: 'sm' | 'md' | 'lg';
   /** Visual variant */
-  variant?: 'default' | 'minimal' | 'filled';
+  variant?: 'default' | 'minimal' | 'filled' | 'glass';
   /** Callback function called when theme is toggled */
   onToggle?: (theme: Theme) => void;
   /** Custom ARIA label */
@@ -91,7 +93,7 @@ const ThemeToggle: React.FC<ThemeToggleProps> = ({
   };
 
   const baseClasses = [
-    'inline-flex items-center justify-center rounded-lg',
+    `inline-flex items-center justify-center ${variant === 'glass' ? 'rounded-full' : 'rounded-lg'}`,
     'transition-all duration-300 ease-in-out',
     'hover:scale-105 hover:shadow-lg',
     'active:scale-95',

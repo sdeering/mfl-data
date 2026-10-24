@@ -11,6 +11,34 @@ import { MFLPlayer, MFLPosition } from '../types/mflApi';
 import { calculatePositionOVR } from '../utils/ruleBasedPositionCalculator';
 import { rankPositionRatings } from '../utils/positionRatingOrder';
 import ClubTrainingTab from './ClubTrainingTab';
+import {
+  PageHeader,
+  Panel,
+  KpiTile,
+  TierBadge,
+  PositionChip,
+  SearchField,
+  InitialsAvatar,
+  SortArrow,
+  btnPrimary,
+  btnSecondary,
+  linkClass,
+  tableClass,
+  theadRowClass,
+  thClass,
+  sortableThClass,
+  rowClass,
+  tdClass,
+} from './ui';
+
+const ATTRIBUTE_COLUMNS = [
+  { key: 'pace', label: 'Pace', short: 'PAC' },
+  { key: 'shooting', label: 'Shooting', short: 'SHO' },
+  { key: 'passing', label: 'Passing', short: 'PAS' },
+  { key: 'dribbling', label: 'Dribbling', short: 'DRI' },
+  { key: 'defense', label: 'Defense', short: 'DEF' },
+  { key: 'physical', label: 'Physical', short: 'PHY' },
+] as const;
 
 interface ClubPlayersPageProps {
   clubId: string;
@@ -188,63 +216,6 @@ export default function ClubPlayersPage({ clubId }: ClubPlayersPageProps) {
     }
   };
 
-  const getSortIndicator = (field: string) => {
-    if (sortField !== field) return null;
-    return sortDirection === 'asc' ? '↑' : '↓';
-  };
-
-  // Tier color function (same as AgencyPage)
-  const getTierColor = (rating: number) => {
-    if (rating >= 95) {
-      return {
-        bg: 'bg-[#87f6f8]',
-        text: 'text-black',
-        border: 'border-[var(--tier-common-foreground)]/15'
-      };
-    } else if (rating >= 85) {
-      return {
-        bg: 'bg-[#fa53ff]',
-        text: 'text-white',
-        border: 'border-[var(--tier-common-foreground)]/15'
-      };
-    } else if (rating >= 75) {
-      return {
-        bg: 'bg-[#0047ff]',
-        text: 'text-white',
-        border: 'border-[var(--tier-common-foreground)]/15'
-      };
-    } else if (rating >= 65) {
-      return {
-        bg: 'bg-[#71ff30]',
-        text: 'text-black',
-        border: 'border-[var(--tier-common-foreground)]/15'
-      };
-    } else if (rating >= 55) {
-      return {
-        bg: 'bg-[#ecd17f]',
-        text: 'text-black',
-        border: 'border-[var(--tier-common-foreground)]/15'
-      };
-    } else {
-      return {
-        bg: 'bg-[#9f9f9f]',
-        text: 'text-white',
-        border: 'border-[var(--tier-common-foreground)]/15'
-      };
-    }
-  };
-
-  // Helper function to check if player is goalkeeper
-  // Tier text color for ratings (matches squad builder table)
-  const getTierTextColorValue = (value: number): string => {
-    if (value >= 95) return '#87f6f8';      // Ultimate
-    if (value >= 85) return '#fa53ff';      // Legendary
-    if (value >= 75) return '#0047ff';      // Epic
-    if (value >= 65) return '#71ff30';      // Uncommon
-    if (value >= 55) return '#ecd17f';      // Limited
-    return '#9f9f9f';                        // Common
-  };
-
   // Rating at one of the player's playable positions (primary = overall)
   const getPositionRating = (player: ClubPlayer, position: MFLPosition) => {
     const m = player.metadata;
@@ -270,23 +241,10 @@ export default function ClubPlayersPage({ clubId }: ClubPlayersPageProps) {
     return player.metadata.positions?.includes('GK') || player.metadata.positions?.[0] === 'GK';
   };
 
-  // Helper function to render attribute values (show dash for GK non-goalkeeping stats)
-  const renderAttributeValue = (player: ClubPlayer, value: number) => {
-    if (isGoalkeeper(player) && value === 0) {
-      return (
-        <div className="flex items-center justify-center rounded-lg shadow-sm px-2 py-1 text-center font-bold w-12 bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400">
-          -
-        </div>
-      );
-    }
-    
-    const tierColors = getTierColor(value);
-    return (
-      <div className={`flex items-center justify-center rounded-lg shadow-sm px-2 py-1 text-center font-bold w-12 ${tierColors.bg} ${tierColors.text} ${tierColors.border}`}>
-        {value}
-      </div>
-    );
-  };
+  // Attribute badge (show dash for GK non-goalkeeping stats)
+  const renderAttributeValue = (player: ClubPlayer, value: number) => (
+    <TierBadge value={isGoalkeeper(player) && value === 0 ? null : value} />
+  );
 
   // Squad averages: whole squad, best 11 and best 16 by overall
   const overallsDesc = players.map(p => p.metadata.overall).sort((a, b) => b - a);
@@ -300,92 +258,123 @@ export default function ClubPlayersPage({ clubId }: ClubPlayersPageProps) {
     { label: 'AVG (TOP16)', value: averageOverall(16) },
   ];
 
+  // Average of each attribute over the squad, leaving out goalkeepers' blank outfield stats
+  const attributeAverages = ATTRIBUTE_COLUMNS.map(({ key, short }) => {
+    const values = players
+      .filter(p => !(isGoalkeeper(p) && p.metadata[key] === 0))
+      .map(p => p.metadata[key]);
+    const value = values.length > 0 ? Math.round(values.reduce((sum, v) => sum + v, 0) / values.length) : null;
+    return { short, value };
+  });
+
   // Helper function to get division name
   const getDivisionName = (division: number) => {
     return clubsService.getDivisionName(division);
   };
 
+  const isFiltersActive =
+    filters.filterPosition !== 'all' ||
+    filters.selectedCardTypes.length > 0 ||
+    filters.overallMin > 0 ||
+    filters.overallMax < 100 ||
+    filters.positionRatingMin > 0 ||
+    filters.positionRatingMax < 100 ||
+    Object.values(filters.attrFilters).some(v => v > 0) ||
+    Object.values(filters.attrFiltersMax).some(v => v < 100);
+
+  const renderSortHeader = (field: string, label: string, centered = false) => (
+    <th
+      key={field}
+      className={`${sortableThClass} ${centered ? 'w-20' : ''}`}
+      onClick={() => handleSort(field)}
+    >
+      <div className={`flex items-center ${centered ? 'justify-center' : ''}`}>
+        <span className={sortField === field ? 'text-accent-ink' : undefined}>{label}</span>
+        <SortArrow active={sortField === field} direction={sortDirection} />
+      </div>
+    </th>
+  );
+
   if (!isConnected) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
-            Wallet Not Connected
-          </h2>
-          <p className="text-gray-600 dark:text-gray-400">
-            Please connect your wallet to view club players.
-          </p>
-        </div>
-      </div>
+      <Panel className="flex flex-col items-center gap-2 px-6 py-16 text-center">
+        <h2 className="m-0 font-display text-2xl font-bold text-fg">
+          Wallet Not Connected
+        </h2>
+        <p className="m-0 text-[15px] font-medium text-muted">
+          Please connect your wallet to view club players.
+        </p>
+      </Panel>
     );
   }
 
   if (error) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
-            Error Loading Club Players
-          </h2>
-          <p className="text-gray-600 dark:text-gray-400 mb-4">{error}</p>
-          <button
-            onClick={() => {
-              clubPlayersService.clearCache(clubId);
-              fetchClubPlayers();
-            }}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-          >
-            Try Again
-          </button>
-        </div>
-      </div>
+      <Panel className="flex flex-col items-center gap-2 px-6 py-16 text-center">
+        <h2 className="m-0 font-display text-2xl font-bold text-fg">
+          Error Loading Club Players
+        </h2>
+        <p className="m-0 mb-2 text-[15px] font-medium text-muted">{error}</p>
+        <button
+          onClick={() => {
+            clubPlayersService.clearCache(clubId);
+            fetchClubPlayers();
+          }}
+          className={btnPrimary}
+        >
+          Try Again
+        </button>
+      </Panel>
     );
   }
 
-  return (
-    <div className="min-h-screen">
-      {/* Header */}
-      <div className="mb-8">
-        <div className="mb-4">
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-            {clubInfo ? `${clubInfo.name} (${filteredPlayers.length}${filteredPlayers.length !== players.length ? ` of ${players.length}` : ''} Players)` : `Club ${clubId} (${filteredPlayers.length}${filteredPlayers.length !== players.length ? ` of ${players.length}` : ''} Players)`}
-          </h1>
-          {clubInfo && (
-            <p className="text-gray-600 dark:text-gray-400 mt-1">
-              {clubInfo.city}, {clubInfo.country} • {getDivisionName(clubInfo.division)}
-            </p>
-          )}
-        </div>
+  const playerCount = `(${filteredPlayers.length}${filteredPlayers.length !== players.length ? ` of ${players.length}` : ''} Players)`;
 
-        {/* Squad Averages */}
-        {players.length > 0 && (
-          <div className="grid grid-cols-3 gap-4 max-w-xl mb-6">
+  return (
+    <div className="flex flex-col gap-[22px]">
+      <PageHeader
+        title={clubInfo ? clubInfo.name : `Club ${clubId}`}
+        count={playerCount}
+        subtitle={clubInfo && `${clubInfo.city}, ${clubInfo.country} • ${getDivisionName(clubInfo.division)}`}
+      />
+
+      {/* Squad Averages */}
+      {players.length > 0 && (
+        <>
+          <div className="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-3.5">
             {squadAverages.map(({ label, value }) => (
-              <div key={label} className="bg-white dark:bg-gray-800 rounded-lg shadow px-4 py-3 text-center">
-                <div className="text-2xl font-bold text-gray-900 dark:text-white">{value}</div>
-                <div className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">{label}</div>
-              </div>
+              <KpiTile key={label} label={label} value={value} />
             ))}
           </div>
-        )}
 
-        {/* Tabs */}
-        <div className="border-b border-gray-200 dark:border-gray-700">
-          <nav className="-mb-px flex gap-6">
-            {(['players', 'training'] as const).map(tab => (
-              <button
-                key={tab}
-                onClick={() => setActiveTab(tab)}
-                className={`py-2 px-1 border-b-2 text-sm font-medium capitalize cursor-pointer ${
-                  activeTab === tab
-                    ? 'border-blue-500 text-blue-600 dark:text-blue-400'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'
-                }`}
-              >
-                {tab}
-              </button>
-            ))}
-          </nav>
+          <Panel className="flex flex-wrap items-center justify-between gap-4 px-5 py-[18px]">
+            <h2 className="m-0 font-display text-xl font-bold text-fg">Squad averages</h2>
+            <div className="flex flex-wrap gap-2.5">
+              {attributeAverages.map(({ short, value }) => (
+                <div key={short} className="flex flex-col items-center gap-1.5">
+                  <span className="text-[11px] font-bold tracking-[0.08em] text-muted">{short}</span>
+                  <TierBadge value={value} size="lg" />
+                </div>
+              ))}
+            </div>
+          </Panel>
+        </>
+      )}
+
+      {/* Tabs */}
+      <div className="flex">
+        <div className="inline-flex p-[3px] rounded-full bg-field border border-line-3">
+          {(['players', 'training'] as const).map(tab => (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className={`h-[30px] px-3.5 rounded-full text-[13px] font-semibold capitalize cursor-pointer transition-colors ${
+                activeTab === tab ? 'bg-fg text-canvas' : 'text-fg-3 hover:text-fg'
+              }`}
+            >
+              {tab}
+            </button>
+          ))}
         </div>
       </div>
 
@@ -393,323 +382,172 @@ export default function ClubPlayersPage({ clubId }: ClubPlayersPageProps) {
 
       {/* Loading State */}
       {activeTab === 'players' && isLoadingPlayers && (
-        <div className="text-center py-12">
-          <div className="text-gray-400 dark:text-gray-500 text-lg">
-            Loading club players...
-          </div>
-        </div>
+        <Panel className="flex items-center justify-center gap-3 px-6 py-16">
+          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-accent"></div>
+          <span className="text-[15px] font-medium text-muted">Loading club players...</span>
+        </Panel>
+      )}
+
+      {activeTab === 'players' && !isLoadingPlayers && players.length === 0 && (
+        <Panel className="px-6 py-16 text-center">
+          <p className="m-0 text-[15px] font-medium text-muted">No players found for this club.</p>
+        </Panel>
       )}
 
       {/* Players Table */}
-      {activeTab === 'players' && !isLoadingPlayers && filteredPlayers.length === 0 && (
-        <div className="text-center py-12">
-          <div className="text-gray-400 dark:text-gray-500 text-lg">
-            {players.length === 0 ? 'No players found for this club.' : 'No players match the current filters.'}
-          </div>
-        </div>
-      )}
-
-      {activeTab === 'players' && !isLoadingPlayers && filteredPlayers.length > 0 && (
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
+      {activeTab === 'players' && !isLoadingPlayers && players.length > 0 && (
+        <Panel className="overflow-hidden">
           {/* Filters Section */}
-          <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-            <div className="flex flex-col sm:flex-row sm:items-center gap-4">
-              {/* Search Input - moved to left */}
-              <div className="relative flex-shrink-0">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                  </svg>
-                </div>
-                <input
-                  type="text"
-                  placeholder="Search players..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="block w-64 pl-10 pr-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md leading-5 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                />
-              </div>
-              
-              {/* Filters Button and Reset Button Row */}
-              <div className="flex items-center gap-4 flex-1 justify-end">
-                {/* Filters Button */}
+          <div className="flex flex-wrap items-center justify-between gap-3 px-[18px] py-4">
+            <SearchField
+              placeholder="Search players..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+
+            <div className="flex items-center gap-4">
+              <button
+                className={btnSecondary}
+                onClick={() => setShowFilters(!showFilters)}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+                  <path d="M4 6h16M7 12h10M10 18h4" />
+                </svg>
+                {showFilters ? 'Hide Filters' : 'Show Filters'}
+              </button>
+
+              {isFiltersActive && (
                 <button
-                  className="text-left px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white hover:bg-gray-50 dark:hover:bg-gray-600 cursor-pointer whitespace-nowrap"
-                  onClick={() => setShowFilters(!showFilters)}
+                  type="button"
+                  onClick={() => {
+                    setFilters({
+                      filterPosition: 'all',
+                      selectedCardTypes: [],
+                      overallMin: 0,
+                      overallMax: 100,
+                      positionRatingMin: 0,
+                      positionRatingMax: 100,
+                      attrFilters: {
+                        pace: 0,
+                        shooting: 0,
+                        passing: 0,
+                        dribbling: 0,
+                        defense: 0,
+                        physical: 0,
+                      },
+                      attrFiltersMax: {
+                        pace: 100,
+                        shooting: 100,
+                        passing: 100,
+                        dribbling: 100,
+                        defense: 100,
+                        physical: 100,
+                      },
+                    });
+                  }}
+                  className={`text-[13px] font-semibold cursor-pointer ${linkClass}`}
+                  title="Reset filters"
                 >
-                  {showFilters ? 'Hide Filters' : 'Show Filters'}
+                  Reset Filters
                 </button>
-                
-                {/* Reset Filters Button - on the right of filters button */}
-                {(() => {
-                  const isFiltersActive = 
-                    filters.filterPosition !== 'all' ||
-                    filters.selectedCardTypes.length > 0 ||
-                    filters.overallMin > 0 ||
-                    filters.overallMax < 100 ||
-                    filters.positionRatingMin > 0 ||
-                    filters.positionRatingMax < 100 ||
-                    Object.values(filters.attrFilters).some(v => v > 0) ||
-                    Object.values(filters.attrFiltersMax).some(v => v < 100);
-                  
-                  if (!isFiltersActive) return null;
-                  
-                  return (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setFilters({
-                          filterPosition: 'all',
-                          selectedCardTypes: [],
-                          overallMin: 0,
-                          overallMax: 100,
-                          positionRatingMin: 0,
-                          positionRatingMax: 100,
-                          attrFilters: {
-                            pace: 0,
-                            shooting: 0,
-                            passing: 0,
-                            dribbling: 0,
-                            defense: 0,
-                            physical: 0,
-                          },
-                          attrFiltersMax: {
-                            pace: 100,
-                            shooting: 100,
-                            passing: 100,
-                            dribbling: 100,
-                            defense: 100,
-                            physical: 100,
-                          },
-                        });
-                      }}
-                      className="text-sm text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
-                      title="Reset filters"
-                    >
-                      Reset Filters
-                    </button>
-                  );
-                })()}
-              </div>
+              )}
             </div>
-            
-            {/* Filters Panel */}
-            {showFilters && (
-              <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-                <PlayerFilters
-                  filters={filters}
-                  onFiltersChange={setFilters}
-                  showSidebarFilters={true}
-                />
-              </div>
-            )}
           </div>
-          
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-              <thead className="bg-gray-50 dark:bg-gray-700">
-                <tr>
-                  <th
-                    className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600 select-none"
-                    onClick={() => handleSort('name')}
-                  >
-                    <div className="flex items-center space-x-1">
-                      <span>Player</span>
-                      {getSortIndicator('name') && (
-                        <span className="text-blue-600 dark:text-blue-400">
-                          {getSortIndicator('name')}
-                        </span>
-                      )}
-                    </div>
-                  </th>
-                  <th
-                    className="px-3 py-2 text-center text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600 select-none"
-                    onClick={() => handleSort('overall')}
-                  >
-                    <div className="flex items-center justify-center space-x-1">
-                      <span>Overall</span>
-                      {getSortIndicator('overall') && (
-                        <span className="text-blue-600 dark:text-blue-400">
-                          {getSortIndicator('overall')}
-                        </span>
-                      )}
-                    </div>
-                  </th>
-                  <th
-                    className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600 select-none"
-                    onClick={() => handleSort('age')}
-                  >
-                    <div className="flex items-center space-x-1">
-                      <span>Age</span>
-                      {getSortIndicator('age') && (
-                        <span className="text-blue-600 dark:text-blue-400">
-                          {getSortIndicator('age')}
-                        </span>
-                      )}
-                    </div>
-                  </th>
-                  <th
-                    className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600 select-none"
-                  >
-                    Positions
-                  </th>
-                  <th
-                    className="px-3 py-2 text-center text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600 select-none w-20"
-                    onClick={() => handleSort('pace')}
-                  >
-                    <div className="flex items-center justify-center space-x-1">
-                      <span>Pace</span>
-                      {getSortIndicator('pace') && (
-                        <span className="text-blue-600 dark:text-blue-400">
-                          {getSortIndicator('pace')}
-                        </span>
-                      )}
-                    </div>
-                  </th>
-                  <th
-                    className="px-3 py-2 text-center text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600 select-none w-20"
-                    onClick={() => handleSort('shooting')}
-                  >
-                    <div className="flex items-center justify-center space-x-1">
-                      <span>Shooting</span>
-                      {getSortIndicator('shooting') && (
-                        <span className="text-blue-600 dark:text-blue-400">
-                          {getSortIndicator('shooting')}
-                        </span>
-                      )}
-                    </div>
-                  </th>
-                  <th
-                    className="px-3 py-2 text-center text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600 select-none w-20"
-                    onClick={() => handleSort('passing')}
-                  >
-                    <div className="flex items-center justify-center space-x-1">
-                      <span>Passing</span>
-                      {getSortIndicator('passing') && (
-                        <span className="text-blue-600 dark:text-blue-400">
-                          {getSortIndicator('passing')}
-                        </span>
-                      )}
-                    </div>
-                  </th>
-                  <th
-                    className="px-3 py-2 text-center text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600 select-none w-20"
-                    onClick={() => handleSort('dribbling')}
-                  >
-                    <div className="flex items-center justify-center space-x-1">
-                      <span>Dribbling</span>
-                      {getSortIndicator('dribbling') && (
-                        <span className="text-blue-600 dark:text-blue-400">
-                          {getSortIndicator('dribbling')}
-                        </span>
-                      )}
-                    </div>
-                  </th>
-                  <th
-                    className="px-3 py-2 text-center text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600 select-none w-20"
-                    onClick={() => handleSort('defense')}
-                  >
-                    <div className="flex items-center justify-center space-x-1">
-                      <span>Defense</span>
-                      {getSortIndicator('defense') && (
-                        <span className="text-blue-600 dark:text-blue-400">
-                          {getSortIndicator('defense')}
-                        </span>
-                      )}
-                    </div>
-                  </th>
-                  <th
-                    className="px-3 py-2 text-center text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600 select-none w-20"
-                    onClick={() => handleSort('physical')}
-                  >
-                    <div className="flex items-center justify-center space-x-1">
-                      <span>Physical</span>
-                      {getSortIndicator('physical') && (
-                        <span className="text-blue-600 dark:text-blue-400">
-                          {getSortIndicator('physical')}
-                        </span>
-                      )}
-                    </div>
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                {filteredPlayers.map((player) => {
-                  const tierColors = getTierColor(player.metadata.overall);
-                  return (
-                    <tr key={player.id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
-                      <td className="px-3 py-2 whitespace-nowrap">
-                        <div
-                          className="text-lg font-semibold text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 cursor-pointer"
-                          onClick={(e) => {
-                            if (e.ctrlKey || e.metaKey) {
-                              window.open(`/players/${player.id}`, '_blank');
-                            } else {
-                              router.push(`/players/${player.id}`);
-                            }
-                          }}
-                        >
-                          {player.metadata.firstName} {player.metadata.lastName}
-                        </div>
-                        <div className="text-sm text-gray-500 dark:text-gray-400">
-                          ID: {player.id}
-                        </div>
-                      </td>
-                      <td className="px-3 py-2 whitespace-nowrap text-center">
-                        <OverallRatingTooltip player={player}>
-                          <div className={`flex items-center justify-center rounded-lg shadow-sm px-2 py-1 text-center font-bold w-12 ${tierColors.bg} ${tierColors.text} ${tierColors.border}`}>
-                            {player.metadata.overall}
-                          </div>
-                        </OverallRatingTooltip>
-                      </td>
-                      <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-900 dark:text-white">
-                        {player.metadata.age}
-                      </td>
-                      <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-900 dark:text-white">
-                        {player.metadata.positions?.length ? rankPositionRatings(
-                          player.metadata.positions,
-                          pos => getPositionRating(player, pos as MFLPosition)
-                        ).map(({ position, rating, isPrimary, diff }) => (
-                          <span
-                            key={position}
-                            className="mr-2"
-                            title={isPrimary ? 'Primary position' : diff > 0 ? `+${diff} vs primary position` : undefined}
-                          >
-                            {position}{' '}
-                            <span className="font-semibold" style={{ color: getTierTextColorValue(rating) }}>{rating}</span>
-                            {diff > 0 && (
-                              <span className="ml-0.5 text-xs text-green-600 dark:text-green-400">
-                                +{diff}
+
+          {/* Filters Panel */}
+          {showFilters && (
+            <div className="px-[18px] py-4 border-t border-line">
+              <PlayerFilters
+                filters={filters}
+                onFiltersChange={setFilters}
+                showSidebarFilters={true}
+              />
+            </div>
+          )}
+
+          {filteredPlayers.length === 0 ? (
+            <div className="px-6 py-14 text-center border-t border-line">
+              <p className="m-0 text-[15px] font-medium text-muted">No players match the current filters.</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className={tableClass}>
+                <thead>
+                  <tr className={theadRowClass}>
+                    {renderSortHeader('name', 'Player')}
+                    {renderSortHeader('overall', 'Overall', true)}
+                    {renderSortHeader('age', 'Age')}
+                    <th className={thClass}>Positions</th>
+                    {ATTRIBUTE_COLUMNS.map(({ key, label }) => renderSortHeader(key, label, true))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredPlayers.map((player) => {
+                    const fullName = `${player.metadata.firstName} ${player.metadata.lastName}`;
+                    return (
+                      <tr key={player.id} className={rowClass}>
+                        <td className={tdClass}>
+                          <div className="flex items-center gap-3">
+                            <InitialsAvatar name={fullName} />
+                            <div className="flex flex-col gap-0.5 min-w-0">
+                              <button
+                                type="button"
+                                className="p-0 border-0 bg-transparent text-left text-[15px] font-bold text-fg cursor-pointer transition-colors hover:text-accent-ink"
+                                onClick={(e) => {
+                                  if (e.ctrlKey || e.metaKey) {
+                                    window.open(`/players/${player.id}`, '_blank');
+                                  } else {
+                                    router.push(`/players/${player.id}`);
+                                  }
+                                }}
+                              >
+                                {fullName}
+                              </button>
+                              <span className="font-mono text-xs text-muted-3">
+                                ID {player.id}
                               </span>
-                            )}
-                          </span>
-                        )) : 'N/A'}
-                      </td>
-                      <td className="px-3 py-2 whitespace-nowrap w-20 text-center">
-                        {renderAttributeValue(player, player.metadata.pace)}
-                      </td>
-                      <td className="px-3 py-2 whitespace-nowrap w-20 text-center">
-                        {renderAttributeValue(player, player.metadata.shooting)}
-                      </td>
-                      <td className="px-3 py-2 whitespace-nowrap w-20 text-center">
-                        {renderAttributeValue(player, player.metadata.passing)}
-                      </td>
-                      <td className="px-3 py-2 whitespace-nowrap w-20 text-center">
-                        {renderAttributeValue(player, player.metadata.dribbling)}
-                      </td>
-                      <td className="px-3 py-2 whitespace-nowrap w-20 text-center">
-                        {renderAttributeValue(player, player.metadata.defense)}
-                      </td>
-                      <td className="px-3 py-2 whitespace-nowrap w-20 text-center">
-                        {renderAttributeValue(player, player.metadata.physical)}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </div>
+                            </div>
+                          </div>
+                        </td>
+                        <td className={`${tdClass} text-center`}>
+                          <OverallRatingTooltip player={player}>
+                            <TierBadge value={player.metadata.overall} size="lg" />
+                          </OverallRatingTooltip>
+                        </td>
+                        <td className={`${tdClass} text-sm font-semibold text-fg-3`}>
+                          {player.metadata.age}
+                        </td>
+                        <td className={`${tdClass} text-sm text-muted`}>
+                          {player.metadata.positions?.length ? (
+                            <div className="flex gap-[5px]">
+                              {rankPositionRatings(
+                                player.metadata.positions,
+                                pos => getPositionRating(player, pos as MFLPosition)
+                              ).map(({ position, rating, isPrimary, diff }) => (
+                                <PositionChip
+                                  key={position}
+                                  position={position}
+                                  rating={rating}
+                                  gain={diff}
+                                  title={isPrimary ? 'Primary position' : diff > 0 ? `+${diff} vs primary position` : undefined}
+                                />
+                              ))}
+                            </div>
+                          ) : 'N/A'}
+                        </td>
+                        {ATTRIBUTE_COLUMNS.map(({ key }) => (
+                          <td key={key} className={`${tdClass} w-20 text-center`}>
+                            {renderAttributeValue(player, player.metadata[key])}
+                          </td>
+                        ))}
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Panel>
       )}
     </div>
   );

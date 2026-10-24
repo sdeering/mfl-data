@@ -1,25 +1,27 @@
 import type { Metadata, Viewport } from 'next';
-import { Titillium_Web } from 'next/font/google';
+import { Bricolage_Grotesque, JetBrains_Mono, Manrope } from 'next/font/google';
 import './globals.css';
 import ThemeProviderWrapper from '../src/components/ThemeProviderWrapper';
 import Header from '../src/components/Header';
 import Footer from '../src/components/Footer';
+import PitchBackdrop from '../src/components/PitchBackdrop';
 import { LoadingProvider } from '../src/contexts/LoadingContext';
 import { WalletProvider } from '../src/contexts/WalletContext';
 import { SupabaseSyncProvider } from '../src/components/SupabaseSyncProvider';
 
-const titilliumWeb = Titillium_Web({ 
-  subsets: ['latin'],
-  weight: ['200', '300', '400', '600', '700', '900'],
-  variable: '--font-titillium-web'
-});
+const bricolage = Bricolage_Grotesque({ subsets: ['latin'], variable: '--font-bricolage' });
+const manrope = Manrope({ subsets: ['latin'], variable: '--font-manrope' });
+const jetbrainsMono = JetBrains_Mono({ subsets: ['latin'], weight: ['500'], variable: '--font-jetbrains' });
+
+// Puts the saved theme on <html> before the first paint, so a light-theme visitor never sees a dark flash
+const themeInitScript = `try{var t=JSON.parse(localStorage.getItem('mfl-data-theme-preference'));if(t==='light'){var c=document.documentElement.classList;c.remove('dark');c.add('light');}}catch(e){}`;
 
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
   themeColor: [
-    { media: '(prefers-color-scheme: light)', color: '#ffffff' },
-    { media: '(prefers-color-scheme: dark)', color: '#1f2937' },
+    { media: '(prefers-color-scheme: light)', color: '#080c0a' },
+    { media: '(prefers-color-scheme: dark)', color: '#080c0a' },
   ],
 };
 
@@ -64,8 +66,9 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" suppressHydrationWarning className={titilliumWeb.variable}>
+    <html lang="en" suppressHydrationWarning className={`dark ${bricolage.variable} ${manrope.variable} ${jetbrainsMono.variable}`}>
       <head>
+        <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
         <link rel="author" href="https://www.twitter.com/dogesports69" />
         {/* Google tag (gtag.js) */}
         <script async src="https://www.googletagmanager.com/gtag/js?id=G-RMQQLQJKZZ"></script>
@@ -80,17 +83,20 @@ export default function RootLayout({
           }}
         />
       </head>
-      <body className={`${titilliumWeb.className} min-h-screen transition-colors duration-300 bg-[#f6f6f6] dark:bg-[#111827]`}>
+      <body className="min-h-screen bg-canvas text-fg font-sans">
         <ThemeProviderWrapper>
           <WalletProvider>
             <LoadingProvider>
               <SupabaseSyncProvider>
-                <div className="max-w-[1440px] mx-auto">
-                  <Header />
-                  <div className="px-[30px] max-[412px]:px-[15px] bg-white dark:bg-[#111827] min-h-[calc(100vh-0px)]">
-                    {children}
+                <div className="relative min-h-screen overflow-x-clip">
+                  <PitchBackdrop />
+                  <div className="relative">
+                    <Header />
+                    <main className="max-w-[1520px] mx-auto px-4 sm:px-7 pt-7 pb-20">
+                      {children}
+                    </main>
+                    <Footer />
                   </div>
-                  <Footer />
                 </div>
               </SupabaseSyncProvider>
             </LoadingProvider>

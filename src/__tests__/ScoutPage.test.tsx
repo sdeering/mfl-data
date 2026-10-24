@@ -89,8 +89,8 @@ describe('ScoutPage', () => {
     expect(cells('Steady Test').slice(9)).toEqual(['70', '72', '65', '71', '40', '68', '–']); // Outfield players have no goalkeeping
 
     const row = within(screen.getByText('Steady Test').closest('tr')!);
-    expect(row.getByText('70')).toHaveClass('bg-[#71ff30]'); // 65+ is green
-    expect(row.getByText('40')).toHaveClass('bg-[#9f9f9f]'); // Under 55 is grey
+    expect(row.getByText('70')).toHaveStyle({ background: '#8ae63a' }); // 65+ is green
+    expect(row.getByText('40')).toHaveStyle({ background: '#454d49' }); // Under 55 is grey
   });
 
   test('rates the player at every position they can play', async () => {
@@ -158,7 +158,7 @@ describe('ScoutPage', () => {
     render(<ScoutPage />);
     await screen.findByText('Rising Test');
 
-    const names = () => screen.getAllByRole('row').slice(1).map(row => within(row).getAllByRole('cell')[0].textContent);
+    const names = () => screen.getAllByRole('row').slice(1).map(row => within(within(row).getAllByRole('cell')[0]).getAllByRole('link')[0].textContent);
     await waitFor(() => expect(names()).toEqual(['Rising Test', 'Steady Test']));
 
     fireEvent.click(screen.getByText('Price'));

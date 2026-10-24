@@ -106,9 +106,8 @@ export const clearThemePreference = (): void => {
 
 /**
  * Gets the initial theme preference with fallback chain:
- * 1. Saved preference from sessionStorage
- * 2. System preference (if available)
- * 3. Default to 'light'
+ * 1. Saved preference from localStorage, then sessionStorage
+ * 2. Default to 'dark'
  */
 export const getInitialThemePreference = (): Theme => {
   // First, try to load saved preference from localStorage (persists across tabs)
@@ -128,16 +127,6 @@ export const getInitialThemePreference = (): Theme => {
   const savedPreference = loadThemePreference();
   if (savedPreference !== null) return savedPreference;
 
-  // Fall back to system preference
-  try {
-    if (typeof window !== 'undefined' && window.matchMedia) {
-      const darkModeQuery = window.matchMedia('(prefers-color-scheme: dark)');
-      return darkModeQuery.matches ? 'dark' : 'light';
-    }
-  } catch (error) {
-    console.warn('Failed to detect system theme preference:', error);
-  }
-
-  // Final fallback to dark theme
+  // The site is designed dark first, so that is the default whatever the system setting
   return 'dark';
 };

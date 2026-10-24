@@ -77,6 +77,6 @@ describe('Squad Builder - sidebar pagination', () => {
     // Still on page 2: its players are listed, page 1's are not
     expect(screen.getByText('Player 21')).toBeInTheDocument()
     expect(screen.queryByText('Player 01')).not.toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '2' })).toHaveClass('bg-blue-600')
+    expect(screen.getByRole('button', { name: '2' })).toHaveClass('bg-accent')
   })
 })

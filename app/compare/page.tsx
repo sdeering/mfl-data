@@ -21,6 +21,7 @@ import { useLoading } from '../../src/contexts/LoadingContext';
 import { useWallet } from '../../src/contexts/WalletContext';
 import { supabaseDataService } from '../../src/services/clientDataService';
 import { rankSimilarPlayers } from '../../src/utils/playerSimilarity';
+import { PageHeader, Panel, TierText, btnPrimary } from '../../src/components/ui';
 
 interface CompareSlot {
   key: number; // Stable identity so a slot keeps its data and in-flight requests when it is moved
@@ -115,7 +116,7 @@ const getSlotName = (slot: CompareSlot, index: number) =>
 
 const MAX_SUGGESTIONS = 50;
 
-const slotControlClass = 'px-2.5 flex items-center rounded-lg border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent';
+const slotControlClass = 'flex-none grid place-items-center w-11 h-11 rounded-xl border border-line-2 bg-panel text-fg-3 transition-colors cursor-pointer hover:border-line-hover hover:text-fg disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:border-line-2 disabled:hover:text-fg-3';
 
 function ComparePageContent() {
   const searchParams = useSearchParams();
@@ -305,54 +306,66 @@ function ComparePageContent() {
     });
   }, []); // Empty dependency array - only run on mount
 
+  // Columns stack once two no longer fit side by side; the switch arrows then point up and down
+  const isThreeUp = slots.length > 2;
+  const gridColsClass = isThreeUp
+    ? 'grid-cols-[repeat(auto-fit,minmax(min(100%,340px),1fr))]'
+    : 'grid-cols-[repeat(auto-fit,minmax(min(100%,420px),1fr))]';
+  const stackedArrowClass = isThreeUp ? '@max-[700px]:rotate-90' : '@max-[860px]:rotate-90';
+
   return (
-    <div className="min-h-screen bg-white dark:bg-[#111827]">
-              <div className="px-4 lg:px-0 bg-white dark:bg-[#111827] rounded-lg">
-        {/* Page Title */}
-        <div className="mb-6">
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Compare Players</h1>
-          <p className="text-gray-600 dark:text-gray-400 mt-2">Enter player IDs to compare their stats and ratings</p>
-        </div>
+    <div className="flex flex-col gap-[22px]">
+      <PageHeader title="Compare Players" subtitle="Enter player IDs to compare their stats and ratings" />
 
-        {/* Search Inputs */}
-        <div className="flex flex-col lg:flex-row gap-4 mb-6">
-          {slots.map((slot, index) => {
-            const { player } = slot;
-            const playerName = getSlotName(slot, index);
-            // Empty columns can only be removed when they are an extra (third) column
-            const canRemove = !!player || slots.length > MIN_SLOTS;
-            const suggestions = suggestionsSlotKey === slot.key ? getSuggestions(slot) : [];
+      <div className={`@container grid ${gridColsClass} gap-5`}>
+        {slots.map((slot, index) => {
+          const { player } = slot;
+          const playerName = getSlotName(slot, index);
+          // Empty columns can only be removed when they are an extra (third) column
+          const canRemove = !!player || slots.length > MIN_SLOTS;
+          const suggestions = suggestionsSlotKey === slot.key ? getSuggestions(slot) : [];
 
-            return (
-              <div key={slot.key} className="flex-1">
-                <label htmlFor={`player${index + 1}`} className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+          return (
+            <div key={slot.key} className="flex flex-col gap-[18px] min-w-0">
+              {/* Search Input */}
+              <div className="flex flex-col gap-1.5">
+                <label htmlFor={`player${index + 1}`} className="text-xs font-semibold text-muted">
                   Player {index + 1} ID
                 </label>
-                <div className="flex gap-2">
+                <div className="flex gap-1.5">
                   <div className="relative flex-1 min-w-0">
-                    <input
-                      id={`player${index + 1}`}
-                      type="text"
-                      value={slot.playerId}
-                      onChange={(e) => {
-                        updateSlot(slot.key, { playerId: e.target.value });
-                        setSuggestionsSlotKey(slot.key);
-                      }}
-                      onFocus={() => setSuggestionsSlotKey(slot.key)}
-                      onBlur={() => setSuggestionsSlotKey(current => current === slot.key ? null : current)}
-                      onKeyDown={(e) => handleKeyDown(e, slot)}
-                      onPaste={(e) => handlePaste(e, slot)}
-                      placeholder={agencyPlayers.length > 0 ? 'Enter player ID or pick from your agency...' : 'Enter player ID...'}
-                      autoComplete="off"
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    />
+                    <div className="flex items-center gap-1.5 h-11 pl-3.5 pr-1.5 rounded-xl border border-line-2 bg-panel/90 transition-colors focus-within:border-line-hover">
+                      <input
+                        id={`player${index + 1}`}
+                        type="text"
+                        value={slot.playerId}
+                        onChange={(e) => {
+                          updateSlot(slot.key, { playerId: e.target.value });
+                          setSuggestionsSlotKey(slot.key);
+                        }}
+                        onFocus={() => setSuggestionsSlotKey(slot.key)}
+                        onBlur={() => setSuggestionsSlotKey(current => current === slot.key ? null : current)}
+                        onKeyDown={(e) => handleKeyDown(e, slot)}
+                        onPaste={(e) => handlePaste(e, slot)}
+                        placeholder={agencyPlayers.length > 0 ? 'Enter player ID or pick from your agency...' : 'Enter player ID...'}
+                        autoComplete="off"
+                        className="flex-1 min-w-0 bg-transparent border-0 outline-none font-mono text-[15px] font-medium text-strong"
+                      />
+                      <button
+                        onClick={() => handleSearch(slot)}
+                        disabled={slot.isLoading || !slot.playerId.trim()}
+                        className="flex-none h-8 px-3.5 rounded-[9px] bg-accent text-accent-fg text-[13px] font-bold whitespace-nowrap cursor-pointer transition-colors hover:bg-[#d8fb74] disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {slot.isLoading ? 'Loading...' : 'Search'}
+                      </button>
+                    </div>
 
                     {/* Agency player suggestions, closest match first */}
                     {suggestionsSlotKey === slot.key && suggestions.length > 0 && (
                       <ul
                         role="listbox"
                         aria-label={`Agency players for player ${index + 1}`}
-                        className="absolute z-20 left-0 right-0 mt-1 max-h-80 overflow-y-auto bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg shadow-lg"
+                        className="absolute z-20 left-0 right-0 mt-1.5 m-0 p-1 list-none max-h-80 overflow-y-auto rounded-2xl border border-line-2 bg-panel shadow-[0_20px_50px_rgba(0,0,0,.45)]"
                       >
                         {suggestions.map(suggestion => (
                           <li
@@ -364,34 +377,27 @@ function ComparePageContent() {
                               e.preventDefault();
                               handleSelectSuggestion(slot, suggestion);
                             }}
-                            className="px-3 py-2 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700"
+                            className="px-3 py-2 rounded-xl cursor-pointer transition-colors hover:bg-row-hover"
                           >
-                            <div className="flex items-center justify-between gap-2 text-sm text-gray-900 dark:text-white">
-                              <span className="truncate font-medium">
+                            <div className="flex items-center justify-between gap-2 text-sm text-fg">
+                              <span className="truncate font-bold">
                                 {suggestion.metadata.firstName} {suggestion.metadata.lastName}
                               </span>
-                              <span className="flex-shrink-0 text-gray-600 dark:text-gray-300">
-                                {suggestion.metadata.positions?.join(', ')} · {suggestion.metadata.overall}
+                              <span className="flex-shrink-0 text-[13px] font-semibold text-fg-3">
+                                {suggestion.metadata.positions?.join(', ')} · <TierText value={suggestion.metadata.overall} />
                               </span>
                             </div>
-                            <div className="flex items-center justify-between gap-2 text-xs text-gray-500 dark:text-gray-400">
+                            <div className="flex items-center justify-between gap-2 text-xs text-muted">
                               <span className="truncate">{suggestion.activeContract?.club?.name || 'No club'}</span>
-                              <span className="flex-shrink-0">Age {suggestion.metadata.age} · #{suggestion.id}</span>
+                              <span className="flex-shrink-0">Age {suggestion.metadata.age} · <span className="font-mono">#{suggestion.id}</span></span>
                             </div>
                           </li>
                         ))}
                       </ul>
                     )}
                   </div>
-                  <button
-                    onClick={() => handleSearch(slot)}
-                    disabled={slot.isLoading || !slot.playerId.trim()}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
-                  >
-                    {slot.isLoading ? 'Loading...' : 'Search'}
-                  </button>
 
-                  {/* Switch / Remove controls (arrows point up/down on small screens where the inputs stack) */}
+                  {/* Switch / Remove controls */}
                   {player && (
                     <>
                       <button
@@ -401,8 +407,8 @@ function ComparePageContent() {
                         title="Switch with the player on the left"
                         aria-label={`Move ${playerName} left`}
                       >
-                        <svg className="h-4 w-4 rotate-90 lg:rotate-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                        <svg className={`h-4 w-4 ${stackedArrowClass}`} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M19 12H5M11 6l-6 6 6 6" />
                         </svg>
                       </button>
                       <button
@@ -412,8 +418,8 @@ function ComparePageContent() {
                         title="Switch with the player on the right"
                         aria-label={`Move ${playerName} right`}
                       >
-                        <svg className="h-4 w-4 rotate-90 lg:rotate-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                        <svg className={`h-4 w-4 ${stackedArrowClass}`} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M5 12h14M13 6l6 6-6 6" />
                         </svg>
                       </button>
                     </>
@@ -421,124 +427,96 @@ function ComparePageContent() {
                   {canRemove && (
                     <button
                       onClick={() => handleRemovePlayer(slot.key)}
-                      className={`${slotControlClass} hover:text-red-600 hover:border-red-300 dark:hover:text-red-400 dark:hover:border-red-700`}
+                      className={`${slotControlClass} hover:text-danger-ink hover:border-red-500/45`}
                       title={player ? 'Remove player' : 'Remove column'}
                       aria-label={`Remove ${playerName}`}
                     >
-                      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2.4} viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 6l12 12M18 6 6 18" />
                       </svg>
                     </button>
                   )}
                 </div>
                 {slot.error && (
-                  <p className="text-red-600 text-sm mt-1">{slot.error}</p>
+                  <p className="m-0 text-sm font-medium text-danger-ink">{slot.error}</p>
                 )}
               </div>
-            );
-          })}
 
-          {/* Add Player Button - Shows when player 2 is loaded and there is room for another column */}
-          {slots[1].player && slots.length < MAX_SLOTS && (
-            <div className="flex items-end">
-              <button
-                onClick={handleAddPlayer}
-                className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors whitespace-nowrap"
-              >
-                + Add Player
-              </button>
+              {/* Player name and profile link */}
+              <div className="flex flex-col items-center gap-1 text-center">
+                <h2 className="m-0 font-display text-[22px] font-bold">{playerName}</h2>
+                {player && (
+                  <a
+                    href={`/players/${player.id}`}
+                    className="text-[13px] font-semibold text-accent-ink hover:text-accent-hover transition-colors"
+                  >
+                    Full Profile →
+                  </a>
+                )}
+              </div>
+
+              {slot.isLoading ? (
+                <Panel className="flex items-center justify-center h-64 border-dashed border-line-2">
+                  <div className="text-center">
+                    <div className="animate-spin rounded-full h-8 w-8 border-2 border-accent border-t-transparent mx-auto mb-4"></div>
+                    <p className="m-0 text-sm font-medium text-muted">Loading player data...</p>
+                  </div>
+                </Panel>
+              ) : player ? (
+                <>
+                  {/* Player Card */}
+                  <div className="flex flex-col items-center gap-4">
+                    <PlayerImage player={player} />
+                    <PlayerStatsGrid player={player} />
+                  </div>
+
+                  {/* Position Ratings */}
+                  <Panel className="p-[18px] flex flex-col gap-2">
+                    <h3 className="m-0 mb-1 font-display text-lg font-bold">Position Ratings</h3>
+                    <PositionRatingsDisplay player={player} />
+                  </Panel>
+
+                  <PlayerProgressionGraph
+                    playerId={player.id.toString()}
+                    playerName={playerName}
+                    playerPositions={player.metadata.positions}
+                  />
+
+                  <PlayerRecentMatches
+                    playerId={player.id.toString()}
+                    playerName={playerName}
+                  />
+
+                  <PlayerSaleHistory
+                    playerId={player.id.toString()}
+                    playerName={playerName}
+                    playerMetadata={player.metadata}
+                    marketValueEstimate={slot.marketValueEstimate}
+                  />
+                </>
+              ) : (
+                <Panel className="flex items-center justify-center h-64 border-dashed border-line-2">
+                  <div className="text-center">
+                    <p className="m-0 text-sm font-medium text-muted">Enter a player ID to load player data</p>
+                  </div>
+                </Panel>
+              )}
             </div>
-          )}
-        </div>
-
-        {/* Comparison Layout */}
-        <div className="flex flex-col lg:flex-row gap-6 lg:gap-[30px]">
-          {slots.map((slot, index) => {
-            const { player } = slot;
-            const playerName = getSlotName(slot, index);
-
-            return (
-              <div key={slot.key} className="flex-1">
-                <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4 text-center">
-                  {player ? (
-                    <div className="flex flex-col items-center space-y-2">
-                      <span>{playerName}</span>
-                      <a 
-                        href={`/players/${player.id}`}
-                        className="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 underline transition-colors"
-                      >
-                        Full Profile
-                      </a>
-                    </div>
-                  ) : (
-                    playerName
-                  )}
-                </h2>
-
-                {slot.isLoading ? (
-                  <div className="flex items-center justify-center h-64 bg-gray-50 dark:bg-gray-800 rounded-lg border-2 border-dashed border-gray-300 dark:border-gray-600">
-                    <div className="text-center">
-                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
-                      <p className="text-gray-500 dark:text-gray-400">Loading player data...</p>
-                    </div>
-                  </div>
-                ) : player ? (
-                  <div className="space-y-6">
-                    {/* Player Card Column */}
-                    <div className="flex flex-col items-center space-y-4 p-[5px]">
-                      <PlayerImage player={player} />
-                      <div className="w-full max-w-[400px]">
-                        <PlayerStatsGrid player={player} />
-                      </div>
-                    </div>
-
-                    {/* Position Ratings Column */}
-                    <div>
-                      <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-[5px] p-[5px]">Position Ratings</h3>
-                      <div className="w-full p-[5px]">
-                        <PositionRatingsDisplay player={player} />
-                      </div>
-                    </div>
-
-                    {/* Progression Graph Column */}
-                    <div className="w-full">
-                      <PlayerProgressionGraph 
-                        playerId={player.id.toString()} 
-                        playerName={playerName}
-                        playerPositions={player.metadata.positions}
-                      />
-                    </div>
-
-                    {/* Recent Matches Column */}
-                    <div className="w-full p-[5px]">
-                      <PlayerRecentMatches 
-                        playerId={player.id.toString()} 
-                        playerName={playerName}
-                      />
-                    </div>
-
-                    {/* Sale History Column */}
-                    <div className="w-full p-[5px]">
-                      <PlayerSaleHistory 
-                        playerId={player.id.toString()} 
-                        playerName={playerName}
-                        playerMetadata={player.metadata}
-                        marketValueEstimate={slot.marketValueEstimate}
-                      />
-                    </div>
-                  </div>
-                ) : (
-                  <div className="flex items-center justify-center h-64 bg-gray-50 dark:bg-gray-800 rounded-lg border-2 border-dashed border-gray-300 dark:border-gray-600">
-                    <div className="text-center">
-                      <p className="text-gray-500 dark:text-gray-400">Enter a player ID to load player data</p>
-                    </div>
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
+          );
+        })}
       </div>
+
+      {/* Add Player Button - Shows when player 2 is loaded and there is room for another column */}
+      {slots[1].player && slots.length < MAX_SLOTS && (
+        <div className="flex justify-center">
+          <button
+            onClick={handleAddPlayer}
+            className={`${btnPrimary} h-11 px-5 text-sm`}
+          >
+            + Add Player
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -546,12 +524,12 @@ function ComparePageContent() {
 const ComparePage = () => {
   return (
     <Suspense fallback={
-      <div className="min-h-screen bg-white dark:bg-[#111827] flex items-center justify-center">
+      <Panel className="flex items-center justify-center h-64">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-500 dark:text-gray-400">Loading compare page...</p>
+          <div className="animate-spin rounded-full h-8 w-8 border-2 border-accent border-t-transparent mx-auto mb-4"></div>
+          <p className="m-0 text-sm font-medium text-muted">Loading compare page...</p>
         </div>
-      </div>
+      </Panel>
     }>
       <ComparePageContent />
     </Suspense>

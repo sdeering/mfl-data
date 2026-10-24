@@ -4,15 +4,15 @@
  */
 export const getOverallLineColor = (overall: number): string => {
   if (overall >= 95) {
-    return '#87f6f8'; // Ultimate - cyan
+    return '#86f0f2'; // Ultimate - cyan
   } else if (overall >= 85) {
-    return '#fa53ff'; // Legendary - magenta/purple
+    return '#ee5bf2'; // Legendary - magenta/purple
   } else if (overall >= 75) {
-    return '#0047ff'; // Rare/Epic - blue
+    return '#2f5bff'; // Rare/Epic - blue
   } else if (overall >= 65) {
-    return '#71ff30'; // Uncommon - green
+    return '#8ae63a'; // Uncommon - green
   } else if (overall >= 55) {
-    return '#ecd17f'; // Limited - gold/yellow
+    return '#e9cf86'; // Limited - gold/yellow
   } else {
     return '#9f9f9f'; // Common - gray
   }

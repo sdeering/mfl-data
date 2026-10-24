@@ -25,10 +25,28 @@ import {
   type ScoutPreset,
   type ScoutFilters
 } from '../utils/scoutFilters';
-import { getTierColor } from '../utils/ratingUtils';
 import { getOverallPointsSince } from '../utils/preciseOverallGain';
 import { calculatePositionOVR } from '../utils/ruleBasedPositionCalculator';
 import { getOffPrimaryGain, rankPositionRatings, type RankedPositionRating } from '../utils/positionRatingOrder';
+import {
+  InitialsAvatar,
+  PageHeader,
+  Panel,
+  PositionChip,
+  Select,
+  TierBadge,
+  btnDanger,
+  btnPill,
+  btnPrimary,
+  btnSecondary,
+  labelClass,
+  linkClass,
+  rowClass,
+  sortableThClass,
+  tableClass,
+  tdClass,
+  theadRowClass
+} from './ui';
 
 // Rise in precise (2-decimal) overall over each period
 const OVERALL_COLUMNS = [
@@ -72,14 +90,8 @@ function getPositionRating(player: MFLListing['player'], position: MFLPosition):
 
 const isOverallKey = (field: SortField): field is OverallKey => OVERALL_COLUMNS.some(column => column.key === field);
 
-// Compact, and as wide as their share of the row, so that every filter fits on one line
-const controlClass = 'w-full px-2 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent';
-const labelClass = 'block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1 whitespace-nowrap';
-// On a narrow screen the filters wrap instead, and these keep each one usable
-const fieldClass = 'flex-1 min-w-[4.25rem] lg:min-w-0';
-const wideFieldClass = 'flex-[1.75] min-w-[7rem] lg:min-w-0';
-const thClass = 'px-3 py-2 text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600 select-none whitespace-nowrap';
-const numberCellClass = 'px-3 py-2 text-right tabular-nums text-gray-700 dark:text-gray-300';
+const checkboxBoxClass = 'flex items-center justify-center h-10';
+const checkboxClass = 'h-[18px] w-[18px] cursor-pointer accent-accent';
 
 function formatListedAgo(timestamp: number, now: number): string {
   const minutes = Math.max(0, Math.floor((now - timestamp) / 60000));
@@ -406,323 +418,312 @@ export default function ScoutPage() {
   };
 
   const sortArrow = (field: SortField) => (sortField === field ? (sortDirection === 'asc' ? ' ↑' : ' ↓') : '');
+  const headerClass = (field: SortField, align = 'text-left') => `${sortableThClass} ${align} ${sortField === field ? 'text-accent-ink!' : ''}`;
   const isRefreshing = !!progress && !progress.done;
   const isLoadingHistories = isCheckingHistories && !progress;
   const isBusy = isLoadingListings || isRefreshing;
   const isFiltered = !filtersEqual(draftFilters, DEFAULT_SCOUT_FILTERS) || (filters !== null && !filtersEqual(filters, DEFAULT_SCOUT_FILTERS));
-  const pending = <span className="text-gray-400 dark:text-gray-500">…</span>;
-  // A rating on a badge of its MFL tier colour, as on the agency and club tables. The badge brings its
-  // own background, so it reads on both themes - the tier colours alone don't, as text.
-  const renderRating = (value: number, compact = false) => {
-    if (!value) return <span className="text-gray-400 dark:text-gray-500">–</span>; // An outfield player's goalkeeping, say
-    const tierColors = getTierColor(value);
-    const size = compact ? 'min-w-[1.75rem] rounded px-1 text-xs leading-5' : 'w-10 rounded-lg shadow-sm px-2 py-0.5';
-    return <span className={`inline-block text-center font-bold tabular-nums ${size} ${tierColors.text} ${tierColors.bg} ${tierColors.border}`}>{value}</span>;
-  };
+  const pending = <span className="text-faint">…</span>;
 
   return (
-    <div className="min-h-screen px-4 lg:px-0">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Scout</h1>
-        <p className="text-gray-600 dark:text-gray-400 mt-2">
-          The newest marketplace listings that match your filters, with how much each player’s overall has risen over the last 7, 30 and 90 days
-        </p>
-      </div>
+    <div className="flex flex-col gap-[22px]">
+      <PageHeader
+        title="Player Scouting"
+        subtitle="The newest marketplace listings that match your filters, with how much each player’s overall has risen over the last 7, 30 and 90 days"
+      />
 
-      {/* Presets - saved filters and sort order, applied as soon as one is picked */}
-      <div className="flex flex-wrap items-center gap-2 mb-3">
-        <label htmlFor="scout-preset" className="text-xs font-medium text-gray-500 dark:text-gray-400">Preset</label>
-        <select
-          id="scout-preset"
-          value={presetId}
-          onChange={e => applyPreset(e.target.value)}
-          disabled={presets.length === 0}
-          className={`${controlClass} !w-auto min-w-[10rem]`}
-        >
-          <option value="">{presets.length === 0 ? 'None saved yet' : 'Choose a preset…'}</option>
-          {presets.map(preset => <option key={preset.id} value={preset.id}>{preset.name}</option>)}
-        </select>
-        <button type="button" onClick={savePreset} title="Save the current filters and sort order under a name" className="px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700">
-          Save current
-        </button>
-        {presetId && (
-          <button type="button" onClick={deletePreset} className="px-1 py-2 text-sm text-red-600 dark:text-red-400 hover:underline">
-            Delete
-          </button>
-        )}
-        <span className="text-xs text-gray-500 dark:text-gray-400">
-          {account ? 'Saved to your wallet' : 'Saved in this browser — connect your wallet to keep them across devices'}
-        </span>
-        {presetError && <span className="text-xs text-red-600 dark:text-red-400" role="alert">{presetError}</span>}
-      </div>
-
-      {/* Filters - applied on Search, so MFL is only asked once per change of mind */}
-      <form
-        className="flex flex-wrap lg:flex-nowrap items-end gap-2 mb-6"
-        aria-label="Listing filters"
-        onSubmit={e => {
-          e.preventDefault();
-          search(draftFilters);
-        }}
-      >
-        <div className={wideFieldClass}>
-          <label htmlFor="scout-position" className={labelClass}>Position</label>
-          <select
-            id="scout-position"
-            title="Players who can play this position, not only as their primary one"
-            value={draftFilters.position}
-            onChange={e => setDraftFilters(current => ({ ...current, position: e.target.value }))}
-            className={controlClass}
+      <Panel className="overflow-hidden">
+        {/* Presets - saved filters and sort order, applied as soon as one is picked */}
+        <div className="flex flex-wrap items-center gap-2 px-[18px] pt-4">
+          <label htmlFor="scout-preset" className="text-xs font-semibold text-muted">Preset</label>
+          <Select
+            id="scout-preset"
+            value={presetId}
+            onChange={e => applyPreset(e.target.value)}
+            disabled={presets.length === 0}
+            className="min-w-[10rem] disabled:opacity-60 disabled:cursor-not-allowed"
           >
-            <option value={ALL_POSITIONS}>All Positions</option>
-            <option disabled>────────────</option>
-            {POSITIONS.map(position => <option key={position.value} value={position.value}>{position.label}</option>)}
-            <option disabled>────────────</option>
-            {Object.entries(POSITION_GROUPS).map(([value, group]) => <option key={value} value={value}>{group.label}</option>)}
-          </select>
+            <option value="">{presets.length === 0 ? 'None saved yet' : 'Choose a preset…'}</option>
+            {presets.map(preset => <option key={preset.id} value={preset.id}>{preset.name}</option>)}
+          </Select>
+          <button type="button" onClick={savePreset} title="Save the current filters and sort order under a name" className={btnPill}>
+            Save current
+          </button>
+          {presetId && (
+            <button type="button" onClick={deletePreset} className={btnDanger}>
+              Delete
+            </button>
+          )}
+          <span className="text-xs font-medium text-muted-3">
+            {account ? 'Saved to your wallet' : 'Saved in this browser — connect your wallet to keep them across devices'}
+          </span>
+          {presetError && <span className="text-xs font-semibold text-danger-ink" role="alert">{presetError}</span>}
         </div>
-        {NUMBER_SELECTS.map(({ filter, label, title }) => (
-          <div key={filter} className={fieldClass}>
-            <label htmlFor={`scout-${filter}`} className={labelClass}>{label}</label>
-            <select
-              id={`scout-${filter}`}
-              title={title}
-              value={draftFilters[filter] ?? ''}
-              onChange={e => setDraftFilters(current => ({ ...current, [filter]: e.target.value === '' ? null : Number(e.target.value) }))}
-              className={controlClass}
+
+        {/* Filters - applied on Search, so MFL is only asked once per change of mind */}
+        <form
+          className="flex flex-wrap items-end gap-3 px-[18px] py-4"
+          aria-label="Listing filters"
+          onSubmit={e => {
+            e.preventDefault();
+            search(draftFilters);
+          }}
+        >
+          <label className={`${labelClass} whitespace-nowrap`}>
+            Position
+            <Select
+              title="Players who can play this position, not only as their primary one"
+              value={draftFilters.position}
+              onChange={e => setDraftFilters(current => ({ ...current, position: e.target.value }))}
             >
-              <option value="">Any</option>
-              {NUMBER_FILTER_OPTIONS[filter].map(option => <option key={option} value={option}>{filter === 'priceMax' ? `$${option}` : option}</option>)}
-            </select>
+              <option value={ALL_POSITIONS}>All Positions</option>
+              <option disabled>────────────</option>
+              {POSITIONS.map(position => <option key={position.value} value={position.value}>{position.label}</option>)}
+              <option disabled>────────────</option>
+              {Object.entries(POSITION_GROUPS).map(([value, group]) => <option key={value} value={value}>{group.label}</option>)}
+            </Select>
+          </label>
+          {NUMBER_SELECTS.map(({ filter, label, title }) => (
+            <label key={filter} className={`${labelClass} whitespace-nowrap`}>
+              {label}
+              <Select
+                title={title}
+                value={draftFilters[filter] ?? ''}
+                onChange={e => setDraftFilters(current => ({ ...current, [filter]: e.target.value === '' ? null : Number(e.target.value) }))}
+              >
+                <option value="">Any</option>
+                {NUMBER_FILTER_OPTIONS[filter].map(option => <option key={option} value={option}>{filter === 'priceMax' ? `$${option}` : option}</option>)}
+              </Select>
+            </label>
+          ))}
+          {/* The tick boxes sit as tall as the dropdowns, so the row stays level */}
+          <label className={`${labelClass} whitespace-nowrap`}>
+            Free agent
+            <span className={checkboxBoxClass}>
+              <input
+                type="checkbox"
+                title="Only players without a club. Untick for every player, under contract or not."
+                checked={draftFilters.isFreeAgent}
+                onChange={e => setDraftFilters(current => ({ ...current, isFreeAgent: e.target.checked }))}
+                className={checkboxClass}
+              />
+            </span>
+          </label>
+          <label className={`${labelClass} whitespace-nowrap`}>
+            Off Pri
+            <span className={checkboxBoxClass}>
+              <input
+                type="checkbox"
+                title="Only players who rate higher at another position than their primary one. Narrows the loaded listings straight away."
+                checked={betterOffPrimary}
+                onChange={e => setDraftFilters(current => ({ ...current, betterOffPrimary: e.target.checked }))}
+                className={checkboxClass}
+              />
+            </span>
+          </label>
+          <label className={`${labelClass} whitespace-nowrap`}>
+            New mint
+            <span className={checkboxBoxClass}>
+              <input
+                type="checkbox"
+                title="Only players who have yet to play a game. Each listed player is checked with MFL, which takes a few seconds."
+                checked={newlyMinted}
+                onChange={e => setDraftFilters(current => ({ ...current, newlyMinted: e.target.checked }))}
+                className={checkboxClass}
+              />
+            </span>
+          </label>
+          <label className={`${labelClass} whitespace-nowrap`}>
+            Listings
+            <Select
+              value={draftFilters.limit}
+              onChange={e => setDraftFilters(current => ({ ...current, limit: Number(e.target.value) }))}
+            >
+              {LISTING_LIMITS.map(limit => <option key={limit} value={limit}>Newest {limit}</option>)}
+            </Select>
+          </label>
+          <div className="flex gap-2">
+            <button type="submit" disabled={isBusy} className={btnPrimary}>
+              Search
+            </button>
+            {isFiltered && (
+              <button type="button" onClick={() => search(DEFAULT_SCOUT_FILTERS)} disabled={isBusy} className={btnSecondary}>
+                Reset
+              </button>
+            )}
           </div>
-        ))}
-        {/* The tick boxes sit as tall as the dropdowns, so the row stays level */}
-        <div className={fieldClass}>
-          <label htmlFor="scout-free-agent" className={labelClass}>Free agent</label>
-          <div className="flex items-center justify-center h-[38px]">
-            <input
-              id="scout-free-agent"
-              type="checkbox"
-              title="Only players without a club. Untick for every player, under contract or not."
-              checked={draftFilters.isFreeAgent}
-              onChange={e => setDraftFilters(current => ({ ...current, isFreeAgent: e.target.checked }))}
-              className="h-4 w-4 rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
-            />
+        </form>
+
+        {error && (
+          <div className="mx-[18px] mb-4 flex items-center justify-between gap-4 rounded-2xl border border-red-500/45 bg-red-500/12 px-4 py-3">
+            <p className="m-0 text-sm font-semibold text-danger-ink">{error}</p>
+            <button onClick={() => setReloadKey(key => key + 1)} className={btnDanger}>
+              Try again
+            </button>
           </div>
-        </div>
-        <div className={fieldClass}>
-          <label htmlFor="scout-off-primary" className={labelClass}>Off Pri</label>
-          <div className="flex items-center justify-center h-[38px]">
-            <input
-              id="scout-off-primary"
-              type="checkbox"
-              title="Only players who rate higher at another position than their primary one. Narrows the loaded listings straight away."
-              checked={betterOffPrimary}
-              onChange={e => setDraftFilters(current => ({ ...current, betterOffPrimary: e.target.checked }))}
-              className="h-4 w-4 rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
-            />
-          </div>
-        </div>
-        <div className={fieldClass}>
-          <label htmlFor="scout-minted" className={labelClass}>New mint</label>
-          <div className="flex items-center justify-center h-[38px]">
-            <input
-              id="scout-minted"
-              type="checkbox"
-              title="Only players who have yet to play a game. Each listed player is checked with MFL, which takes a few seconds."
-              checked={newlyMinted}
-              onChange={e => setDraftFilters(current => ({ ...current, newlyMinted: e.target.checked }))}
-              className="h-4 w-4 rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
-            />
-          </div>
-        </div>
-        <div className={wideFieldClass}>
-          <label htmlFor="scout-limit" className={labelClass}>Listings</label>
-          <select
-            id="scout-limit"
-            value={draftFilters.limit}
-            onChange={e => setDraftFilters(current => ({ ...current, limit: Number(e.target.value) }))}
-            className={controlClass}
-          >
-            {LISTING_LIMITS.map(limit => <option key={limit} value={limit}>Newest {limit}</option>)}
-          </select>
-        </div>
-        <button
-          type="submit"
-          disabled={isBusy}
-          className="px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm whitespace-nowrap"
-        >
-          Search
-        </button>
-        {isFiltered && (
-          <button type="button" onClick={() => search(DEFAULT_SCOUT_FILTERS)} disabled={isBusy} className="px-1 py-2 text-sm text-blue-600 dark:text-blue-400 hover:underline disabled:opacity-50">
-            Reset
-          </button>
         )}
-      </form>
 
-      {error && (
-        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4 mb-6 flex items-center justify-between gap-4">
-          <p className="text-red-800 dark:text-red-200">{error}</p>
-          <button
-            onClick={() => setReloadKey(key => key + 1)}
-            className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm whitespace-nowrap"
-          >
-            Try again
-          </button>
-        </div>
-      )}
-
-      {isLoadingListings && listings.length === 0 && (
-        <div className="flex items-center justify-center py-12">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-          <span className="ml-3 text-gray-600 dark:text-gray-400">Loading listings...</span>
-        </div>
-      )}
-
-      {!isLoadingListings && !error && listings.length === 0 && (
-        <div className="text-center py-12 bg-gray-50 dark:bg-gray-800 rounded-lg border-2 border-dashed border-gray-300 dark:border-gray-600">
-          <p className="text-gray-600 dark:text-gray-400">No players are listed that match these filters right now.</p>
-        </div>
-      )}
-
-      {listings.length > 0 && (
-        // The last results stay in place, dimmed, while a new search loads
-        <div className={`bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden ${isLoadingListings ? 'opacity-50' : ''}`}>
-          <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700">
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-              Listings
-              <span className="ml-2 text-sm font-normal text-gray-500 dark:text-gray-400">
-                {shownRows.length === listings.length ? listings.length : `${shownRows.length} of ${listings.length}`} · rise in exact overall over each period
-              </span>
-            </h2>
-
-            {isCheckingPlayed && (
-              <p className="mt-3 text-xs text-gray-500 dark:text-gray-400" role="status">
-                Checking which players have yet to play a game… {listedIds.filter(id => played[id] !== undefined).length} / {listedIds.length}
-              </p>
-            )}
-            {playedNotice && <p className="mt-3 text-xs text-amber-700 dark:text-amber-400" role="status">{playedNotice}</p>}
-
-            {(isLoadingHistories || isRefreshing) && (
-              <div className="mt-3" role="status">
-                <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">
-                  {progress
-                    ? `Loading progression history from MFL… ${progress.refreshed} / ${progress.toRefresh} players`
-                    : 'Checking progression history…'}
-                </p>
-                <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-1">
-                  <div
-                    className="bg-blue-600 h-1 rounded-full transition-all duration-300"
-                    style={{ width: progress ? `${(progress.refreshed / progress.toRefresh) * 100}%` : '0%' }}
-                  />
-                </div>
-              </div>
-            )}
-
-            {progress?.rateLimitedSeconds !== undefined && (
-              <p className="mt-3 text-xs text-amber-700 dark:text-amber-400" role="status">
-                MFL is limiting requests right now, so {progress.toRefresh > 0
-                  ? `${progress.toRefresh - progress.refreshed} of ${progress.toRefresh} players are still to be loaded`
-                  : 'progression could not be checked'}. Everything loaded so far is saved — search again in about{' '}
-                {Math.max(1, Math.ceil(progress.rateLimitedSeconds / 60))} minute{Math.ceil(progress.rateLimitedSeconds / 60) > 1 ? 's' : ''} to continue.
-              </p>
-            )}
-
-            {progress && !isRefreshing && progress.failedIds.length > 0 && (
-              <p className="mt-3 text-xs text-amber-700 dark:text-amber-400">
-                Couldn’t load {progress.failedIds.length} player{progress.failedIds.length !== 1 ? 's' : ''} from MFL, so their progression may be missing.{' '}
-                <button onClick={() => setReloadKey(key => key + 1)} className="underline">Try again</button>
-              </p>
-            )}
+        {isLoadingListings && listings.length === 0 && (
+          <div className="flex items-center justify-center gap-3 py-16 border-t border-line text-sm font-medium text-muted">
+            <span className="h-8 w-8 animate-spin rounded-full border-2 border-accent border-t-transparent" />
+            Loading listings...
           </div>
+        )}
 
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700 text-sm">
-              <thead className="bg-gray-50 dark:bg-gray-700">
-                <tr>
-                  <th className={`${thClass} text-left`} onClick={() => handleSort('name')}>Player{sortArrow('name')}</th>
-                  <th className={`${thClass} text-right`} onClick={() => handleSort('age')}>Age{sortArrow('age')}</th>
-                  <th className={`${thClass} text-left`} onClick={() => handleSort('position')} title="Each position the player can play, with their rating there">Pos{sortArrow('position')}</th>
-                  <th className={`${thClass} text-right`} onClick={() => handleSort('rating')}>Rating{sortArrow('rating')}</th>
-                  <th className={`${thClass} text-right`} onClick={() => handleSort('price')}>Price{sortArrow('price')}</th>
-                  <th className={`${thClass} text-right`} onClick={() => handleSort('listed')}>Listed{sortArrow('listed')}</th>
-                  {OVERALL_COLUMNS.map(column => (
-                    <th
-                      key={column.key}
-                      className={`${thClass} text-right`}
-                      onClick={() => handleSort(column.key)}
-                      title={`Rise in exact overall (the 2-decimal overall on the player page) over the last ${column.days} days`}
-                    >
-                      {column.label}{sortArrow(column.key)}
-                    </th>
-                  ))}
-                  {ATTRIBUTE_STATS.map(stat => (
-                    <th key={stat} className={`${thClass} text-center`} onClick={() => handleSort(stat)} title={STAT_NAMES[stat]}>
-                      {STAT_LABELS[stat]}{sortArrow(stat)}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                {sortedRows.map(({ listing, name, positionRatings, overallPoints }) => (
-                  <tr key={listing.listingResourceId} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
-                    <td className="px-3 py-2 whitespace-nowrap">
-                      <a href={`/players/${listing.player.id}`} className="text-blue-600 dark:text-blue-400 hover:underline">{name}</a>
-                    </td>
-                    <td className={numberCellClass}>{listing.player.metadata.age}</td>
-                    <td className="px-3 py-2 whitespace-nowrap text-gray-700 dark:text-gray-300">
-                      {positionRatings.map(({ position, rating, isPrimary, diff }) => (
-                        <React.Fragment key={position}>
-                          <span className="mr-1.5" title={isPrimary ? 'Primary position' : diff > 0 ? `+${diff} vs primary position` : undefined}>
-                            {position} {renderRating(rating, true)}
-                            {diff > 0 && (
-                              <span className="ml-0.5 text-xs text-green-600 dark:text-green-400">
-                                +{diff}
-                              </span>
-                            )}
-                          </span>{' '}
-                        </React.Fragment>
-                      ))}
-                    </td>
-                    <td className="px-3 py-2 text-right">{renderRating(listing.player.metadata.overall)}</td>
-                    <td className="px-3 py-2 text-right tabular-nums whitespace-nowrap">
-                      <a
-                        href={`https://app.playmfl.com/players/${listing.player.id}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        title="Open on MFL"
-                        className="text-blue-600 dark:text-blue-400 hover:underline"
-                      >
-                        ${listing.price.toLocaleString()}
-                      </a>
-                    </td>
-                    <td className={`${numberCellClass} whitespace-nowrap`} title={new Date(listing.createdDateTime).toLocaleString()}>
-                      {formatListedAgo(listing.createdDateTime, loadedAt)}
-                    </td>
+        {!isLoadingListings && !error && listings.length === 0 && (
+          <p className="m-0 py-16 border-t border-line text-center text-sm font-medium text-muted">
+            No players are listed that match these filters right now.
+          </p>
+        )}
+
+        {listings.length > 0 && (
+          // The last results stay in place, dimmed, while a new search loads
+          <div className={isLoadingListings ? 'opacity-50' : undefined}>
+            <div className="px-[18px] py-4 border-t border-line">
+              <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
+                <h2 className="m-0 font-display text-[22px] font-bold text-fg">Listings</h2>
+                <span className="text-[13px] font-medium text-muted">
+                  {shownRows.length === listings.length ? listings.length : `${shownRows.length} of ${listings.length}`} · rise in exact overall over each period
+                </span>
+              </div>
+
+              {isCheckingPlayed && (
+                <p className="mt-3 mb-0 text-xs font-medium text-muted" role="status">
+                  Checking which players have yet to play a game… {listedIds.filter(id => played[id] !== undefined).length} / {listedIds.length}
+                </p>
+              )}
+              {playedNotice && <p className="mt-3 mb-0 text-xs font-medium text-warn-ink" role="status">{playedNotice}</p>}
+
+              {(isLoadingHistories || isRefreshing) && (
+                <div className="mt-3" role="status">
+                  <p className="mt-0 mb-1.5 text-xs font-medium text-muted">
+                    {progress
+                      ? `Loading progression history from MFL… ${progress.refreshed} / ${progress.toRefresh} players`
+                      : 'Checking progression history…'}
+                  </p>
+                  <div className="w-full h-1 rounded-full bg-line">
+                    <div
+                      className="h-1 rounded-full bg-accent transition-all duration-300"
+                      style={{ width: progress ? `${(progress.refreshed / progress.toRefresh) * 100}%` : '0%' }}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {progress?.rateLimitedSeconds !== undefined && (
+                <p className="mt-3 mb-0 text-xs font-medium text-warn-ink" role="status">
+                  MFL is limiting requests right now, so {progress.toRefresh > 0
+                    ? `${progress.toRefresh - progress.refreshed} of ${progress.toRefresh} players are still to be loaded`
+                    : 'progression could not be checked'}. Everything loaded so far is saved — search again in about{' '}
+                  {Math.max(1, Math.ceil(progress.rateLimitedSeconds / 60))} minute{Math.ceil(progress.rateLimitedSeconds / 60) > 1 ? 's' : ''} to continue.
+                </p>
+              )}
+
+              {progress && !isRefreshing && progress.failedIds.length > 0 && (
+                <p className="mt-3 mb-0 text-xs font-medium text-warn-ink">
+                  Couldn’t load {progress.failedIds.length} player{progress.failedIds.length !== 1 ? 's' : ''} from MFL, so their progression may be missing.{' '}
+                  <button onClick={() => setReloadKey(key => key + 1)} className="underline cursor-pointer">Try again</button>
+                </p>
+              )}
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className={tableClass}>
+                <thead>
+                  <tr className={theadRowClass}>
+                    <th className={`${headerClass('name')} pl-[18px]`} onClick={() => handleSort('name')}>Player{sortArrow('name')}</th>
+                    <th className={headerClass('age')} onClick={() => handleSort('age')}>Age{sortArrow('age')}</th>
+                    <th className={headerClass('position')} onClick={() => handleSort('position')} title="Each position the player can play, with their rating there">Pos{sortArrow('position')}</th>
+                    <th className={headerClass('rating')} onClick={() => handleSort('rating')}>Rating{sortArrow('rating')}</th>
+                    <th className={headerClass('price', 'text-right')} onClick={() => handleSort('price')}>Price{sortArrow('price')}</th>
+                    <th className={headerClass('listed', 'text-right')} onClick={() => handleSort('listed')}>Listed{sortArrow('listed')}</th>
                     {OVERALL_COLUMNS.map(column => (
-                      <td
+                      <th
                         key={column.key}
-                        className={`px-3 py-2 text-right tabular-nums font-semibold text-gray-900 dark:text-white ${sortField === column.key ? 'bg-gray-50 dark:bg-gray-700/40' : ''}`}
+                        className={headerClass(column.key, 'text-right')}
+                        onClick={() => handleSort(column.key)}
+                        title={`Rise in exact overall (the 2-decimal overall on the player page) over the last ${column.days} days`}
                       >
-                        {overallPoints ? (overallPoints[column.key] > 0 ? `+${overallPoints[column.key].toFixed(2)}` : '–') : pending}
-                      </td>
+                        {column.label}{sortArrow(column.key)}
+                      </th>
                     ))}
                     {ATTRIBUTE_STATS.map(stat => (
-                      <td key={stat} className="px-3 py-2 text-center">{renderRating(listing.player.metadata[stat])}</td>
+                      <th key={stat} className={headerClass(stat, 'text-center')} onClick={() => handleSort(stat)} title={STAT_NAMES[stat]}>
+                        {STAT_LABELS[stat]}{sortArrow(stat)}
+                      </th>
                     ))}
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {sortedRows.map(({ listing, name, positionRatings, overallPoints }) => (
+                    <tr key={listing.listingResourceId} className={rowClass}>
+                      <td className={`${tdClass} pl-[18px]`}>
+                        <div className="flex items-center gap-3 min-w-0">
+                          <InitialsAvatar name={name} />
+                          <div className="flex flex-col gap-0.5 min-w-0">
+                            <a href={`/players/${listing.player.id}`} className="text-[15px] font-bold text-fg hover:text-accent-ink transition-colors">{name}</a>
+                            <span className="font-mono text-xs font-medium text-muted-3">ID {listing.player.id}</span>
+                          </div>
+                        </div>
+                      </td>
+                      <td className={`${tdClass} text-sm font-semibold text-fg-3 tabular-nums`}>{listing.player.metadata.age}</td>
+                      <td className={tdClass}>
+                        <div className="flex gap-[5px]">
+                          {positionRatings.map(({ position, rating, isPrimary, diff }) => (
+                            <React.Fragment key={position}>
+                              <PositionChip
+                                position={position}
+                                rating={rating}
+                                gain={diff}
+                                title={isPrimary ? 'Primary position' : diff > 0 ? `+${diff} vs primary position` : undefined}
+                              />{' '}
+                            </React.Fragment>
+                          ))}
+                        </div>
+                      </td>
+                      <td className={tdClass}><TierBadge value={listing.player.metadata.overall} size="lg" /></td>
+                      <td className={`${tdClass} text-right text-sm font-semibold tabular-nums`}>
+                        <a
+                          href={`https://app.playmfl.com/players/${listing.player.id}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          title="Open on MFL"
+                          className={linkClass}
+                        >
+                          ${listing.price.toLocaleString()}
+                        </a>
+                      </td>
+                      <td className={`${tdClass} text-right text-sm font-medium text-muted`} title={new Date(listing.createdDateTime).toLocaleString()}>
+                        {formatListedAgo(listing.createdDateTime, loadedAt)}
+                      </td>
+                      {OVERALL_COLUMNS.map(column => (
+                        <td
+                          key={column.key}
+                          className={`${tdClass} text-right text-sm font-bold tabular-nums ${sortField === column.key ? 'bg-[rgba(var(--glass-rgb),.03)]' : ''}`}
+                        >
+                          {overallPoints
+                            ? (overallPoints[column.key] > 0
+                              ? <span className="text-accent-ink">+{overallPoints[column.key].toFixed(2)}</span>
+                              : <span className="text-faint">–</span>)
+                            : pending}
+                        </td>
+                      ))}
+                      {ATTRIBUTE_STATS.map(stat => (
+                        <td key={stat} className={`${tdClass} text-center`}><TierBadge value={listing.player.metadata[stat]} /></td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {sortedRows.length === 0 && (
+              <p className="m-0 px-[18px] py-8 text-center text-sm font-medium text-muted">
+                None of these listings rate higher at another position than their primary one.
+              </p>
+            )}
           </div>
-          {sortedRows.length === 0 && (
-            <p className="px-4 py-6 text-center text-sm text-gray-600 dark:text-gray-400">
-              None of these listings rate higher at another position than their primary one.
-            </p>
-          )}
-        </div>
-      )}
+        )}
+      </Panel>
     </div>
   );
 }

@@ -4,8 +4,13 @@ import React, { useState, useEffect } from 'react';
 import { fetchPlayerMatches, fetchPlayerSeasonMatches } from '../services/playerMatchesService';
 import type { PlayerMatchStats, PositionSummary } from '../types/playerMatches';
 import { groupMatchesBySeason, type PlayerSeason } from '../utils/playerSeasons';
+import { Panel } from './ui';
 
 const formatDay = (timestamp: number) => new Date(timestamp).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+
+const sectionHeadClass = 'm-0 px-[18px] py-2.5 bg-thead border-y border-line text-[11px] font-bold uppercase tracking-[0.1em] text-muted-2';
+const rowClass = 'flex justify-between items-center gap-3 px-[18px] py-3 border-b border-divider last:border-b-0 hover:bg-row-hover transition-colors';
+const badgeClass = 'inline-flex items-center h-[22px] px-2 rounded-full text-[11px] font-bold';
 
 interface PlayerPositionSummaryProps {
   playerId: string;
@@ -95,49 +100,49 @@ export default function PlayerPositionSummary({ playerId, playerName }: PlayerPo
   };
 
   const getRatingColor = (rating: number) => {
-    if (rating >= 8.0) return 'text-[#00adc3]';
-    if (rating >= 7.0) return 'text-[#00c424]';
-    if (rating >= 6.0) return 'text-[#d7af00]';
-    return 'text-red-600';
+    if (rating >= 8.0) return 'text-rt-cyan';
+    if (rating >= 7.0) return 'text-rt-green';
+    if (rating >= 6.0) return 'text-warn-ink';
+    return 'text-danger-ink';
   };
 
   // Loading state
   if (isLoading) {
     return (
-      <div className="w-full p-4 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
+      <Panel className="w-full p-[18px]">
         <div className="flex items-center justify-center h-48">
-          <div data-testid="loading-spinner" className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+          <div data-testid="loading-spinner" className="animate-spin rounded-full h-6 w-6 border-2 border-accent border-t-transparent"></div>
         </div>
-      </div>
+      </Panel>
     );
   }
 
   // Error state
   if (error) {
     return (
-      <div className="w-full p-4 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
+      <Panel className="w-full p-[18px]">
         <div className="flex items-center justify-center h-48">
-          <div className="text-center text-gray-500 dark:text-gray-400">
-            <p className="text-sm">{error}</p>
+          <div className="text-center text-muted">
+            <p className="m-0 text-sm">{error}</p>
           </div>
         </div>
-      </div>
+      </Panel>
     );
   }
 
   // No data state
   if (matches.length === 0) {
     return (
-      <div className="w-full p-4 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
-              <div>
-        <h3 className="text-lg font-bold text-gray-900 dark:text-white">Match Position Ratings</h3>
-      </div>
-        <div className="flex items-center justify-center h-48">
-          <div className="text-center text-gray-500 dark:text-gray-400">
-            <p className="text-sm">No matches available</p>
+      <Panel className="w-full">
+        <div className="px-[18px] py-4">
+          <h3 className="m-0 font-display text-lg font-bold">Match Position Ratings</h3>
+        </div>
+        <div className="flex items-center justify-center h-48 border-t border-line">
+          <div className="text-center text-muted">
+            <p className="m-0 text-sm">No matches available</p>
           </div>
         </div>
-      </div>
+      </Panel>
     );
   }
 
@@ -231,40 +236,36 @@ export default function PlayerPositionSummary({ playerId, playerName }: PlayerPo
   };
 
   return (
-    <div className="w-full p-4 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
-      <div>
-        <h3 className="text-lg font-bold text-gray-900 dark:text-white">Match Position Ratings</h3>
+    <Panel className="w-full overflow-hidden">
+      <div className="px-[18px] py-4">
+        <h3 className="m-0 font-display text-lg font-bold">Match Position Ratings</h3>
       </div>
 
       {/* Position Summaries */}
       {positionSummaries.length > 0 && (
         <div>
-          <h4 className="text-base text-gray-500 dark:text-gray-400 mb-3">Position Summary (last {matches.length} matches)</h4>
-          <div className="space-y-2">
+          <h4 className={sectionHeadClass}>Position Summary (last {matches.length} matches)</h4>
+          <div>
             {positionSummaries.map((summary) => (
-              <div 
+              <div
                 key={summary.position}
-                className="p-3 bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600"
+                className={rowClass}
               >
-                <div className="flex justify-between items-center">
-                  <div className="flex-1">
-                                        <div className="flex items-center space-x-2">
-                      <span className="text-base font-bold text-gray-900 dark:text-white">
-                        {summary.position}
-                      </span>
-                    </div>
-                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                      {summary.matches} matches • {summary.totalGoals} goals • {summary.totalAssists} assists
-                    </p>
-                  </div>
-                  <div className="text-right">
-                    <span className={`text-[20px] font-bold ${getRatingColor(summary.averageRating)}`}>
-                      {formatRating(summary.averageRating)}
-                    </span>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">
-                      avg rating
-                    </p>
-                  </div>
+                <div className="flex flex-1 min-w-0 items-center gap-3">
+                  <span className="grid place-items-center min-w-11 h-[38px] px-1.5 rounded-[10px] border-2 border-line-2 bg-field text-[13px] font-extrabold text-fg">
+                    {summary.position}
+                  </span>
+                  <p className="m-0 text-[13px] text-muted">
+                    {summary.matches} matches • {summary.totalGoals} goals • {summary.totalAssists} assists
+                  </p>
+                </div>
+                <div className="text-right">
+                  <span className={`font-display text-xl font-extrabold tabular-nums ${getRatingColor(summary.averageRating)}`}>
+                    {formatRating(summary.averageRating)}
+                  </span>
+                  <p className="m-0 text-[11px] text-muted-3">
+                    avg rating
+                  </p>
                 </div>
               </div>
             ))}
@@ -273,70 +274,68 @@ export default function PlayerPositionSummary({ playerId, playerName }: PlayerPo
       )}
 
       {/* League Summaries: the last two seasons, each in full */}
-      <div className="mt-6">
-        <h4 className="text-base text-gray-500 dark:text-gray-400 mb-3">League Summary (last 2 seasons)</h4>
+      <div>
+        <h4 className={sectionHeadClass}>League Summary (last 2 seasons)</h4>
         {seasonsError ? (
-          <p className="text-sm text-gray-500 dark:text-gray-400">{seasonsError}</p>
+          <p className="m-0 px-[18px] py-4 text-sm text-muted">{seasonsError}</p>
         ) : seasons === null ? (
-          <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
-            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+          <div className="flex items-center gap-2 px-[18px] py-4 text-sm text-muted">
+            <div className="animate-spin rounded-full h-4 w-4 border-2 border-accent border-t-transparent"></div>
             Loading seasons…
           </div>
         ) : seasons.length === 0 ? (
-          <p className="text-sm text-gray-500 dark:text-gray-400">No league matches in the last two seasons</p>
+          <p className="m-0 px-[18px] py-4 text-sm text-muted">No league matches in the last two seasons</p>
         ) : (
-          <div className="space-y-4">
+          <div>
             {seasons.map((season, index) => (
-              <div key={season.start}>
-                <div className="flex flex-wrap items-baseline justify-between gap-x-3 mb-2">
-                  <h5 className="text-sm font-semibold text-gray-900 dark:text-white">
+              <div key={season.start} className="border-b border-divider last:border-b-0">
+                <div className="flex flex-wrap items-baseline justify-between gap-x-3 px-[18px] pt-3.5 pb-1.5">
+                  <h5 className="m-0 text-sm font-bold text-fg">
                     {seasonLabel(season, index)}
-                    <span className="ml-2 font-normal text-gray-500 dark:text-gray-400">
+                    <span className="ml-2 font-medium text-muted">
                       {formatDay(season.start)} – {season.end ? formatDay(season.end) : 'now'} · {season.matches.length} matches
                     </span>
                   </h5>
-                  <p className="text-sm text-gray-500 dark:text-gray-400">
+                  <p className="m-0 text-[13px] text-muted">
                     {season.leagueMatches} league • {season.cupMatches} cup
                   </p>
                 </div>
-                <div className="space-y-2">
+                <div>
                   {calculateLeagueSummaries(season.matches).map((summary) => {
                     const [matchType, division] = summary.league.split(' ');
                     const divisionColor = getDivisionColor(division);
-        
+
                     return (
                       <div
                         key={summary.league}
-                        className="p-3 bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600"
+                        className={rowClass}
                       >
-                        <div className="flex justify-between items-center">
-                          <div className="flex-1">
-                            <div className="flex items-center space-x-2">
-                              <span className={`text-xs px-2 py-1 rounded ${
-                                matchType === 'Cup' 
-                                  ? 'bg-purple-100 dark:bg-purple-900 text-purple-800 dark:text-purple-200' 
-                                  : 'bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200'
-                              }`}>
-                                {matchType}
-                              </span>
-                              {division && (
-                                <span className={`text-xs px-2 py-1 rounded font-medium ${divisionColor}`}>
-                                  {division}
-                                </span>
-                              )}
-                            </div>
-                            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                              {summary.matches} matches • {summary.totalGoals} goals • {summary.totalAssists} assists
-                            </p>
-                          </div>
-                          <div className="text-right">
-                            <span className={`text-[20px] font-bold ${getRatingColor(summary.averageRating)}`}>
-                              {formatRating(summary.averageRating)}
+                        <div className="flex-1">
+                          <div className="flex items-center gap-1.5">
+                            <span className={`${badgeClass} ${
+                              matchType === 'Cup'
+                                ? 'bg-violet-bg text-violet-ink'
+                                : 'bg-[rgba(138,230,58,.14)] text-pos-ink'
+                            }`}>
+                              {matchType}
                             </span>
-                            <p className="text-xs text-gray-500 dark:text-gray-400">
-                              avg rating
-                            </p>
+                            {division && (
+                              <span className={`${badgeClass} ${divisionColor}`}>
+                                {division}
+                              </span>
+                            )}
                           </div>
+                          <p className="m-0 mt-1 text-[13px] text-muted">
+                            {summary.matches} matches • {summary.totalGoals} goals • {summary.totalAssists} assists
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <span className={`font-display text-xl font-extrabold tabular-nums ${getRatingColor(summary.averageRating)}`}>
+                            {formatRating(summary.averageRating)}
+                          </span>
+                          <p className="m-0 text-[11px] text-muted-3">
+                            avg rating
+                          </p>
                         </div>
                       </div>
                     );
@@ -347,6 +346,6 @@ export default function PlayerPositionSummary({ playerId, playerName }: PlayerPo
           </div>
         )}
       </div>
-    </div>
+    </Panel>
   );
 }

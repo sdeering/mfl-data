@@ -29,8 +29,9 @@ export const ThemeProvider: React.FC<ThemeProviderProps> = ({
     }
   }, []); // Remove initialTheme dependency to ensure it runs
 
-  // Apply theme to document element
+  // Apply theme to document element, once the saved preference is known (the head script has already applied it)
   useEffect(() => {
+    if (!isClient) return;
     const html = document.documentElement;
     
     // Remove existing theme classes
@@ -41,7 +42,7 @@ export const ThemeProvider: React.FC<ThemeProviderProps> = ({
     
     // Also set data attribute for additional styling if needed
     html.setAttribute('data-theme', theme);
-  }, [theme]);
+  }, [theme, isClient]);
 
   // Toggle theme function
   const toggleTheme = (): void => {

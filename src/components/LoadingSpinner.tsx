@@ -17,7 +17,7 @@ export const LoadingSpinner: React.FC<LoadingSpinnerProps> = ({
 
   return (
     <div className={`inline-block ${sizeClasses[size]} ${className}`}>
-      <div className="animate-spin rounded-full h-full w-full border-2 border-gray-300 border-t-blue-600"></div>
+      <div className="animate-spin rounded-full h-full w-full border-2 border-line-2 border-t-accent"></div>
     </div>
   );
 };

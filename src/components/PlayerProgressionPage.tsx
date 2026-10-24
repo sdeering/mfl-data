@@ -2,8 +2,6 @@
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useWallet } from '../contexts/WalletContext';
-import { useTheme } from '../contexts/ThemeContext';
-import { useRenderedSurface } from '../hooks/useRenderedSurface';
 import { supabaseDataService } from '../services/clientDataService';
 import { loadProgressionHistories, type PlayerHistories, type ProgressionLoadProgress } from '../services/playerProgressionService';
 import type { MFLPlayer, MFLPosition } from '../types/mflApi';
@@ -11,7 +9,6 @@ import { POSITIONS, POSITION_GROUPS } from '../utils/positionOptions';
 import {
   ATTRIBUTE_STATS,
   PROGRESSION_STATS,
-  STAT_COLORS,
   STAT_LABELS,
   STAT_NAMES,
   attributeTotal,
@@ -34,7 +31,23 @@ import {
   type Squad
 } from '../utils/progressionSquads';
 import { getOverallPointsEvents } from '../utils/preciseOverallGain';
-import PlayerProgressionChart, { PlayerProgressionDayTable, type ProgressionChartMode } from './PlayerProgressionChart';
+import PlayerProgressionChart, { PlayerProgressionDayTable, SERIES_COLORS, type ProgressionChartMode } from './PlayerProgressionChart';
+import {
+  KpiTile,
+  PageHeader,
+  Panel,
+  Select,
+  TierText,
+  btnDanger,
+  btnSecondary,
+  labelClass,
+  linkClass,
+  rowClass,
+  sortableThClass,
+  tableClass,
+  tdClass,
+  theadRowClass
+} from './ui';
 
 interface PlayerProgressionPageProps {
   walletAddress?: string; // View another wallet's players; defaults to the connected wallet
@@ -57,13 +70,14 @@ interface PlayerRow {
   overallPoints: number; // Rise in precise (2-decimal) overall over the period
 }
 
-const controlClass = 'px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent';
-const labelClass = 'block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1';
-const thClass = 'px-3 py-2 text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600 select-none whitespace-nowrap';
+// The filters sit on the page rather than in a panel, so they take the panel colour to stand out
+const filterSelectClass = 'h-11! bg-panel/90!';
+// The column of the stat being charted
+const highlightClass = 'font-semibold bg-[rgba(var(--glass-rgb),.03)]';
+const blank = <span className="text-faint-2">–</span>;
 
 export default function PlayerProgressionPage({ walletAddress }: PlayerProgressionPageProps) {
   const { account } = useWallet();
-  const { theme } = useTheme();
   const wallet = walletAddress ?? account;
 
   const [players, setPlayers] = useState<MFLPlayer[]>([]);
@@ -76,7 +90,6 @@ export default function PlayerProgressionPage({ walletAddress }: PlayerProgressi
   const [hasCheckedWallet, setHasCheckedWallet] = useState(false);
   // Squad filter values whose histories are fully loaded, so going back to one is instant
   const loadedSquadsRef = useRef<Set<string>>(new Set());
-  const chartCardRef = useRef<HTMLDivElement>(null);
 
   // null until the default squad has been worked out from the wallet's players
   const [squadFilter, setSquadFilter] = useState<string | null>(null);
@@ -282,10 +295,6 @@ export default function PlayerProgressionPage({ walletAddress }: PlayerProgressi
   const isRefreshing = !!progress && !progress.done;
   const isSquadLoaded = squadFilter !== null && (loadedSquadsRef.current.has(squadFilter) || loadedSquadsRef.current.has(ALL_SQUADS));
   const isLoadingHistories = !!wallet && !error && !isLoadingPlayers && players.length > 0 && !progress && !isSquadLoaded;
-  // Match the chart to what is actually on screen; until that is measured, go by the theme setting
-  const chartSurface = useRenderedSurface(chartCardRef, players.length > 0);
-  const isDark = chartSurface?.isDark ?? theme === 'dark';
-  const surfaceColor = chartSurface?.color ?? (isDark ? '#1f2937' : '#ffffff');
 
   const attributeProgressions = rows.reduce((sum, row) => sum + row.total, 0);
   const overallProgressions = rows.reduce((sum, row) => sum + (row.totals.overall ?? 0), 0);
@@ -294,6 +303,7 @@ export default function PlayerProgressionPage({ walletAddress }: PlayerProgressi
   const visibleRows = showAllRows ? sortedRows : sortedRows.slice(0, INITIAL_ROWS);
 
   const sortArrow = (field: SortField) => (sortField === field ? (sortDirection === 'asc' ? ' ↑' : ' ↓') : '');
+  const headerClass = (field: SortField, align = 'text-left') => `${sortableThClass} ${align} ${sortField === field ? 'text-accent-ink!' : ''}`;
   const renderSquadOption = (squad: Squad) => (
     <option key={squad.id} value={squad.id}>
       {squad.name} ({squad.playerCount}, avg age {squad.averageAge.toFixed(1)})
@@ -302,61 +312,57 @@ export default function PlayerProgressionPage({ walletAddress }: PlayerProgressi
 
   if (!wallet) {
     return (
-      <div className="min-h-screen px-4 lg:px-0">
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Player Progression</h1>
+      <div className="flex flex-col gap-5">
+        <PageHeader title="Player Progression" />
         {hasCheckedWallet && (
-          <p className="text-gray-600 dark:text-gray-400 mt-2">Connect your wallet to see how your players are progressing.</p>
+          <Panel className="px-5 py-16 text-center">
+            <p className="m-0 text-sm font-medium text-muted">Connect your wallet to see how your players are progressing.</p>
+          </Panel>
         )}
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen px-4 lg:px-0">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Player Progression</h1>
-        <p className="text-gray-600 dark:text-gray-400 mt-2">Stat points gained by your players over the last {periodDays} days, day by day</p>
-      </div>
+    <div className="flex flex-col gap-5">
+      <PageHeader title="Player Progression" subtitle={`Stat points gained by your players over the last ${periodDays} days, day by day`} />
 
       {error && (
-        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4 mb-6 flex items-center justify-between gap-4">
-          <p className="text-red-800 dark:text-red-200">{error}</p>
-          <button
-            onClick={() => setReloadKey(key => key + 1)}
-            className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm whitespace-nowrap"
-          >
+        <div className="flex items-center justify-between gap-4 rounded-2xl border border-red-500/45 bg-red-500/12 px-4 py-3">
+          <p className="m-0 text-sm font-semibold text-danger-ink">{error}</p>
+          <button onClick={() => setReloadKey(key => key + 1)} className={btnDanger}>
             Try again
           </button>
         </div>
       )}
 
       {isLoadingPlayers && (
-        <div className="flex items-center justify-center py-12">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-          <span className="ml-3 text-gray-600 dark:text-gray-400">Loading your players...</span>
-        </div>
+        <Panel className="flex items-center justify-center gap-3 py-16 text-sm font-medium text-muted">
+          <span className="h-8 w-8 animate-spin rounded-full border-2 border-accent border-t-transparent" />
+          Loading your players...
+        </Panel>
       )}
 
       {!isLoadingPlayers && !error && players.length === 0 && (
-        <div className="text-center py-12 bg-gray-50 dark:bg-gray-800 rounded-lg border-2 border-dashed border-gray-300 dark:border-gray-600">
-          <p className="text-gray-600 dark:text-gray-400">No players found for this wallet.</p>
-          <p className="text-sm text-gray-500 dark:text-gray-500 mt-1">If you own players, use “Sync Agency Data” in the wallet menu first.</p>
-        </div>
+        <Panel className="px-5 py-16 text-center">
+          <p className="m-0 text-sm font-medium text-muted">No players found for this wallet.</p>
+          <p className="mt-1 mb-0 text-sm text-muted-3">If you own players, use “Sync Agency Data” in the wallet menu first.</p>
+        </Panel>
       )}
 
       {players.length > 0 && (
         <>
           {/* Filters - one row, scoping everything below */}
-          <div className="flex flex-wrap items-end gap-3 mb-6">
-            <div>
-              <label htmlFor="progression-period" className={labelClass}>Period</label>
-              <select id="progression-period" value={periodDays} onChange={e => setPeriodDays(Number(e.target.value))} className={controlClass}>
+          <div className="flex flex-wrap items-end gap-3">
+            <label className={labelClass}>
+              Period
+              <Select value={periodDays} onChange={e => setPeriodDays(Number(e.target.value))} className={`${filterSelectClass} min-w-[150px]`}>
                 {PERIODS.map(period => <option key={period} value={period}>Last {period} days</option>)}
-              </select>
-            </div>
-            <div>
-              <label htmlFor="progression-squad" className={labelClass}>Squad</label>
-              <select id="progression-squad" value={squadFilter ?? ALL_SQUADS} onChange={e => setSquadFilter(e.target.value)} className={`${controlClass} max-w-full`}>
+              </Select>
+            </label>
+            <label className={`${labelClass} min-w-0 max-w-full`}>
+              Squad
+              <Select value={squadFilter ?? ALL_SQUADS} onChange={e => setSquadFilter(e.target.value)} className={`${filterSelectClass} min-w-[300px] max-w-full`}>
                 {squads.some(squad => squad.isOwned) && (
                   <optgroup label="Your clubs">
                     {squads.filter(squad => squad.isOwned).map(renderSquadOption)}
@@ -369,72 +375,59 @@ export default function PlayerProgressionPage({ walletAddress }: PlayerProgressi
                 )}
                 {playersWithoutSquad > 0 && <option value={NO_SQUAD}>No squad ({playersWithoutSquad})</option>}
                 <option value={ALL_SQUADS}>All squads ({players.length})</option>
-              </select>
-            </div>
-            <div>
-              <label htmlFor="progression-position" className={labelClass}>Position</label>
-              <select id="progression-position" value={positionFilter} onChange={e => setPositionFilter(e.target.value)} className={controlClass}>
+              </Select>
+            </label>
+            <label className={labelClass}>
+              Position
+              <Select value={positionFilter} onChange={e => setPositionFilter(e.target.value)} className={`${filterSelectClass} min-w-[220px]`}>
                 <option value="all">All Positions</option>
                 <option disabled>────────────</option>
                 {POSITIONS.map(position => <option key={position.value} value={position.value}>{position.label}</option>)}
                 <option disabled>────────────</option>
                 {Object.entries(POSITION_GROUPS).map(([value, group]) => <option key={value} value={value}>{group.label}</option>)}
-              </select>
-            </div>
-            <div>
-              <label htmlFor="progression-max-age" className={labelClass}>Max age</label>
-              <select
-                id="progression-max-age"
+              </Select>
+            </label>
+            <label className={labelClass}>
+              Max age
+              <Select
                 value={maxAge ?? ''}
                 onChange={e => setMaxAge(e.target.value === '' ? null : Number(e.target.value))}
-                className={controlClass}
+                className={`${filterSelectClass} min-w-[110px]`}
               >
                 <option value="">Any age</option>
                 {ageOptions.map(age => <option key={age} value={age}>{age}</option>)}
-              </select>
-            </div>
+              </Select>
+            </label>
             {isFiltered && (
-              <button onClick={resetFilters} className="px-3 py-2 text-sm text-blue-600 dark:text-blue-400 hover:underline">
+              <button onClick={resetFilters} className={`${btnSecondary} h-11!`}>
                 Reset
               </button>
             )}
           </div>
 
           {/* Summary */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
-            {[
-              { label: 'Players', value: rows.length, note: rows.length !== players.length ? `of ${players.length}` : null },
-              { label: 'Players who progressed', value: playersProgressed, note: null },
-              { label: 'Stat progressions', value: attributeProgressions, note: 'excludes overall' },
-              { label: 'Overall progressions', value: overallProgressions, note: null }
-            ].map(tile => (
-              <div key={tile.label} className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4">
-                <p className="text-xs font-medium text-gray-500 dark:text-gray-400">{tile.label}</p>
-                <p className="text-2xl font-semibold text-gray-900 dark:text-white mt-1">
-                  {tile.value.toLocaleString()}
-                  {tile.note && <span className="ml-2 text-xs font-normal text-gray-500 dark:text-gray-400">{tile.note}</span>}
-                </p>
-              </div>
-            ))}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
+            <KpiTile label="Players" value={rows.length.toLocaleString()} sub={rows.length !== players.length ? `of ${players.length}` : undefined} />
+            <KpiTile label="Players who progressed" value={playersProgressed.toLocaleString()} />
+            <KpiTile label="Stat progressions" value={attributeProgressions.toLocaleString()} sub="excludes overall" accent />
+            <KpiTile label="Overall progressions" value={overallProgressions.toLocaleString()} />
           </div>
 
           {/* Chart */}
-          <div ref={chartCardRef} className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-3 lg:p-4 mb-6">
-            <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
-              <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-                Progressions per day
-                <span className="ml-2 text-sm font-normal text-gray-500 dark:text-gray-400">{modeName}</span>
-              </h2>
-              <div className="flex rounded-lg border border-gray-300 dark:border-gray-600 overflow-hidden text-sm">
+          <Panel className="flex flex-col gap-4 p-5">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex flex-wrap items-baseline gap-x-2.5">
+                <h2 className="m-0 font-display text-[22px] font-bold text-fg">Progressions per day</h2>
+                <span className="text-[13px] font-medium text-muted">{modeName}</span>
+              </div>
+              <div className="flex p-[3px] rounded-full bg-field border border-line-3">
                 {(['chart', 'table'] as const).map(option => (
                   <button
                     key={option}
                     onClick={() => setView(option)}
                     aria-pressed={view === option}
-                    className={`px-3 py-1 capitalize transition-colors ${
-                      view === option
-                        ? 'bg-gray-900 text-white dark:bg-white dark:text-gray-900'
-                        : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
+                    className={`h-[30px] px-3.5 rounded-full text-[13px] font-semibold capitalize cursor-pointer transition-colors ${
+                      view === option ? 'bg-fg text-canvas' : 'text-fg-3 hover:text-fg'
                     }`}
                   >
                     {option}
@@ -443,37 +436,38 @@ export default function PlayerProgressionPage({ walletAddress }: PlayerProgressi
               </div>
             </div>
 
-            <div className="flex flex-wrap gap-1 mb-4" role="group" aria-label="Progression to chart">
+            <div className="flex flex-wrap gap-1.5" role="group" aria-label="Progression to chart">
               {CHART_MODES.map(option => (
                 <button
                   key={option}
                   onClick={() => setMode(option)}
                   aria-pressed={mode === option}
                   title={option === 'attributes' ? 'Every stat, excluding overall' : STAT_NAMES[option]}
-                  className={`px-3 py-1 text-sm font-bold rounded-full border transition-colors inline-flex items-center gap-1.5 ${
+                  className={`inline-flex items-center gap-1.5 h-8 px-3 rounded-full border text-xs font-bold cursor-pointer transition-colors ${
                     mode === option
-                      ? 'bg-gray-900 text-white border-transparent dark:bg-white dark:text-gray-900'
-                      : 'text-gray-600 dark:text-gray-400 border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700'
+                      ? 'border-fg bg-fg text-canvas'
+                      : 'border-line-2 bg-[rgba(var(--glass-rgb),.03)] text-fg-2 hover:border-line-hover'
                   }`}
                 >
-                  {option !== 'attributes' && (
-                    <span className="w-2 h-2 rounded-full" style={{ backgroundColor: STAT_COLORS[option][isDark ? 'dark' : 'light'] }} />
-                  )}
+                  <span
+                    className={`w-[7px] h-[7px] rounded-full ${option === 'attributes' ? 'bg-current' : ''}`}
+                    style={option === 'attributes' ? undefined : { backgroundColor: SERIES_COLORS[option] }}
+                  />
                   {option === 'attributes' ? 'All stats' : STAT_LABELS[option]}
                 </button>
               ))}
             </div>
 
             {(isLoadingHistories || isRefreshing) && (
-              <div className="mb-3" role="status">
-                <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">
+              <div role="status">
+                <p className="mt-0 mb-1.5 text-xs font-medium text-muted">
                   {progress
                     ? `Updating progression history from MFL… ${progress.refreshed} / ${progress.toRefresh} players`
                     : 'Checking for new progressions…'}
                 </p>
-                <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-1">
+                <div className="w-full h-1 rounded-full bg-line">
                   <div
-                    className="bg-blue-600 h-1 rounded-full transition-all duration-300"
+                    className="h-1 rounded-full bg-accent transition-all duration-300"
                     style={{ width: progress ? `${(progress.refreshed / progress.toRefresh) * 100}%` : '0%' }}
                   />
                 </div>
@@ -481,7 +475,7 @@ export default function PlayerProgressionPage({ walletAddress }: PlayerProgressi
             )}
 
             {progress?.rateLimitedSeconds !== undefined && (
-              <p className="mb-3 text-xs text-amber-700 dark:text-amber-400" role="status">
+              <p className="m-0 text-xs font-medium text-warn-ink" role="status">
                 MFL is limiting requests right now, so {progress.toRefresh > 0
                   ? `${progress.toRefresh - progress.refreshed} of ${progress.toRefresh} players are still to be updated`
                   : 'new progressions could not be checked'}. Everything loaded so far is saved — reload in about{' '}
@@ -490,83 +484,79 @@ export default function PlayerProgressionPage({ walletAddress }: PlayerProgressi
             )}
 
             {progress && !isRefreshing && progress.failedIds.length > 0 && (
-              <p className="mb-3 text-xs text-amber-700 dark:text-amber-400">
+              <p className="m-0 text-xs font-medium text-warn-ink">
                 Couldn’t update {progress.failedIds.length} player{progress.failedIds.length !== 1 ? 's' : ''} from MFL, so their latest progressions may be missing.{' '}
-                <button onClick={() => setReloadKey(key => key + 1)} className="underline">Try again</button>
+                <button onClick={() => setReloadKey(key => key + 1)} className="underline cursor-pointer">Try again</button>
               </p>
             )}
 
             {/* While histories are still arriving the chart stays in place, dimmed */}
             <div className={isLoadingHistories ? 'opacity-50' : undefined}>
               {view === 'chart'
-                ? <PlayerProgressionChart days={days} mode={mode} isDark={isDark} surface={surfaceColor} />
+                ? <PlayerProgressionChart days={days} mode={mode} />
                 : <PlayerProgressionDayTable days={days} mode={mode} />}
             </div>
-          </div>
+          </Panel>
 
           {/* Players */}
-          <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
-            <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700">
-              <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-                Players
-                <span className="ml-2 text-sm font-normal text-gray-500 dark:text-gray-400">
-                  {rows.length}{rows.length !== players.length ? ` of ${players.length}` : ''} · stat points gained, last {periodDays} days
-                </span>
-              </h2>
+          <Panel className="overflow-hidden">
+            <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-1 px-5 py-[18px]">
+              <h2 className="m-0 font-display text-[22px] font-bold text-fg">Players</h2>
+              <span className="text-[13px] font-medium text-muted">
+                {rows.length}{rows.length !== players.length ? ` of ${players.length}` : ''} · stat points gained, last {periodDays} days
+              </span>
             </div>
             <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700 text-sm">
-                <thead className="bg-gray-50 dark:bg-gray-700">
-                  <tr>
-                    <th className={`${thClass} text-left`} onClick={() => handleSort('name')}>Player{sortArrow('name')}</th>
-                    <th className={`${thClass} text-right`} onClick={() => handleSort('age')}>Age{sortArrow('age')}</th>
-                    <th className={`${thClass} text-left`} onClick={() => handleSort('position')}>Pos{sortArrow('position')}</th>
-                    <th className={`${thClass} text-left`} onClick={() => handleSort('squad')}>Squad{sortArrow('squad')}</th>
-                    <th className={`${thClass} text-right`} onClick={() => handleSort('rating')}>Rating{sortArrow('rating')}</th>
-                    <th className={`${thClass} text-right`} onClick={() => handleSort('total')} title="Stat points gained, excluding overall">Total{sortArrow('total')}</th>
-                    <th className={`${thClass} text-right`} onClick={() => handleSort('overallPoints')} title="Rise in exact overall (the 2-decimal overall on the player page) over the period">
+              <table className={tableClass}>
+                <thead>
+                  <tr className={theadRowClass}>
+                    <th className={`${headerClass('name')} pl-5`} onClick={() => handleSort('name')}>Player{sortArrow('name')}</th>
+                    <th className={headerClass('age', 'text-right')} onClick={() => handleSort('age')}>Age{sortArrow('age')}</th>
+                    <th className={headerClass('position')} onClick={() => handleSort('position')}>Pos{sortArrow('position')}</th>
+                    <th className={headerClass('squad')} onClick={() => handleSort('squad')}>Squad{sortArrow('squad')}</th>
+                    <th className={headerClass('rating', 'text-right')} onClick={() => handleSort('rating')}>Rating{sortArrow('rating')}</th>
+                    <th className={headerClass('total', 'text-right')} onClick={() => handleSort('total')} title="Stat points gained, excluding overall">Total{sortArrow('total')}</th>
+                    <th className={headerClass('overallPoints', 'text-right')} onClick={() => handleSort('overallPoints')} title="Rise in exact overall (the 2-decimal overall on the player page) over the period">
                       +{STAT_LABELS.overallPoints}{sortArrow('overallPoints')}
                     </th>
                     {PROGRESSION_STATS.map(stat => (
-                      <th key={stat} className={`${thClass} text-right`} onClick={() => handleSort(stat)} title={`${STAT_NAMES[stat]} progressions`}>
+                      <th key={stat} className={headerClass(stat, 'text-right')} onClick={() => handleSort(stat)} title={`${STAT_NAMES[stat]} progressions`}>
                         +{STAT_LABELS[stat]}{sortArrow(stat)}
                       </th>
                     ))}
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                <tbody>
                   {visibleRows.map(row => (
-                    <tr key={row.player.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
-                      <td className="px-3 py-2 whitespace-nowrap">
-                        <a href={`/players/${row.player.id}`} className="text-blue-600 dark:text-blue-400 hover:underline">{row.name}</a>
+                    <tr key={row.player.id} className={`${rowClass} text-sm font-medium text-fg-2`}>
+                      <td className={`${tdClass} pl-5`}>
+                        <a href={`/players/${row.player.id}`} className="font-bold text-fg hover:text-accent-ink transition-colors">{row.name}</a>
                       </td>
-                      <td className="px-3 py-2 text-right tabular-nums text-gray-700 dark:text-gray-300">{row.player.metadata.age}</td>
-                      <td className="px-3 py-2 whitespace-nowrap text-gray-700 dark:text-gray-300">{row.player.metadata.positions.join(', ')}</td>
-                      <td className="px-3 py-2 whitespace-nowrap text-gray-700 dark:text-gray-300">{row.squad ?? <span className="text-gray-400 dark:text-gray-500">–</span>}</td>
-                      <td className="px-3 py-2 text-right tabular-nums text-gray-700 dark:text-gray-300">{row.player.metadata.overall}</td>
-                      <td className="px-3 py-2 text-right tabular-nums font-semibold text-gray-900 dark:text-white">{row.total || '–'}</td>
-                      <td
-                        className={`px-3 py-2 text-right tabular-nums ${
-                          mode === 'overallPoints' ? 'font-semibold text-gray-900 dark:text-white bg-gray-50 dark:bg-gray-700/40' : 'text-gray-700 dark:text-gray-300'
-                        }`}
-                      >
-                        {row.overallPoints > 0 ? `+${row.overallPoints.toFixed(2)}` : '–'}
+                      <td className={`${tdClass} text-right tabular-nums`}>{row.player.metadata.age}</td>
+                      <td className={`${tdClass} text-muted`}>{row.player.metadata.positions.join(', ')}</td>
+                      <td className={`${tdClass} text-[13px] text-muted`}>{row.squad ?? blank}</td>
+                      <td className={`${tdClass} text-right`}><TierText value={row.player.metadata.overall} /></td>
+                      <td className={`${tdClass} text-right`}>
+                        {row.total
+                          ? <span className="inline-grid place-items-center min-w-9 h-[26px] px-1.5 rounded-lg bg-accent text-accent-fg font-display text-sm font-extrabold tabular-nums">{row.total}</span>
+                          : blank}
+                      </td>
+                      <td className={`${tdClass} text-right font-mono text-[13px] text-pos-ink ${mode === 'overallPoints' ? highlightClass : ''}`}>
+                        {row.overallPoints > 0 ? `+${row.overallPoints.toFixed(2)}` : blank}
                       </td>
                       {PROGRESSION_STATS.map(stat => (
                         <td
                           key={stat}
-                          className={`px-3 py-2 text-right tabular-nums ${
-                            mode === stat ? 'font-semibold text-gray-900 dark:text-white bg-gray-50 dark:bg-gray-700/40' : 'text-gray-700 dark:text-gray-300'
-                          }`}
+                          className={`${tdClass} text-right tabular-nums ${(row.totals[stat] ?? 0) >= 5 ? 'text-accent-ink' : ''} ${mode === stat ? highlightClass : ''}`}
                         >
-                          {row.totals[stat] || '–'}
+                          {row.totals[stat] || blank}
                         </td>
                       ))}
                     </tr>
                   ))}
                   {rows.length === 0 && (
                     <tr>
-                      <td colSpan={7 + PROGRESSION_STATS.length} className="px-3 py-8 text-center text-gray-500 dark:text-gray-400">
+                      <td colSpan={7 + PROGRESSION_STATS.length} className="px-3 py-8 text-center text-sm font-medium text-muted">
                         No players match these filters.
                       </td>
                     </tr>
@@ -575,13 +565,13 @@ export default function PlayerProgressionPage({ walletAddress }: PlayerProgressi
               </table>
             </div>
             {sortedRows.length > visibleRows.length && (
-              <div className="px-4 py-3 border-t border-gray-200 dark:border-gray-700 text-center">
-                <button onClick={() => setShowAllRows(true)} className="text-sm text-blue-600 dark:text-blue-400 hover:underline">
+              <div className="px-5 py-3 border-t border-line text-center">
+                <button onClick={() => setShowAllRows(true)} className={`text-sm font-semibold cursor-pointer ${linkClass}`}>
                   Show all {sortedRows.length} players
                 </button>
               </div>
             )}
-          </div>
+          </Panel>
         </>
       )}
     </div>

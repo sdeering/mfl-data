@@ -35,21 +35,6 @@ export const STAT_NAMES: Record<ChartSeries, string> = {
   goalkeeping: 'Goalkeeping'
 };
 
-// Same hue per stat as the single-player progression chart (orange pace, teal dribbling, ...),
-// stepped so every colour holds up on both the light and dark card surfaces.
-export const STAT_COLORS: Record<ChartSeries, { light: string; dark: string }> = {
-  // Both measures of overall share a colour: they are never charted together
-  overallPoints: { light: '#e87ba4', dark: '#d55181' },
-  overall: { light: '#e87ba4', dark: '#d55181' },
-  pace: { light: '#eb6834', dark: '#d95926' },
-  dribbling: { light: '#1baf7a', dark: '#199e70' },
-  goalkeeping: { light: '#eda100', dark: '#c98500' },
-  defense: { light: '#2a78d6', dark: '#3987e5' },
-  passing: { light: '#008300', dark: '#008300' },
-  physical: { light: '#4a3aa7', dark: '#9085e9' },
-  shooting: { light: '#e34948', dark: '#e66767' }
-};
-
 // Bottom-to-top order of the stacked chart. Chosen so neighbouring colours stay distinguishable
 // for colour-blind readers in both themes - don't reorder without re-checking that.
 export const STACK_ORDER: AttributeStat[] = ['pace', 'dribbling', 'goalkeeping', 'defense', 'passing', 'physical', 'shooting'];

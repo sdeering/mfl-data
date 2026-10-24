@@ -9,6 +9,11 @@ jest.mock('next/navigation', () => ({
   useRouter: jest.fn(),
 }));
 
+const mockWallet = { isConnected: false, connectWallet: jest.fn() };
+jest.mock('@/src/contexts/WalletContext', () => ({
+  useWallet: () => mockWallet,
+}));
+
 const mockPush = jest.fn();
 
 describe('HomePage', () => {
@@ -31,14 +36,14 @@ describe('HomePage', () => {
     renderWithProviders(<HomePage />);
     
     expect(screen.getByText('Search for MFL players')).toBeInTheDocument();
-    expect(screen.getByPlaceholderText('Search for a player by id...')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('Search for a player by ID…')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Search Player' })).toBeInTheDocument();
   });
 
   it('handles manual search submission', async () => {
     renderWithProviders(<HomePage />);
     
-    const input = screen.getByPlaceholderText('Search for a player by id...');
+    const input = screen.getByPlaceholderText('Search for a player by ID…');
     const submitButton = screen.getByRole('button', { name: 'Search Player' });
     
     // Initially button should be disabled
@@ -66,7 +71,7 @@ describe('HomePage', () => {
   it('handles paste event for valid player ID', async () => {
     renderWithProviders(<HomePage />);
     
-    const input = screen.getByPlaceholderText('Search for a player by id...');
+    const input = screen.getByPlaceholderText('Search for a player by ID…');
     
     // Simulate paste event with valid player ID
     const pasteEvent = new Event('paste', { bubbles: true });
@@ -93,7 +98,7 @@ describe('HomePage', () => {
   it('does not trigger search for invalid pasted content', () => {
     renderWithProviders(<HomePage />);
     
-    const input = screen.getByPlaceholderText('Search for a player by id...');
+    const input = screen.getByPlaceholderText('Search for a player by ID…');
     
     // Simulate paste event with invalid content
     const pasteEvent = new Event('paste', { bubbles: true });
@@ -115,7 +120,7 @@ describe('HomePage', () => {
   it('shows loading spinner in input when searching', async () => {
     renderWithProviders(<HomePage />);
     
-    const input = screen.getByPlaceholderText('Search for a player by id...');
+    const input = screen.getByPlaceholderText('Search for a player by ID…');
     
     // Simulate paste event
     const pasteEvent = new Event('paste', { bubbles: true });
@@ -138,7 +143,7 @@ describe('HomePage', () => {
   it('disables quick search links during search', async () => {
     renderWithProviders(<HomePage />);
     
-    const input = screen.getByPlaceholderText('Search for a player by id...');
+    const input = screen.getByPlaceholderText('Search for a player by ID…');
     
     // Simulate paste event to start search
     const pasteEvent = new Event('paste', { bubbles: true });
@@ -160,16 +165,17 @@ describe('HomePage', () => {
   });
 
   it('lists each tool in a box linking to it, marking the ones that need a wallet', () => {
+    mockWallet.isConnected = false;
     renderWithProviders(<HomePage />);
 
     const tools = [
       { title: 'Agency Overview', path: '/agency', needsWallet: true },
+      { title: 'Squad Builder', path: '/squad-builder', needsWallet: true },
+      { title: 'Player Compare', path: '/compare', needsWallet: false },
+      { title: 'Player Progression', path: '/player-progression', needsWallet: true },
       { title: 'Club Overview', path: '/clubs', needsWallet: true },
-      { title: 'Player Progression Overview', path: '/player-progression', needsWallet: true },
-      { title: 'Player Compare Tool', path: '/compare', needsWallet: false },
-      { title: 'Player Scouting Tool', path: '/scout', needsWallet: false },
-      { title: 'Squad Builder Tool', path: '/squad-builder', needsWallet: true },
-      { title: 'MFL Resources Links', path: '/resources', needsWallet: false },
+      { title: 'Player Scouting', path: '/scout', needsWallet: false },
+      { title: 'MFL Resources', path: '/resources', needsWallet: false },
     ];
 
     for (const tool of tools) {
@@ -177,5 +183,15 @@ describe('HomePage', () => {
       expect(box).toHaveAttribute('href', tool.path);
       expect(box.textContent?.includes('Needs wallet')).toBe(tool.needsWallet);
     }
+    expect(screen.getByRole('button', { name: 'Connect your wallet' })).toBeInTheDocument();
+  });
+
+  it('drops the wallet tags once a wallet is connected', () => {
+    mockWallet.isConnected = true;
+    renderWithProviders(<HomePage />);
+
+    expect(screen.queryByText('Needs wallet')).not.toBeInTheDocument();
+    expect(screen.getByText('All tools unlocked')).toBeInTheDocument();
+    mockWallet.isConnected = false;
   });
 });

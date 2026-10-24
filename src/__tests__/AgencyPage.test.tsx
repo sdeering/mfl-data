@@ -98,10 +98,10 @@ const ratingAt = (player: typeof midfielder | typeof playmaker, position: string
   }, position as MFLPosition).ovr
 }
 
-// The card colour ranges, as on the Overall column
-const tierBackground = (rating: number) =>
-  rating >= 95 ? 'bg-[#87f6f8]' : rating >= 85 ? 'bg-[#fa53ff]' : rating >= 75 ? 'bg-[#0047ff]' :
-  rating >= 65 ? 'bg-[#71ff30]' : rating >= 55 ? 'bg-[#ecd17f]' : 'bg-[#9f9f9f]'
+// The card colour ranges as text, as the design shows ratings beside a position
+const tierText = (rating: number) =>
+  rating >= 95 ? 'var(--rt-cyan)' : rating >= 85 ? 'var(--rt-pink)' : rating >= 75 ? 'var(--rt-blue)' :
+  rating >= 65 ? 'var(--rt-green)' : rating >= 55 ? 'var(--rt-sand)' : 'var(--rt-grey)'
 
 const rowOf = async (name: string) => (await screen.findByText(name)).closest('tr') as HTMLElement
 const positionPills = (row: HTMLElement, positions: string[]) =>
@@ -115,8 +115,8 @@ describe('AgencyPage player table', () => {
     for (const position of ['LM', 'RM', 'CM']) {
       const [pill] = positionPills(row, [position])
       const rating = ratingAt(midfielder, position)
-      expect(pill).toHaveTextContent(`${position}${rating}`)
-      expect(pill).toHaveClass(tierBackground(rating))
+      expect(pill).toHaveTextContent(`${position} ${rating}`)
+      expect(within(pill).getByText(String(rating))).toHaveStyle({ color: tierText(rating) })
     }
     // Primary position carries no penalty, the others take -1
     expect(ratingAt(midfielder, 'RM')).toBe(ratingAt(midfielder, 'LM') - 1)

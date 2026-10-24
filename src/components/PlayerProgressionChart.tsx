@@ -4,21 +4,32 @@ import React, { useState } from 'react';
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import {
   STACK_ORDER,
-  STAT_COLORS,
   STAT_LABELS,
   STAT_NAMES,
   type ChartSeries,
   type DailyProgression
 } from '../utils/progressionCounts';
+import { tableClass, thClass } from './ui';
 
 // 'attributes' stacks every attribute stat (overall excluded); otherwise a single series is charted
 export type ProgressionChartMode = 'attributes' | ChartSeries;
 
+// One colour per stat, the same in both themes. Both measures of overall share one: they are never charted together.
+export const SERIES_COLORS: Record<ChartSeries, string> = {
+  pace: '#f97316',
+  dribbling: '#14b8a6',
+  goalkeeping: '#eab308',
+  defense: '#3b82f6',
+  passing: '#22c55e',
+  physical: '#a78bfa',
+  shooting: '#f05a5a',
+  overall: '#f0569a',
+  overallPoints: '#f0569a'
+};
+
 interface PlayerProgressionChartProps {
   days: DailyProgression[];
   mode: ProgressionChartMode;
-  isDark: boolean;
-  surface: string; // Background the chart sits on, used as the gap between stacked segments
 }
 
 // "16 Jun" on the axis ("16 Jun 25" when the period crosses a new year); "Tue 16 Jun 2026" in full
@@ -48,31 +59,31 @@ export const getChartStats = (mode: ProgressionChartMode): ChartSeries[] =>
 // Overall points are decimals ("+0.23"); everything else counts whole stat points
 const formatValue = (value: number, series: ChartSeries) => (series === 'overallPoints' ? `+${value.toFixed(2)}` : String(value));
 
-function DayTooltip({ active, payload, mode, isDark }: any) {
+function DayTooltip({ active, payload, mode }: any) {
   const day: DailyProgression | undefined = payload?.[0]?.payload;
   if (!active || !day) return null;
 
   const stats = getChartStats(mode).filter(stat => day[stat] > 0);
 
   return (
-    <div className="rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-900 px-3 py-2 shadow-lg text-sm">
-      <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">{formatDay(day.dayStart, 'full')}</p>
+    <div className="rounded-2xl border border-line-2 bg-panel px-3.5 py-2.5 shadow-[0_20px_50px_rgba(0,0,0,.45)] text-sm">
+      <p className="mt-0 mb-1.5 text-xs font-semibold text-muted">{formatDay(day.dayStart, 'full')}</p>
       {stats.length === 0 ? (
-        <p className="text-gray-600 dark:text-gray-300">No progressions</p>
+        <p className="m-0 text-fg-3">No progressions</p>
       ) : (
         <>
           {[...stats].reverse().map(stat => (
             <div key={stat} className="flex items-center gap-2">
-              <span className="w-3 h-0.5 rounded-full" style={{ backgroundColor: STAT_COLORS[stat][isDark ? 'dark' : 'light'] }} />
-              <span className="font-semibold text-gray-900 dark:text-white tabular-nums">{formatValue(day[stat], stat)}</span>
-              <span className="text-gray-600 dark:text-gray-300">{STAT_NAMES[stat]}</span>
+              <span className="w-[9px] h-[9px] rounded-[3px]" style={{ backgroundColor: SERIES_COLORS[stat] }} />
+              <span className="font-display font-bold text-fg tabular-nums">{formatValue(day[stat], stat)}</span>
+              <span className="text-fg-3">{STAT_NAMES[stat]}</span>
             </div>
           ))}
           {mode === 'attributes' && stats.length > 1 && (
-            <div className="flex items-center gap-2 mt-1 pt-1 border-t border-gray-200 dark:border-gray-700">
-              <span className="w-3" />
-              <span className="font-semibold text-gray-900 dark:text-white tabular-nums">{day.total}</span>
-              <span className="text-gray-600 dark:text-gray-300">Total</span>
+            <div className="flex items-center gap-2 mt-1.5 pt-1.5 border-t border-line">
+              <span className="w-[9px]" />
+              <span className="font-display font-bold text-fg tabular-nums">{day.total}</span>
+              <span className="text-fg-3">Total</span>
             </div>
           )}
         </>
@@ -81,10 +92,9 @@ function DayTooltip({ active, payload, mode, isDark }: any) {
   );
 }
 
-export default function PlayerProgressionChart({ days, mode, isDark, surface }: PlayerProgressionChartProps) {
+export default function PlayerProgressionChart({ days, mode }: PlayerProgressionChartProps) {
   const [chartWidth, setChartWidth] = useState(0);
   const stats = getChartStats(mode);
-  const theme = isDark ? 'dark' : 'light';
 
   const barSlotWidth = days.length > 0 ? Math.max(0, chartWidth - Y_AXIS_WIDTH - CHART_MARGIN_RIGHT) / days.length : 0;
   const showRoomyBars = barSlotWidth >= MIN_BAR_WIDTH_FOR_GAPS;
@@ -92,14 +102,12 @@ export default function PlayerProgressionChart({ days, mode, isDark, surface }: 
   const isEmpty = days.every(day => stats.every(stat => day[stat] === 0));
   const decimalTicks = mode === 'overallPoints' && !isEmpty ? getDecimalTicks(Math.max(...days.map(day => day.overallPoints))) : undefined;
   const crossesNewYear = days.length > 0 && new Date(days[0].dayStart).getFullYear() !== new Date(days[days.length - 1].dayStart).getFullYear();
-  const gridColor = isDark ? '#374151' : '#e5e7eb';
-  const axisTextColor = isDark ? '#9ca3af' : '#6b7280';
 
   return (
-    <div>
+    <div className="flex flex-col gap-4">
       <div className="relative h-[340px] w-full">
         {isEmpty && (
-          <p className="absolute inset-0 flex items-center justify-center text-sm text-gray-500 dark:text-gray-400 pointer-events-none">
+          <p className="absolute inset-0 m-0 flex items-center justify-center text-sm font-medium text-muted pointer-events-none">
             {mode === 'overallPoints'
               ? 'No overall points gained in this period'
               : `No ${mode === 'attributes' ? '' : `${STAT_NAMES[mode].toLowerCase()} `}progressions in this period`}
@@ -107,27 +115,27 @@ export default function PlayerProgressionChart({ days, mode, isDark, surface }: 
         )}
         <ResponsiveContainer width="100%" height="100%" onResize={width => setChartWidth(width)}>
           <BarChart data={days} margin={{ top: 8, right: CHART_MARGIN_RIGHT, left: 0, bottom: 0 }} barCategoryGap={showRoomyBars ? '20%' : 0}>
-            <CartesianGrid vertical={false} stroke={gridColor} />
+            <CartesianGrid vertical={false} stroke="var(--line)" strokeDasharray="4 4" />
             <XAxis
               dataKey="dayStart"
               tickFormatter={(dayStart: number) => formatDay(dayStart, crossesNewYear ? 'withYear' : 'short')}
-              tick={{ fill: axisTextColor, fontSize: 12 }}
+              tick={{ fill: 'var(--muted3)', fontSize: 11, fontWeight: 500 }}
               tickLine={false}
-              axisLine={{ stroke: gridColor }}
+              axisLine={{ stroke: 'var(--line)' }}
               minTickGap={40}
             />
             <YAxis
               allowDecimals={mode === 'overallPoints'}
               ticks={decimalTicks}
               domain={decimalTicks ? [0, decimalTicks[decimalTicks.length - 1]] : undefined}
-              tick={{ fill: axisTextColor, fontSize: 12 }}
+              tick={{ fill: 'var(--muted3)', fontSize: 11, fontWeight: 500, className: 'font-mono' }}
               tickLine={false}
               axisLine={false}
               width={Y_AXIS_WIDTH}
             />
             <Tooltip
-              content={<DayTooltip mode={mode} isDark={isDark} />}
-              cursor={{ fill: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)' }}
+              content={<DayTooltip mode={mode} />}
+              cursor={{ fill: 'rgba(var(--glass-rgb), 0.05)' }}
               isAnimationActive={false}
             />
             {stats.map(stat => (
@@ -136,11 +144,11 @@ export default function PlayerProgressionChart({ days, mode, isDark, surface }: 
                 dataKey={stat}
                 name={STAT_NAMES[stat]}
                 stackId="progressions"
-                fill={STAT_COLORS[stat][theme]}
-                // A sliver of card surface separates stacked segments instead of an outline
-                stroke={surface}
+                fill={SERIES_COLORS[stat]}
+                // A sliver of panel colour separates stacked segments instead of an outline
+                stroke="var(--panel)"
                 strokeWidth={showSegmentGaps ? 1 : 0}
-                radius={stats.length > 1 || !showRoomyBars ? 0 : [4, 4, 0, 0]}
+                radius={showRoomyBars ? 3 : 0}
                 // Dense periods leave each day only a few pixels. Left to itself the chart rounds those
                 // down to 1px hairlines, so give the bar most of its slot explicitly.
                 barSize={showRoomyBars || barSlotWidth === 0 ? undefined : Math.max(1, barSlotWidth * 0.8)}
@@ -153,11 +161,11 @@ export default function PlayerProgressionChart({ days, mode, isDark, surface }: 
       </div>
 
       {stats.length > 1 && (
-        <ul className="flex flex-wrap justify-center gap-x-4 gap-y-1 mt-3">
+        <ul className="m-0 p-0 list-none flex flex-wrap justify-center gap-x-[18px] gap-y-1.5">
           {stats.map(stat => (
-            <li key={stat} className="flex items-center gap-1.5 text-xs text-gray-600 dark:text-gray-300">
-              <span className="w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: STAT_COLORS[stat][theme] }} />
-              {STAT_LABELS[stat]} <span className="text-gray-400 dark:text-gray-500">{STAT_NAMES[stat]}</span>
+            <li key={stat} className="flex items-center gap-1.5 text-xs font-bold text-fg-2">
+              <span className="w-[9px] h-[9px] rounded-[3px]" style={{ backgroundColor: SERIES_COLORS[stat] }} />
+              {STAT_LABELS[stat]} <span className="font-medium text-muted-3">{STAT_NAMES[stat]}</span>
             </li>
           ))}
         </ul>
@@ -171,30 +179,30 @@ export function PlayerProgressionDayTable({ days, mode }: { days: DailyProgressi
   const showTotal = stats.length > 1;
 
   return (
-    <div className="max-h-[340px] overflow-auto">
-      <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700 text-sm">
-        <thead className="bg-gray-50 dark:bg-gray-700 sticky top-0">
-          <tr>
-            <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Day</th>
+    <div className="max-h-[340px] overflow-auto rounded-2xl border border-line">
+      <table className={tableClass}>
+        <thead className="sticky top-0">
+          <tr className="bg-thead border-b border-line">
+            <th className={thClass}>Day</th>
             {stats.map(stat => (
-              <th key={stat} className="px-3 py-2 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+              <th key={stat} className={`${thClass} text-right`}>
                 {STAT_LABELS[stat]}
               </th>
             ))}
-            {showTotal && (
-              <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Total</th>
-            )}
+            {showTotal && <th className={`${thClass} text-right`}>Total</th>}
           </tr>
         </thead>
-        <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+        <tbody>
           {[...days].reverse().map(day => (
-            <tr key={day.dayStart}>
-              <td className="px-3 py-1.5 whitespace-nowrap text-gray-900 dark:text-white">{formatDay(day.dayStart, 'full')}</td>
+            <tr key={day.dayStart} className="border-b border-divider last:border-b-0 hover:bg-row-hover transition-colors text-sm">
+              <td className="px-3 py-2 whitespace-nowrap font-medium text-fg">{formatDay(day.dayStart, 'full')}</td>
               {stats.map(stat => (
-                <td key={stat} className="px-3 py-1.5 text-right tabular-nums text-gray-700 dark:text-gray-300">{day[stat] ? formatValue(day[stat], stat) : '–'}</td>
+                <td key={stat} className="px-3 py-2 text-right tabular-nums text-fg-2">
+                  {day[stat] ? formatValue(day[stat], stat) : <span className="text-faint-2">–</span>}
+                </td>
               ))}
               {showTotal && (
-                <td className="px-3 py-1.5 text-right tabular-nums font-semibold text-gray-900 dark:text-white">{day.total || '–'}</td>
+                <td className="px-3 py-2 text-right tabular-nums font-display font-bold text-fg">{day.total || <span className="text-faint-2">–</span>}</td>
               )}
             </tr>
           ))}

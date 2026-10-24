@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { fetchPlayerExperienceHistory, processProgressionData, getCurrentAge } from '../services/playerExperienceService';
 import type { ProgressionDataPoint, StatType } from '../types/playerExperience';
+import { Panel } from './ui';
 
 interface PlayerProgressionGraphProps {
   playerId: string;
@@ -13,14 +14,17 @@ interface PlayerProgressionGraphProps {
 }
 
   const STAT_COLORS = {
-    overall: 'black', // black
-    pace: 'rgb(255, 163, 50)', // orange
-    dribbling: 'rgb(34, 163, 140)', // teal
-    passing: 'rgb(30, 255, 0)', // bright green
-    shooting: 'rgb(255, 0, 61)', // pink/red
-    defense: 'rgb(50, 99, 255)', // blue
-    physical: 'purple' // purple
+    overall: '#f0569a', // pink
+    pace: '#f97316', // orange
+    dribbling: '#14b8a6', // teal
+    passing: '#22c55e', // green
+    shooting: '#f05a5a', // red
+    defense: '#3b82f6', // blue
+    physical: '#a78bfa' // violet
   };
+
+  const pillClass = 'h-8 px-3.5 rounded-full border text-xs font-bold cursor-pointer transition-colors';
+  const inactivePillClass = `${pillClass} border-line-2 bg-transparent text-fg-3 hover:border-line-hover hover:text-fg`;
 
   const STAT_LABELS = {
     overall: 'OVR',
@@ -109,37 +113,37 @@ export default function PlayerProgressionGraph({ playerId, playerName, playerPos
   // Loading state
   if (isLoading) {
     return (
-      <div className="w-full p-2 lg:p-4 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
+      <Panel className="w-full p-5">
         <div className="flex items-center justify-center h-32 lg:h-48">
-          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+          <div className="animate-spin rounded-full h-6 w-6 border-2 border-accent border-t-transparent"></div>
         </div>
-      </div>
+      </Panel>
     );
   }
 
   // Error state
   if (error) {
     return (
-      <div className="w-full p-2 lg:p-4 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
+      <Panel className="w-full p-5">
         <div className="flex items-center justify-center h-32 lg:h-48">
-          <div className="text-center text-gray-500 dark:text-gray-400">
-            <p className="text-sm">{error}</p>
+          <div className="text-center text-muted">
+            <p className="m-0 text-sm">{error}</p>
           </div>
         </div>
-      </div>
+      </Panel>
     );
   }
 
   // No data state
   if (progressionData.length === 0) {
     return (
-      <div className="w-full p-2 lg:p-4 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
+      <Panel className="w-full p-5">
         <div className="flex items-center justify-center h-32 lg:h-48">
-          <div className="text-center text-gray-500 dark:text-gray-400">
-            <p className="text-sm">No progression data available</p>
+          <div className="text-center text-muted">
+            <p className="m-0 text-sm">No progression data available</p>
           </div>
         </div>
-      </div>
+      </Panel>
     );
   }
 
@@ -196,40 +200,6 @@ export default function PlayerProgressionGraph({ playerId, playerName, playerPos
     return isNaN(y) ? chartHeight / 2 : y;
   };
 
-  // Helper function to get color for the overall line based on rating
-  const getOverallLineColor = (rating: number) => {
-    if (rating >= 95) {
-      return '#87f6f8'; // Ultimate teal
-    } else if (rating >= 85) {
-      return '#fa53ff'; // Legendary purple
-    } else if (rating >= 75) {
-      return '#0047ff'; // Rare blue
-    } else if (rating >= 65) {
-      return '#71ff30'; // Uncommon green
-    } else if (rating >= 55) {
-      return '#ecd17f'; // Limited yellow
-    } else {
-      return '#9f9f9f'; // Common grey
-    }
-  };
-
-  // Helper function to get darker color for dots
-  const getDarkerColor = (color: string) => {
-    // Convert hex to RGB and darken
-    const hex = color.replace('#', '');
-    const r = parseInt(hex.substr(0, 2), 16);
-    const g = parseInt(hex.substr(2, 2), 16);
-    const b = parseInt(hex.substr(4, 2), 16);
-    
-    // Darken by 20%
-    const darkenFactor = 0.8;
-    const darkerR = Math.round(r * darkenFactor);
-    const darkerG = Math.round(g * darkenFactor);
-    const darkerB = Math.round(b * darkenFactor);
-    
-    return `rgb(${darkerR}, ${darkerG}, ${darkerB})`;
-  };
-
   // Generate SVG path for a specific stat
    const generatePath = (stat: StatType) => {
      const validData = progressionData
@@ -272,76 +242,6 @@ export default function PlayerProgressionGraph({ playerId, playerName, playerPos
      return `M ${points.join(' L ')}`;
    };
 
-  // Generate multi-colored path segments for overall stat
-  const generateOverallPathSegments = () => {
-    const validData = progressionData
-      .map(d => ({ age: d.age, value: d.overall }))
-      .filter(d => d.value !== undefined && d.value >= 0);
-
-    if (validData.length < 2) return [];
-
-    // For stats with no progression (same value), return single segment
-    const uniqueValues = new Set(validData.map(d => d.value));
-    const hasProgression = uniqueValues.size > 1;
-    
-    if (!hasProgression) {
-      const constantValue = validData[0].value!;
-      const x1 = getChartX(minAge);
-      const y1 = getChartY(constantValue, 'overall');
-      const x2 = getChartX(maxAge);
-      const y2 = getChartY(constantValue, 'overall');
-      
-      return [{
-        path: `M ${x1},${y1} L ${x2},${y2}`,
-        color: getOverallLineColor(constantValue)
-      }];
-    }
-
-    // Create path segments with color changes
-    const segments: Array<{ path: string; color: string }> = [];
-    
-    for (let i = 0; i < validData.length - 1; i++) {
-      const currentPoint = validData[i];
-      const nextPoint = validData[i + 1];
-      
-      if (currentPoint.value !== undefined && nextPoint.value !== undefined) {
-        const x1 = getChartX(currentPoint.age || 0);
-        const y1 = getChartY(currentPoint.value, 'overall');
-        const x2 = getChartX(nextPoint.age || 0);
-        const y2 = getChartY(nextPoint.value, 'overall');
-        
-        // Use the color based on the current point's rating
-        const color = getOverallLineColor(currentPoint.value);
-        
-        segments.push({
-          path: `M ${x1},${y1} L ${x2},${y2}`,
-          color
-        });
-      }
-    }
-
-    // Add final segment to current age if needed
-    if (validData.length > 0) {
-      const lastPoint = validData[validData.length - 1];
-      const lastValue = lastPoint.value!;
-      const lastAge = lastPoint.age || 0;
-      
-      if (lastAge < maxAge) {
-        const x1 = getChartX(lastAge);
-        const y1 = getChartY(lastValue, 'overall');
-        const x2 = getChartX(maxAge);
-        const y2 = getChartY(lastValue, 'overall');
-        
-        segments.push({
-          path: `M ${x1},${y1} L ${x2},${y2}`,
-          color: getOverallLineColor(lastValue)
-        });
-      }
-    }
-
-    return segments;
-  };
-
   // Generate data points for circles - only show dots when the stat value changes
   const generateDataPoints = (stat: StatType) => {
     const allPoints = progressionData
@@ -367,76 +267,49 @@ export default function PlayerProgressionGraph({ playerId, playerName, playerPos
   };
 
   return (
-    <div className="w-full p-2 lg:p-4 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2 lg:mb-4">Player Progression</h3>
-      
-             {/* Stat Toggles */}
-                    <div className="mb-4 flex flex-wrap gap-1">
-               {availableStats.length > 1 && (
-                 <button
-                   onClick={toggleAllStats}
-                   className={`px-3 py-1 text-sm font-bold rounded-full border transition-colors ${
-                     enabledStats.size === availableStats.length
-                       ? 'text-white border-transparent bg-gray-600'
-                       : 'text-gray-600 dark:text-gray-400 border-gray-300 dark:border-gray-600'
-                   }`}
-                 >
-                   {enabledStats.size === availableStats.length ? 'None' : 'All'}
-                 </button>
-               )}
-               {availableStats.map(stat => (
-                 <button
-                   key={stat}
-                   onClick={() => toggleStat(stat)}
-                   className={`px-3 py-1 text-sm font-bold rounded-full border transition-colors ${
-                     enabledStats.has(stat)
-                       ? 'text-white border-transparent'
-                       : 'text-gray-600 dark:text-gray-400 border-gray-300 dark:border-gray-600'
-                   }`}
-                   style={{
-                     backgroundColor: enabledStats.has(stat) ? (stat === 'overall' ? getOverallLineColor(progressionData[progressionData.length - 1]?.overall || 0) : STAT_COLORS[stat]) : 'transparent'
-                   }}
-                 >
-                   {STAT_LABELS[stat]}
-                 </button>
-               ))}
-             </div>
-      
+    <Panel className="w-full p-5 flex flex-col gap-4">
+      <h3 className="m-0 font-display text-[22px] font-bold">Player Progression</h3>
+
+      {/* Stat Toggles */}
+      <div className="flex flex-wrap gap-1.5">
+        {availableStats.length > 1 && (
+          <button
+            onClick={toggleAllStats}
+            className={enabledStats.size === availableStats.length ? `${pillClass} border-fg bg-fg text-canvas` : inactivePillClass}
+          >
+            {enabledStats.size === availableStats.length ? 'None' : 'All'}
+          </button>
+        )}
+        {availableStats.map(stat => (
+          <button
+            key={stat}
+            onClick={() => toggleStat(stat)}
+            className={enabledStats.has(stat) ? pillClass : inactivePillClass}
+            style={enabledStats.has(stat) ? { backgroundColor: STAT_COLORS[stat], borderColor: STAT_COLORS[stat], color: '#0b1406' } : undefined}
+          >
+            {STAT_LABELS[stat]}
+          </button>
+        ))}
+      </div>
+
       <div className="relative">
         <svg
-          width="100%"
-          height="500"
-          className="w-full max-w-full"
+          className="block w-full h-auto max-h-[500px]"
           viewBox="0 0 1200 500"
         >
-          {/* Grid lines */}
-          <defs>
-            <pattern id="grid" width="50" height="50" patternUnits="userSpaceOnUse">
-              <path
-                d="M 50 0 L 0 0 0 50"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="0.5"
-                className="text-gray-200 dark:text-gray-700"
-              />
-            </pattern>
-          </defs>
-          
-          <rect width="100%" height="100%" fill="url(#grid)" />
-          
-          {/* Y-axis labels - dynamic range for enabled stats */}
+          {/* Y-axis labels and gridlines - dynamic range for enabled stats */}
           {(() => {
             // Calculate the overall range for all enabled stats
             const enabledRanges = Array.from(enabledStats)
               .map(stat => statRanges[stat])
               .filter(range => range !== undefined);
-            
+
             if (enabledRanges.length === 0) return null;
-            
+
             const minValue = Math.min(...enabledRanges.map(r => r!.min));
             const maxValue = Math.max(...enabledRanges.map(r => r!.max));
             const midValue = Math.round((minValue + maxValue) / 2);
-            
+
             return [minValue, midValue, maxValue].map((value, index) => {
               // Use the first enabled stat for Y calculation (they all use the same range now)
               const firstStat = Array.from(enabledStats)[0];
@@ -444,10 +317,10 @@ export default function PlayerProgressionGraph({ playerId, playerName, playerPos
               return (
                 <g key={`y-axis-${value}-${index}`}>
                   <text
-                    x={padding - 5}
+                    x={padding - 8}
                     y={y + 4}
                     textAnchor="end"
-                    className="text-xs fill-gray-500 dark:fill-gray-400"
+                    className="font-mono text-xs fill-muted-3"
                   >
                     {value}
                   </text>
@@ -456,15 +329,15 @@ export default function PlayerProgressionGraph({ playerId, playerName, playerPos
                     y1={y}
                     x2={chartWidth - padding}
                     y2={y}
-                    stroke="currentColor"
-                    strokeWidth="0.5"
-                    className="text-gray-300 dark:text-gray-600"
+                    strokeWidth="1"
+                    strokeDasharray="4 4"
+                    className="stroke-line-2"
                   />
                 </g>
               );
             });
           })()}
-          
+
           {/* X-axis labels */}
           {Array.from({ length: Math.floor(maxAge) - minAge + 1 }, (_, i) => minAge + i).map((age) => {
             const x = getChartX(age);
@@ -472,43 +345,18 @@ export default function PlayerProgressionGraph({ playerId, playerName, playerPos
               <text
                 key={age}
                 x={x}
-                y={chartHeight - padding + 15}
+                y={chartHeight - padding + 22}
                 textAnchor="middle"
-                className="text-xs fill-gray-500 dark:fill-gray-400"
+                className="font-mono text-xs fill-muted-3"
               >
                 Age {age}
               </text>
             );
           })}
-          
+
           {/* Progression lines for each enabled stat */}
           {availableStats.map(stat => {
             if (!enabledStats.has(stat) || !statRanges[stat]) return null;
-            
-            if (stat === 'overall') {
-              return (
-                <g key={stat}>
-                  {generateOverallPathSegments().map((segment, index) => (
-                    <path
-                      key={`${stat}-segment-${index}`}
-                      d={segment.path}
-                      fill="none"
-                      stroke={segment.color}
-                      strokeWidth="4"
-                    />
-                  ))}
-                  {generateDataPoints(stat).map((point, index) => (
-                    <circle
-                      key={`${stat}-${index}`}
-                      cx={point.x}
-                      cy={point.y}
-                      r="4"
-                      fill={getDarkerColor(getOverallLineColor(point.value || 0))}
-                    />
-                  ))}
-                </g>
-              );
-            }
 
             return (
               <g key={stat}>
@@ -516,59 +364,59 @@ export default function PlayerProgressionGraph({ playerId, playerName, playerPos
                   d={generatePath(stat)}
                   fill="none"
                   stroke={STAT_COLORS[stat]}
-                  strokeWidth="3"
+                  strokeWidth={stat === 'overall' ? 4 : 3}
+                  strokeLinejoin="round"
+                  strokeLinecap="round"
                 />
                 {generateDataPoints(stat).map((point, index) => (
                   <circle
                     key={`${stat}-${index}`}
                     cx={point.x}
                     cy={point.y}
-                    r="4"
+                    r="5"
                     fill={STAT_COLORS[stat]}
+                    strokeWidth="2"
+                    className="stroke-panel"
                   />
                 ))}
               </g>
             );
           })}
         </svg>
-        
+
         {/* Legend */}
-        <div className="mt-2 lg:mt-4 text-sm text-gray-500 dark:text-gray-400">
-                     {enabledStats.size > 0 && (
-                           <div className="mt-2 flex flex-wrap gap-2">
-               {Array.from(enabledStats).map(stat => {
-                 const range = statRanges[stat];
-                 if (!range) return null;
-                 
-                 const currentValue = progressionData[progressionData.length - 1]?.[stat];
-                 const firstValue = progressionData[0]?.[stat];
-                 const change = currentValue !== undefined && firstValue !== undefined ? currentValue - firstValue : 0;
-                 
-                 // For the legend, we want to show the current (latest) value, not the first value
-                 const displayValue = currentValue !== undefined ? currentValue : 0;
-                 
-         
-                 
-                 return (
-                   <div key={stat} className="flex items-center space-x-2 text-base font-semibold text-gray-700 dark:text-white">
-                     <div 
-                       className="w-3 h-3 rounded-full" 
-                       style={{ backgroundColor: stat === 'overall' ? getOverallLineColor(displayValue) : STAT_COLORS[stat] }}
-                     />
-                     <span className="font-medium">{STAT_LABELS[stat]}:</span>
-                     <span>{displayValue}</span>
-                     {change !== 0 && (
-                       <span className={change > 0 ? 'text-green-600' : 'text-red-600'}>
-                         ({change > 0 ? '+' : ''}{change})
-                       </span>
-                     )}
-                   </div>
-                 );
-               })}
-             </div>
-           )}
-        </div>
+        {enabledStats.size > 0 && (
+          <div className="mt-2 flex flex-wrap gap-x-5 gap-y-2">
+            {Array.from(enabledStats).map(stat => {
+              const range = statRanges[stat];
+              if (!range) return null;
+
+              const currentValue = progressionData[progressionData.length - 1]?.[stat];
+              const firstValue = progressionData[0]?.[stat];
+              const change = currentValue !== undefined && firstValue !== undefined ? currentValue - firstValue : 0;
+
+              // For the legend, we want to show the current (latest) value, not the first value
+              const displayValue = currentValue !== undefined ? currentValue : 0;
+
+              return (
+                <div key={stat} className="flex items-center gap-2 text-sm font-bold text-fg">
+                  <div
+                    className="w-2.5 h-2.5 rounded-full"
+                    style={{ backgroundColor: STAT_COLORS[stat] }}
+                  />
+                  <span className="font-semibold text-muted">{STAT_LABELS[stat]}:</span>
+                  <span className="tabular-nums">{displayValue}</span>
+                  {change !== 0 && (
+                    <span className={change > 0 ? 'text-green-600 dark:text-green-400' : 'text-danger-ink'}>
+                      ({change > 0 ? '+' : ''}{change})
+                    </span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
-    </div>
+    </Panel>
   );
 }

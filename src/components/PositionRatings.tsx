@@ -86,12 +86,12 @@ export const PositionRatings: React.FC<PositionRatingsProps> = ({ player }) => {
   };
 
   const getRatingBarStyle = (rating: number) => {
-    if (rating >= 95) return { backgroundColor: '#87f6f8' };
-    if (rating >= 85) return { backgroundColor: '#fa53ff' };
-    if (rating >= 75) return { backgroundColor: '#0047ff' };
-    if (rating >= 65) return { backgroundColor: '#71ff30' };
-    if (rating >= 55) return { backgroundColor: '#ecd17f' };
-    return { backgroundColor: '#9f9f9f' };
+    if (rating >= 95) return { backgroundColor: '#86f0f2' };
+    if (rating >= 85) return { backgroundColor: '#ee5bf2' };
+    if (rating >= 75) return { backgroundColor: '#2f5bff' };
+    if (rating >= 65) return { backgroundColor: '#8ae63a' };
+    if (rating >= 55) return { backgroundColor: '#e9cf86' };
+    return { backgroundColor: '#454d49' };
   };
 
   if (!player.metadata) {

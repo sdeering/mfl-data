@@ -3,50 +3,28 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useRuleBasedPositionRatings } from '../hooks/useRuleBasedPositionRatings';
 import type { MFLPosition, PlayerForOVRCalculation } from '../types/positionOvr';
-import { getRatingStyle } from '../utils/ratingUtils';
+import { getTierColors } from '../utils/tierColors';
 import { fetchPlayerMatches } from '../services/playerMatchesService';
 import type { PlayerMatchStats, PositionSummary } from '../types/playerMatches';
 import { OverallRatingTooltip } from './OverallRatingTooltip';
+import { btnSecondary } from './ui';
 
-// Function to get tier color based on rating value (same as PlayerStatsGrid)
-const getTierColor = (rating: number) => {
-  if (rating >= 95) {
-    return {
-      bg: 'bg-[#87f6f8]',
-      text: 'text-black',
-      border: 'border-[var(--tier-common-foreground)]/15'
-    };
-  } else if (rating >= 85) {
-    return {
-      bg: 'bg-[#fa53ff]',
-      text: 'text-white',
-      border: 'border-[var(--tier-common-foreground)]/15'
-    };
-  } else if (rating >= 75) {
-    return {
-      bg: 'bg-[#0047ff]',
-      text: 'text-white',
-      border: 'border-[var(--tier-common-foreground)]/15'
-    };
-  } else if (rating >= 65) {
-    return {
-      bg: 'bg-[#71ff30]',
-      text: 'text-black',
-      border: 'border-[var(--tier-common-foreground)]/15'
-    };
-  } else if (rating >= 55) {
-    return {
-      bg: 'bg-[#ecd17f]',
-      text: 'text-black',
-      border: 'border-[var(--tier-common-foreground)]/15'
-    };
-  } else {
-    return {
-      bg: 'bg-[#9f9f9f]',
-      text: 'text-white',
-      border: 'border-[var(--tier-common-foreground)]/15'
-    };
-  }
+// Row tint by how the position compares to the primary one: bright for the primary (or a position the player
+// rates as well in matches), fading green just below it, red well below it
+const getRowTint = (isBright: boolean, difference: number) => {
+  const [background, borderColor] = isBright ? ['rgba(138,230,58,.34)', 'rgba(138,230,58,.8)']
+    : difference >= -1 ? ['rgba(138,230,58,.14)', 'rgba(138,230,58,.35)']
+    : difference >= -6 ? ['rgba(138,230,58,.07)', 'rgba(138,230,58,.2)']
+    : difference >= -17 ? ['rgba(239,68,68,.09)', 'rgba(239,68,68,.22)']
+    : ['rgba(239,68,68,.17)', 'rgba(239,68,68,.35)'];
+  return { background, borderColor };
+};
+
+const getMatchRatingColor = (rating: number) => {
+  if (rating >= 8.0) return 'text-rt-cyan';
+  if (rating >= 7.0) return 'text-rt-green';
+  if (rating >= 6.0) return 'text-warn-ink';
+  return 'text-danger-ink';
 };
 
 interface PositionRatingsDisplayProps {
@@ -147,11 +125,9 @@ export default function PositionRatingsDisplay({ player, showMatchRatings = true
   // Loading state
   if (isLoading) {
     return (
-      <div className="text-gray-600 dark:text-gray-400 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
-        <div className="flex items-center space-x-2">
-          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
-          <span>Calculating position ratings...</span>
-        </div>
+      <div className="flex items-center justify-center gap-2 py-6 text-sm text-muted">
+        <div className="animate-spin rounded-full h-4 w-4 border-2 border-accent border-t-transparent"></div>
+        <span>Calculating position ratings...</span>
       </div>
     );
   }
@@ -159,10 +135,8 @@ export default function PositionRatingsDisplay({ player, showMatchRatings = true
   // Error state
   if (error) {
     return (
-      <div className="text-gray-600 dark:text-gray-400 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
-        <div className="text-center">
-          <p>No position ratings available</p>
-        </div>
+      <div className="py-6 text-center text-sm text-muted">
+        <p className="m-0">No position ratings available</p>
       </div>
     );
   }
@@ -170,10 +144,8 @@ export default function PositionRatingsDisplay({ player, showMatchRatings = true
   // No ratings available
   if (!positionRatings || !positionRatings.success || !positionRatings.results) {
     return (
-      <div className="text-gray-600 dark:text-gray-400 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
-        <div className="text-center">
-          <p>No position ratings available</p>
-        </div>
+      <div className="py-6 text-center text-sm text-muted">
+        <p className="m-0">No position ratings available</p>
       </div>
     );
   }
@@ -213,43 +185,44 @@ export default function PositionRatingsDisplay({ player, showMatchRatings = true
   // Show only top 6 positions initially, or all if showAllPositions is true
   const displayedRatings = showAllPositions ? sortedRatings : sortedRatings.slice(0, 6);
 
+  // A position the player rates as well in matches as their primary one is highlighted like the primary
+  const primaryMatchRating = showMatchRatings
+    ? matchPositionRatings.find(mr => mr.position === sortedRatings.find(r => r.familiarity === 'PRIMARY')?.position)?.averageRating
+    : undefined;
+
   return (
-    <div className="space-y-4">
-      {/* Position Ratings Grid */}
-      <div className="grid grid-cols-1 gap-3">
-        {displayedRatings.map((rating, index) => {
-          const matchRating = showMatchRatings ? matchPositionRatings.find(mr => mr.position === rating.position) : undefined;
-          return (
-            <PositionRatingItem 
-              key={`${rating.position}-${index}`} 
-              rating={rating} 
-              player={player} 
-              matchRating={matchRating}
-            />
-          );
-        })}
-      </div>
+    <div className="flex flex-col gap-2">
+      {displayedRatings.map((rating, index) => {
+        const matchRating = showMatchRatings ? matchPositionRatings.find(mr => mr.position === rating.position) : undefined;
+        return (
+          <PositionRatingItem 
+            key={`${rating.position}-${index}`} 
+            rating={rating} 
+            player={player} 
+            matchRating={matchRating}
+            primaryMatchRating={primaryMatchRating}
+          />
+        );
+      })}
       
       {/* Show More/Less Button */}
       {sortedRatings.length > 6 && (
-        <div className="text-center">
-          <button
-            onClick={() => setShowAllPositions(!showAllPositions)}
-            className="px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg border border-gray-200 dark:border-gray-600 hover:bg-gray-200 dark:hover:bg-gray-600 hover:text-gray-900 dark:hover:text-white transition-all duration-200 font-medium text-sm cursor-pointer"
-          >
-            {showAllPositions 
-              ? `Show Less Positions` 
-              : `Show ${sortedRatings.length - 6} More Positions`
-            }
-          </button>
-        </div>
+        <button
+          onClick={() => setShowAllPositions(!showAllPositions)}
+          className={`${btnSecondary} w-full mt-1.5 text-fg-2`}
+        >
+          {showAllPositions 
+            ? `Show Less Positions` 
+            : `Show ${sortedRatings.length - 6} More Positions`
+          }
+        </button>
       )}
     </div>
   );
 }
 
 // Individual position rating item component
-function PositionRatingItem({ rating, player, matchRating }: { 
+function PositionRatingItem({ rating, player, matchRating, primaryMatchRating }: { 
   rating: {
     position: MFLPosition;
     rating: number;
@@ -258,90 +231,68 @@ function PositionRatingItem({ rating, player, matchRating }: {
   }; 
   player: PositionRatingsDisplayProps['player'];
   matchRating?: PositionSummary;
+  primaryMatchRating?: number;
 }) {
   const { position, familiarity, difference, rating: ratingValue } = rating;
   
-  const overallRating = player.metadata.overall;
-  const tierColors = getTierColor(ratingValue);
-  const gradientStyle = getRatingStyle(ratingValue, overallRating);
-  
-  const getMatchRatingColor = (rating: number) => {
-    if (rating >= 8.0) return 'text-[#00adc3]';
-    if (rating >= 7.0) return 'text-[#00c424]';
-    if (rating >= 6.0) return 'text-[#d7af00]';
-    return 'text-red-600';
-  };
+  const tierColors = getTierColors(ratingValue);
+  const isBright = familiarity === 'PRIMARY' ||
+    (matchRating !== undefined && primaryMatchRating !== undefined && matchRating.averageRating >= primaryMatchRating);
+  const ringClass = familiarity === 'PRIMARY' ? 'border-[#8ae63a]'
+    : familiarity === 'SECONDARY' ? 'border-[#f97316]'
+    : 'border-line-2';
+
+  const ratingChip = (
+    <div
+      className="grid place-items-center w-11 h-[38px] rounded-[10px] font-display text-lg font-extrabold tabular-nums"
+      style={{ background: tierColors.bg, color: tierColors.fg }}
+    >
+      {ratingValue}
+    </div>
+  );
 
   return (
     <div
-      className={`px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 transition-all duration-200 ${gradientStyle}`}
+      className="flex items-center gap-3 h-14 pl-2 pr-2.5 rounded-[14px] border transition-colors"
+      style={getRowTint(isBright, difference)}
     >
-      <div className="flex items-center justify-between">
-        <div className="flex items-center space-x-2">
-          <span className={`text-lg font-bold px-3 py-2 rounded-lg shadow-sm text-gray-900 dark:text-gray-900 bg-gradient-to-r from-gray-100 to-gray-200 dark:from-gray-100 dark:to-gray-200 ${
-            familiarity === 'PRIMARY' ? 'border-4 border-green-500' : 
-            familiarity === 'SECONDARY' ? 'border-4 border-orange-500' : ''
-          }`}>
-            {position}
+      <span className={`grid place-items-center min-w-11 h-[38px] px-1.5 rounded-[10px] border-2 bg-field text-[13px] font-extrabold text-fg ${ringClass}`}>
+        {position}
+      </span>
+      {matchRating && (
+        <div className="relative group">
+          <span className={`font-display text-xl font-extrabold tabular-nums ${getMatchRatingColor(matchRating.averageRating)} cursor-help`}>
+            {matchRating.averageRating.toFixed(2)}
           </span>
-          {matchRating && (
-            <div className="flex items-center space-x-1">
-              <div className="relative group">
-                <span className={`text-[24px] font-bold ${getMatchRatingColor(matchRating.averageRating)} cursor-help`} style={{ marginRight: '0', marginLeft: '4px' }}>
-                  {matchRating.averageRating.toFixed(2)}
-                </span>
-                {/* Tooltip */}
-                <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-gray-900 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-10">
-                  {matchRating.matches} {matchRating.matches === 1 ? 'game' : 'games'}
-                  <div className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-900"></div>
-                </div>
-              </div>
-            </div>
-          )}
-          {familiarity === 'PRIMARY' && (
-            <span className="text-xs font-semibold text-black dark:text-black" style={{ marginLeft: '4px' }}>
-              Primary
-            </span>
-          )}
-          {familiarity === 'SECONDARY' && (
-            <span className="text-xs font-semibold text-black dark:text-black" style={{ marginLeft: '4px' }}>
-              Secondary
-            </span>
-          )}
+          {/* Tooltip */}
+          <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2.5 py-1.5 rounded-xl border border-line-2 bg-panel text-fg text-xs font-semibold shadow-[0_12px_30px_rgba(0,0,0,.4)] opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-10">
+            {matchRating.matches} {matchRating.matches === 1 ? 'game' : 'games'}
+          </div>
         </div>
-        
-        <div className="flex items-center space-x-2">
-          {difference !== 0 && (
-            <span 
-              className="font-medium text-black"
-              style={{
-                fontSize: difference > 0 
-                  ? `${Math.max(0.75, Math.min(1.5, 0.75 + difference * 0.08))}rem`
-                  : '0.875rem' // 14px for negative differences
-              }}
-            >
-              {difference > 0 ? '+' : ''}{difference}
-            </span>
-          )}
-          {(familiarity === 'PRIMARY' || familiarity === 'SECONDARY') ? (
-            <OverallRatingTooltip player={player} position={position}>
-              <div 
-                className={`font-bold px-3 py-2 rounded-lg shadow-sm ${tierColors.text} ${tierColors.bg} ${tierColors.border}`}
-                style={{ fontSize: '22px' }}
-              >
-                {ratingValue}
-              </div>
-            </OverallRatingTooltip>
-          ) : (
-            <div 
-              className={`font-bold px-3 py-2 rounded-lg shadow-sm ${tierColors.text} ${tierColors.bg} ${tierColors.border}`}
-              style={{ fontSize: '22px' }}
-            >
-              {ratingValue}
-            </div>
-          )}
-        </div>
-      </div>
+      )}
+      {familiarity === 'PRIMARY' && (
+        <span className="text-xs font-semibold text-fg-3">
+          Primary
+        </span>
+      )}
+      {familiarity === 'SECONDARY' && (
+        <span className="text-xs font-semibold text-fg-3">
+          Secondary
+        </span>
+      )}
+      <span className="flex-1" />
+      {difference !== 0 && (
+        <span className={`font-mono text-[13px] font-semibold ${difference > 0 ? 'text-green-600 dark:text-green-400' : 'text-muted'}`}>
+          {difference > 0 ? '+' : ''}{difference}
+        </span>
+      )}
+      {(familiarity === 'PRIMARY' || familiarity === 'SECONDARY') ? (
+        <OverallRatingTooltip player={player} position={position}>
+          {ratingChip}
+        </OverallRatingTooltip>
+      ) : (
+        ratingChip
+      )}
     </div>
   );
 }

@@ -3,6 +3,10 @@
 import React, { useState, useEffect } from 'react';
 import { fetchPlayerMatches } from '../services/playerMatchesService';
 import type { PlayerMatchStats } from '../types/playerMatches';
+import { Panel, btnSecondary } from './ui';
+
+const badgeClass = 'inline-flex items-center h-[22px] px-2 rounded-full text-[11px] font-bold';
+const toggleClass = 'h-8 px-3.5 rounded-full text-xs font-bold cursor-pointer transition-colors';
 
 interface PlayerRecentMatchesProps {
   playerId: string;
@@ -104,10 +108,10 @@ export default function PlayerRecentMatches({ playerId, playerName }: PlayerRece
   };
 
   const getRatingColor = (rating: number) => {
-    if (rating >= 8.0) return 'text-[#00adc3]';
-    if (rating >= 7.0) return 'text-[#00c424]';
-    if (rating >= 6.0) return 'text-[#d7af00]';
-    return 'text-red-600';
+    if (rating >= 8.0) return 'text-rt-cyan';
+    if (rating >= 7.0) return 'text-rt-green';
+    if (rating >= 6.0) return 'text-warn-ink';
+    return 'text-danger-ink';
   };
 
   const toggleMatchType = (matchType: string) => {
@@ -143,40 +147,40 @@ export default function PlayerRecentMatches({ playerId, playerName }: PlayerRece
   // Loading state
   if (isLoading) {
     return (
-      <div className="w-full p-4 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
+      <Panel className="w-full p-[18px]">
         <div className="flex items-center justify-center h-48">
-          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+          <div className="animate-spin rounded-full h-6 w-6 border-2 border-accent border-t-transparent"></div>
         </div>
-      </div>
+      </Panel>
     );
   }
 
   // Error state
   if (error) {
     return (
-      <div className="w-full p-4 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
+      <Panel className="w-full p-[18px]">
         <div className="flex items-center justify-center h-48">
-          <div className="text-center text-gray-500 dark:text-gray-400">
-            <p className="text-sm">{error}</p>
+          <div className="text-center text-muted">
+            <p className="m-0 text-sm">{error}</p>
           </div>
         </div>
-      </div>
+      </Panel>
     );
   }
 
   // No data state
   if (matches.length === 0) {
     return (
-      <div className="w-full p-4 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
-        <div className="mb-4">
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Recent Matches</h3>
+      <Panel className="w-full">
+        <div className="px-[18px] py-4">
+          <h3 className="m-0 font-display text-lg font-bold">Recent Matches</h3>
         </div>
-        <div className="flex items-center justify-center h-48">
-          <div className="text-center text-gray-500 dark:text-gray-400">
-            <p className="text-sm">No matches available</p>
+        <div className="flex items-center justify-center h-48 border-t border-line">
+          <div className="text-center text-muted">
+            <p className="m-0 text-sm">No matches available</p>
           </div>
         </div>
-      </div>
+      </Panel>
     );
   }
 
@@ -193,137 +197,128 @@ export default function PlayerRecentMatches({ playerId, playerName }: PlayerRece
 
   const displayedMatches = showAllMatches ? filteredMatches : filteredMatches.slice(0, 5);
 
+  const toggleButtonClass = (isActive: boolean) =>
+    `${toggleClass} ${isActive ? 'bg-fg text-canvas' : 'bg-transparent text-fg-3 hover:text-fg'}`;
+
   return (
-    <div className="w-full p-4 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
-      <div className="mb-4">
-        <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Recent Matches</h3>
-        
+    <Panel className="w-full overflow-hidden">
+      <div className="flex flex-wrap items-center justify-between gap-3 px-[18px] py-4">
+        <h3 className="m-0 font-display text-lg font-bold">Recent Matches</h3>
+
         {/* Match Type Toggles */}
-        <div className="mt-3 flex flex-wrap gap-1">
+        <div className="flex p-[3px] rounded-full bg-field border border-line-3">
           <button
             onClick={() => toggleMatchType('All')}
-            className={`px-3 py-1 text-sm font-bold rounded-full border transition-colors ${
-              enabledMatchTypes.size === 2
-                ? 'text-white border-transparent bg-blue-500'
-                : 'text-gray-600 dark:text-gray-400 border-gray-300 dark:border-gray-600'
-            }`}
+            className={toggleButtonClass(enabledMatchTypes.size === 2)}
           >
             All
           </button>
           <button
             onClick={() => toggleMatchType('League')}
-            className={`px-3 py-1 text-sm font-bold rounded-full border transition-colors ${
-              enabledMatchTypes.has('League') && enabledMatchTypes.size === 1
-                ? 'text-white border-transparent bg-green-500'
-                : 'text-gray-600 dark:text-gray-400 border-gray-300 dark:border-gray-600'
-            }`}
+            className={toggleButtonClass(enabledMatchTypes.has('League') && enabledMatchTypes.size === 1)}
           >
             League
           </button>
           <button
             onClick={() => toggleMatchType('Cup')}
-            className={`px-3 py-1 text-sm font-bold rounded-full border transition-colors ${
-              enabledMatchTypes.has('Cup') && enabledMatchTypes.size === 1
-                ? 'text-white border-transparent bg-purple-500'
-                : 'text-gray-600 dark:text-gray-400 border-gray-300 dark:border-gray-600'
-            }`}
+            className={toggleButtonClass(enabledMatchTypes.has('Cup') && enabledMatchTypes.size === 1)}
           >
             Cup
           </button>
         </div>
       </div>
-      
+
       {/* Recent Matches */}
-      <div className="space-y-3">
+      <div className="border-t border-line">
         {displayedMatches.map((match) => {
           const matchType = getMatchType(match.match.competition.name);
           const division = getDivisionBadge(match.match.competition.name);
           const divisionColor = getDivisionColor(division);
-          
+
           return (
-            <div 
-              key={match.id} 
-              className="p-3 bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600"
+            <div
+              key={match.id}
+              className="flex justify-between items-start gap-3 px-[18px] py-3 border-b border-divider last:border-b-0 hover:bg-row-hover transition-colors"
             >
-              <div className="flex justify-between items-start mb-2">
-                <div className="flex-1">
-                                  <div className="flex items-center space-x-2 mb-1">
-                  <span className="text-base font-bold text-gray-900 dark:text-white">
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-1.5 mb-1">
+                  <span className="grid place-items-center min-w-9 h-[26px] px-1.5 rounded-lg border border-line-2 bg-field text-xs font-extrabold text-fg">
                     {match.stats.position}
                   </span>
-                  <span className={`text-xs px-2 py-1 rounded ${
-                    matchType === 'Cup' 
-                      ? 'bg-purple-100 dark:bg-purple-900 text-purple-800 dark:text-purple-200' 
-                      : 'bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200'
+                  <span className={`${badgeClass} ${
+                    matchType === 'Cup'
+                      ? 'bg-violet-bg text-violet-ink'
+                      : 'bg-[rgba(138,230,58,.14)] text-pos-ink'
                   }`}>
                     {matchType}
                   </span>
-                    {division && (
-                      <span className={`text-xs px-2 py-1 rounded font-medium ${divisionColor}`}>
-                        {division}
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                    {match.match.homeTeamName} vs {match.match.awayTeamName}
-                  </p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">
-                    {formatDate(match.match.startDate)} • {match.match.competition.name}
-                  </p>
-                  
-                  {/* Goals and Assists Icons */}
-                  <div className="flex items-center space-x-2 mt-2">
+                  {division && (
+                    <span className={`${badgeClass} ${divisionColor}`}>
+                      {division}
+                    </span>
+                  )}
+                </div>
+                <p className="m-0 mt-1 text-sm font-semibold text-fg-2">
+                  {match.match.homeTeamName} vs {match.match.awayTeamName}
+                </p>
+                <p className="m-0 mt-0.5 text-xs text-muted">
+                  {formatDate(match.match.startDate)} • {match.match.competition.name}
+                </p>
+
+                {/* Goals and Assists Icons */}
+                {(match.stats.goals > 0 || match.stats.assists > 0) && (
+                  <div className="flex items-center gap-2 mt-2">
                     {/* Goals */}
                     {match.stats.goals > 0 && (
-                      <div className="flex items-center space-x-1">
+                      <div className="flex items-center gap-1">
                         {Array.from({ length: match.stats.goals }, (_, i) => (
-                          <div key={i} className="w-4 h-4 bg-green-600 dark:bg-green-400 rounded-full flex items-center justify-center">
-                            <span className="text-xs font-bold text-white">⚽</span>
+                          <div key={i} className="w-5 h-5 rounded-full grid place-items-center bg-[rgba(138,230,58,.18)]">
+                            <span className="text-[11px] leading-none">⚽</span>
                           </div>
                         ))}
                       </div>
                     )}
-                    
+
                     {/* Assists */}
                     {match.stats.assists > 0 && (
-                      <div className="flex items-center space-x-1">
+                      <div className="flex items-center gap-1">
                         {Array.from({ length: match.stats.assists }, (_, i) => (
-                          <div key={i} className="w-4 h-4 bg-white dark:bg-gray-200 rounded-full flex items-center justify-center border border-gray-300 dark:border-gray-600">
-                            <span className="text-xs font-bold text-gray-800 dark:text-gray-800">🥅</span>
+                          <div key={i} className="w-5 h-5 rounded-full grid place-items-center border border-line-2 bg-chip">
+                            <span className="text-[11px] leading-none">🥅</span>
                           </div>
                         ))}
                       </div>
                     )}
                   </div>
-                </div>
-                <div className="text-right">
-                  <span className={`text-[20px] font-bold ${getRatingColor(match.stats.rating)}`}>
-                    {formatRating(match.stats.rating)}
-                  </span>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">
-                    rating
-                  </p>
-                </div>
+                )}
+              </div>
+              <div className="text-right">
+                <span className={`font-display text-xl font-extrabold tabular-nums ${getRatingColor(match.stats.rating)}`}>
+                  {formatRating(match.stats.rating)}
+                </span>
+                <p className="m-0 text-[11px] text-muted-3">
+                  rating
+                </p>
               </div>
             </div>
           );
         })}
       </div>
-      
+
       {/* Show More/Less Button */}
       {matches.length > 5 && (
-        <div className="text-center mt-4">
+        <div className="flex justify-center px-[18px] py-4 border-t border-divider">
           <button
             onClick={() => setShowAllMatches(!showAllMatches)}
-            className="px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg border border-gray-200 dark:border-gray-600 hover:bg-gray-200 dark:hover:bg-gray-600 hover:text-gray-900 dark:hover:text-white transition-all duration-200 font-medium text-sm cursor-pointer"
+            className={btnSecondary}
           >
-            {showAllMatches 
-              ? `Show Less Matches` 
+            {showAllMatches
+              ? `Show Less Matches`
               : `Show ${matches.length - 5} More Matches`
             }
           </button>
         </div>
       )}
-    </div>
+    </Panel>
   );
 }

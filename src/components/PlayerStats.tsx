@@ -4,45 +4,23 @@ import { getCountryFlag, formatCountryName } from '@/src/utils/countryFlags';
 import type { MFLPlayer } from '@/src/types/mflApi';
 import type { MarketValueEstimate } from '@/src/utils/marketValueCalculator';
 
-// Function to get tier color based on rating value (same as PlayerStatsGrid)
-const getTierColor = (rating: number) => {
-  if (rating >= 95) {
-    return {
-      bg: 'bg-[#87f6f8]',
-      text: 'text-black',
-      border: 'border-[var(--tier-common-foreground)]/15'
-    };
-  } else if (rating >= 85) {
-    return {
-      bg: 'bg-[#fa53ff]',
-      text: 'text-white',
-      border: 'border-[var(--tier-common-foreground)]/15'
-    };
-  } else if (rating >= 75) {
-    return {
-      bg: 'bg-[#0047ff]',
-      text: 'text-white',
-      border: 'border-[var(--tier-common-foreground)]/15'
-    };
-  } else if (rating >= 65) {
-    return {
-      bg: 'bg-[#71ff30]',
-      text: 'text-black',
-      border: 'border-[var(--tier-common-foreground)]/15'
-    };
-  } else if (rating >= 55) {
-    return {
-      bg: 'bg-[#ecd17f]',
-      text: 'text-black',
-      border: 'border-[var(--tier-common-foreground)]/15'
-    };
-  } else {
-    return {
-      bg: 'bg-[#9f9f9f]',
-      text: 'text-white',
-      border: 'border-[var(--tier-common-foreground)]/15'
-    };
-  }
+const valueClass = 'text-[15px] font-bold text-fg';
+const linkValueClass = `${valueClass} hover:text-accent-ink transition-colors cursor-pointer`;
+const pillClass = 'inline-flex items-center whitespace-nowrap leading-tight rounded-full font-bold';
+
+const TAG_CLASSES: Record<string, string> = {
+  slow: 'bg-[rgba(249,115,22,.16)] text-orange-ink',
+  retirement: 'bg-[rgba(249,115,22,.16)] text-orange-ink',
+  fast: 'bg-[rgba(138,230,58,.14)] text-pos-ink',
+  lightningFast: 'bg-[rgba(138,230,58,.14)] text-pos-ink',
+  positions: 'bg-[rgba(138,230,58,.14)] text-pos-ink',
+  newlyMinted: 'bg-violet-bg text-violet-ink',
+};
+
+const CONFIDENCE_CLASSES: Record<string, string> = {
+  high: 'bg-[rgba(138,230,58,.14)] text-pos-ink',
+  medium: 'bg-[rgba(255,190,90,.14)] text-warn-ink',
+  low: 'bg-red-500/18 text-danger-ink',
 };
 
 interface PlayerStatsProps {
@@ -225,151 +203,109 @@ export default function PlayerStats({ player, marketValueEstimate, progressionDa
 
 
   return (
-    <div className="space-y-3">
+    <div>
         {stats.map((stat, index) => (
-          <div key={index} className="flex items-center justify-between">
-            <span className="text-sm font-semibold text-gray-700 dark:text-gray-300 tracking-wide">{stat.label}</span>
-            <div className="flex items-center space-x-2">
+          <div key={index} className="flex items-center justify-between gap-3 min-h-[46px] py-2 border-b border-divider last:border-b-0">
+            <span className="text-[13px] font-semibold text-muted">{stat.label}</span>
+            <div className="flex flex-wrap items-center justify-end gap-1.5 min-w-0 text-right">
               {stat.value !== undefined && stat.value !== null ? (
                 <>
                   {stat.isCountry ? (
-                    <span className="text-lg font-bold px-3 py-2 rounded-lg shadow-sm text-gray-900 dark:text-gray-900 bg-gradient-to-r from-white to-gray-100 dark:from-white dark:to-gray-100">
-                      <span className="text-xl mr-2">{getCountryFlag(stat.value as string)}</span>
+                    <span className={`${valueClass} flex items-center gap-2`}>
+                      <span className="text-lg leading-none">{getCountryFlag(stat.value as string)}</span>
                       {formatCountryName(stat.value as string)}
                     </span>
                   ) : stat.isAgency ? (
-                    <a 
+                    <a
                       href={`https://app.playmfl.com/users/${player.ownedBy.walletAddress}`}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className={`text-lg font-bold px-3 py-2 rounded-lg shadow-sm text-gray-900 dark:text-gray-900 bg-gradient-to-r from-white to-gray-100 dark:from-white dark:to-gray-100 hover:bg-gray-50 dark:hover:bg-gray-50 transition-colors cursor-pointer`}
+                      className={linkValueClass}
                     >
                       {stat.value}
                     </a>
                   ) : stat.isTeam ? (
-                    stat.isFreeAgent ? (
-                      <span className="text-lg font-bold px-3 py-2 rounded-lg shadow-sm text-gray-900 dark:text-gray-900 bg-gradient-to-r from-white to-gray-100 dark:from-white dark:to-gray-100">
-                        {stat.value}
-                      </span>
-                    ) : stat.isDevCentre ? (
-                      <span className="text-lg font-bold px-3 py-2 rounded-lg shadow-sm text-gray-900 dark:text-gray-900 bg-gradient-to-r from-white to-gray-100 dark:from-white dark:to-gray-100">
-                        {stat.value}
-                      </span>
-                    ) : stat.teamId ? (
-                      <a 
+                    stat.teamId && !stat.isFreeAgent && !stat.isDevCentre ? (
+                      <a
                         href={`https://app.playmfl.com/clubs/${stat.teamId}`}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-lg font-bold px-3 py-2 rounded-lg shadow-sm text-gray-900 dark:text-gray-900 bg-gradient-to-r from-white to-gray-100 dark:from-white dark:to-gray-100 hover:bg-gray-50 dark:hover:bg-gray-50 transition-colors cursor-pointer"
+                        className={linkValueClass}
                       >
                         {stat.value}
                       </a>
                     ) : (
-                      <span className="text-lg font-bold px-3 py-2 rounded-lg shadow-sm text-gray-900 dark:text-gray-900 bg-gradient-to-r from-white to-gray-100 dark:from-white dark:to-gray-100">
-                        {stat.value}
-                      </span>
+                      <span className={valueClass}>{stat.value}</span>
                     )
                   ) : stat.isMarketValue ? (
-                    <div className="flex items-center space-x-2">
-                      <div className="flex items-center space-x-1 px-3 py-2 rounded-lg shadow-sm text-gray-900 dark:text-gray-900 bg-gradient-to-r from-white to-gray-100 dark:from-white dark:to-gray-100">
-                        {stat.isCalculating ? (
-                          <div className="flex items-center space-x-2">
-                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-600"></div>
-                            <span className="text-lg font-bold">Calculating...</span>
-                          </div>
-                        ) : (
-                          <>
-                            <span className="text-lg font-bold">
-                              {stat.value}
+                    <div className="flex items-center gap-1.5">
+                      {stat.isCalculating ? (
+                        <div className="flex items-center gap-2">
+                          <div className="animate-spin rounded-full h-4 w-4 border-2 border-accent border-t-transparent"></div>
+                          <span className={valueClass}>Calculating...</span>
+                        </div>
+                      ) : (
+                        <>
+                          <span className={valueClass}>
+                            {stat.value}
+                          </span>
+                          {stat.confidence && (
+                            <span className={`${pillClass} px-2.5 py-[3px] text-[11px] ${CONFIDENCE_CLASSES[stat.confidence] ?? CONFIDENCE_CLASSES.low}`}>
+                              {stat.confidence}
                             </span>
-                            {stat.confidence && (
-                              <span className={`text-xs px-2 py-1 rounded-full ml-2 ${
-                                stat.confidence === 'high' 
-                                  ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
-                                  : stat.confidence === 'medium'
-                                  ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200'
-                                  : 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
-                              }`}>
-                                {stat.confidence}
-                              </span>
-                            )}
-                          </>
-                        )}
-                        {stat.breakdown && !stat.isCalculating && (
-                          <div className="relative group">
-                            <svg className="w-4 h-4 text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 cursor-help" fill="currentColor" viewBox="0 0 20 20">
-                              <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-3a1 1 0 00-.867.5 1 1 0 11-1.731-1A3 3 0 0113 8a3.001 3.001 0 01-2 2.83V11a1 1 0 11-2 0v-1a1 1 0 011-1 1 1 0 100-2zm0 8a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
-                            </svg>
-                                                  {/* Tooltip */}
-                      <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-gray-900 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-10 max-w-xs">
-                        <div className="font-semibold mb-1">Market Value Estimate</div>
-                        <div className="space-y-1">
-                          <div>Base value: ${stat.details?.baseValue?.toLocaleString()}</div>
+                          )}
+                        </>
+                      )}
+                      {stat.breakdown && !stat.isCalculating && (
+                        <div className="relative group flex">
+                          <svg className="w-4 h-4 text-muted-3 hover:text-fg-2 cursor-help" fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-3a1 1 0 00-.867.5 1 1 0 11-1.731-1A3 3 0 0113 8a3.001 3.001 0 01-2 2.83V11a1 1 0 11-2 0v-1a1 1 0 011-1 1 1 0 100-2zm0 8a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
+                          </svg>
+                          {/* Tooltip */}
+                          <div className="absolute bottom-full right-0 mb-2 px-3.5 py-3 rounded-xl border border-line-2 bg-panel text-left text-xs font-medium text-fg-3 shadow-[0_20px_50px_rgba(0,0,0,.45)] opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-10">
+                            <div className="font-display text-sm font-bold text-fg mb-1.5">Market Value Estimate</div>
+                            <div className="space-y-1">
+                              <div>Base value: ${stat.details?.baseValue?.toLocaleString()}</div>
 
-                          {stat.breakdown.positionPremium > 0 && (
-                            <div>Positions premium: +${stat.breakdown.positionPremium.toLocaleString()}</div>
-                          )}
+                              {stat.breakdown.positionPremium > 0 && (
+                                <div>Positions premium: +${stat.breakdown.positionPremium.toLocaleString()}</div>
+                              )}
 
-                          {stat.breakdown.progressionPremium !== 0 && (
-                            <div>{stat.breakdown.progressionPremium > 0 ? 'Progression premium' : 'Progression penalty'}: {stat.breakdown.progressionPremium > 0 ? '+' : '-'}${Math.abs(stat.breakdown.progressionPremium).toLocaleString()}</div>
-                          )}
-                          {stat.breakdown.retirementPenalty !== 0 && (
-                            <div>Retirement penalty: -${Math.abs(stat.breakdown.retirementPenalty).toLocaleString()}</div>
-                          )}
-                          {stat.breakdown.newlyMintPremium > 0 && (
-                            <div>Newly mint premium: +${stat.breakdown.newlyMintPremium.toLocaleString()}</div>
-                          )}
-                          {stat.breakdown.pacePenalty !== 0 && (
-                            <div>Pace penalty: -${Math.abs(stat.breakdown.pacePenalty).toLocaleString()}</div>
-                          )}
-                          {stat.breakdown.pacePremium > 0 && (
-                            <div>Pace premium: +${stat.breakdown.pacePremium.toLocaleString()}</div>
-                          )}
-                          {stat.breakdown.heightAdjustment !== 0 && (
-                            <div>{stat.breakdown.heightAdjustment > 0 ? 'Height premium' : 'Height penalty'}: {stat.breakdown.heightAdjustment > 0 ? '+' : '-'}${Math.abs(stat.breakdown.heightAdjustment).toLocaleString()}</div>
-                          )}
-                        </div>
-                        <div className="border-t border-gray-700 pt-1 mt-1">
-                          <div>Based on {stat.breakdown.comparableListings} comparable listings and {stat.breakdown.recentSales} recent sales</div>
-                          <div>Confidence: {stat.confidence}</div>
-                          <div className="italic text-gray-400">* this is just an estimate, please do your own research *</div>
-                        </div>
-                        <div className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-900"></div>
-                      </div>
+                              {stat.breakdown.progressionPremium !== 0 && (
+                                <div>{stat.breakdown.progressionPremium > 0 ? 'Progression premium' : 'Progression penalty'}: {stat.breakdown.progressionPremium > 0 ? '+' : '-'}${Math.abs(stat.breakdown.progressionPremium).toLocaleString()}</div>
+                              )}
+                              {stat.breakdown.retirementPenalty !== 0 && (
+                                <div>Retirement penalty: -${Math.abs(stat.breakdown.retirementPenalty).toLocaleString()}</div>
+                              )}
+                              {stat.breakdown.newlyMintPremium > 0 && (
+                                <div>Newly mint premium: +${stat.breakdown.newlyMintPremium.toLocaleString()}</div>
+                              )}
+                              {stat.breakdown.pacePenalty !== 0 && (
+                                <div>Pace penalty: -${Math.abs(stat.breakdown.pacePenalty).toLocaleString()}</div>
+                              )}
+                              {stat.breakdown.pacePremium > 0 && (
+                                <div>Pace premium: +${stat.breakdown.pacePremium.toLocaleString()}</div>
+                              )}
+                              {stat.breakdown.heightAdjustment !== 0 && (
+                                <div>{stat.breakdown.heightAdjustment > 0 ? 'Height premium' : 'Height penalty'}: {stat.breakdown.heightAdjustment > 0 ? '+' : '-'}${Math.abs(stat.breakdown.heightAdjustment).toLocaleString()}</div>
+                              )}
+                            </div>
+                            <div className="border-t border-divider pt-1.5 mt-1.5 space-y-1 text-muted">
+                              <div>Based on {stat.breakdown.comparableListings} comparable listings and {stat.breakdown.recentSales} recent sales</div>
+                              <div>Confidence: {stat.confidence}</div>
+                              <div className="italic text-muted-3">* this is just an estimate, please do your own research *</div>
+                            </div>
                           </div>
-                        )}
-                      </div>
+                        </div>
+                      )}
                     </div>
-                  ) : stat.isHeight ? (
-                    <span className="text-lg font-bold px-3 py-2 rounded-lg shadow-sm text-gray-900 dark:text-gray-900 bg-gradient-to-r from-white to-gray-100 dark:from-white dark:to-gray-100">
-                      {stat.value}
-                    </span>
-                  ) : stat.isPositions ? (
-                    <span className="text-lg font-bold px-3 py-2 rounded-lg shadow-sm text-gray-900 dark:text-gray-900 bg-gradient-to-r from-white to-gray-100 dark:from-white dark:to-gray-100">
-                      {stat.value}
-                    </span>
                   ) : stat.isTags ? (
                     stat.value && stat.value.length > 0 ? (
-                      <div className="flex flex-wrap gap-1 items-center justify-end">
+                      <div className="flex flex-wrap gap-1.5 items-center justify-end">
                         {stat.value.map((tag: any, index: number) => (
-                          <span 
+                          <span
                             key={index}
-                            className={`font-medium px-2 py-[2px] rounded-md flex items-center ${
-                              tag.type === 'slow'
-                                ? 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200'
-                                : tag.type === 'fast'
-                                ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
-                                : tag.type === 'lightningFast'
-                                ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
-                                : tag.type === 'retirement' 
-                                ? 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200'
-                                : tag.type === 'positions'
-                                ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
-                                : tag.type === 'newlyMinted'
-                                ? 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200'
-                                : 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200'
-                            }`}
-                            style={{ fontSize: '16px' }}
+                            className={`${pillClass} px-3 py-1.5 text-xs ${TAG_CLASSES[tag.type] ?? 'bg-chip text-fg-3'}`}
                           >
                             {tag.icon && tag.icon}
                             <span>{tag.text}</span>
@@ -378,10 +314,7 @@ export default function PlayerStats({ player, marketValueEstimate, progressionDa
                       </div>
                     ) : null
                   ) : (
-                    <span 
-                      className="font-bold px-3 py-2 rounded-lg shadow-sm text-gray-900 dark:text-gray-900 bg-gradient-to-r from-white to-gray-100 dark:from-white dark:to-gray-100"
-                      style={{ fontSize: '18px' }}
-                    >
+                    <span className={valueClass}>
                       {Array.isArray(stat.value) ? null : stat.value}
                     </span>
                   )}
@@ -391,7 +324,7 @@ export default function PlayerStats({ player, marketValueEstimate, progressionDa
                 // Don't show anything for empty tags
                 null
               ) : (
-                <span className="text-sm text-gray-400 dark:text-gray-500 italic bg-gray-100 dark:bg-gray-700 px-3 py-1 rounded-lg">Not available</span>
+                <span className="text-[13px] font-medium text-faint">Not available</span>
               )}
             </div>
           </div>

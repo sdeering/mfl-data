@@ -2,6 +2,7 @@
 
 import React from 'react';
 import type { MFLPlayer } from '@/src/types/mflApi';
+import { getTierColors } from '@/src/utils/tierColors';
 
 interface PlayerImageProps {
   player?: MFLPlayer;
@@ -28,16 +29,16 @@ const getRatingTextColor = (overall: number): string => {
 export default function PlayerImage({ player }: PlayerImageProps) {
   if (!player) {
     return (
-      <div className="w-40 sm:w-[280px] md:w-[280px] xl:w-[280px] m-0 max-[412px]:w-[85%]">
-        <div className="bg-white dark:bg-gray-800 p-6 h-[500px] flex items-center justify-center">
+      <div className="w-[280px] max-w-[85%] m-0">
+        <div className="h-[420px] p-6 flex items-center justify-center rounded-[22px] border border-dashed border-line-2 bg-panel/92">
           <div className="text-center">
-            <div className="w-24 h-24 bg-gradient-to-br from-gray-200 to-gray-300 dark:from-gray-600 dark:to-gray-700 mx-auto mb-4 flex items-center justify-center rounded-xl shadow-inner">
-              <span className="text-gray-500 dark:text-gray-400 text-2xl font-light">?</span>
+            <div className="w-24 h-24 mx-auto mb-4 flex items-center justify-center rounded-2xl border border-line-2 bg-chip">
+              <span className="font-display text-3xl font-bold text-muted">?</span>
             </div>
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white bg-gradient-to-r from-gray-600 to-gray-800 dark:from-gray-300 dark:to-gray-100 bg-clip-text text-transparent">
+            <h3 className="m-0 font-display text-lg font-bold text-fg">
               No Player Data
             </h3>
-            <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">
+            <p className="m-0 mt-2 text-sm text-muted">
               Search for a player to view their card
             </p>
           </div>
@@ -60,11 +61,10 @@ export default function PlayerImage({ player }: PlayerImageProps) {
   const ratingTextColor = getRatingTextColor(player.metadata.overall);
 
   return (
-    <div className="w-40 sm:w-[280px] md:w-[280px] xl:w-[280px] m-0 max-[412px]:w-[85%]">
-      {/* Modern container with theme-aware styling */}
+    <div className="w-[280px] max-w-[85%] m-0">
       <div className="relative">
-        {/* Card container */}
-        <div className="relative bg-white dark:bg-gray-900 rounded-xl">
+        {/* Card container, with a glow in the card's tier colour */}
+        <div className="relative" style={{ filter: `drop-shadow(0 20px 40px ${getTierColors(player.metadata.overall).bg}40)` }}>
           <svg 
         xmlns="http://www.w3.org/2000/svg" 
         viewBox="0 -14 128.27 214.118" 
@@ -78,14 +78,14 @@ export default function PlayerImage({ player }: PlayerImageProps) {
             <stop stopColor="#3992ff" offset="1"></stop>
           </linearGradient>
           <linearGradient id="v2-text-legendary" x1="100%" y1="34%" x2="0%" y2="66%">
-            <stop stopColor="#fa53ff" offset="0"></stop>
-            <stop stopColor="#fa53ff" offset="0.51"></stop>
-            <stop stopColor="#fa53ff" offset="1"></stop>
+            <stop stopColor="#ee5bf2" offset="0"></stop>
+            <stop stopColor="#ee5bf2" offset="0.51"></stop>
+            <stop stopColor="#ee5bf2" offset="1"></stop>
           </linearGradient>
           <linearGradient id="v2-text-ultimate" x1="100%" y1="34%" x2="0%" y2="66%">
-            <stop stopColor="#87f6f8" offset="0"></stop>
-            <stop stopColor="#87f6f8" offset="0.51"></stop>
-            <stop stopColor="#87f6f8" offset="1"></stop>
+            <stop stopColor="#86f0f2" offset="0"></stop>
+            <stop stopColor="#86f0f2" offset="0.51"></stop>
+            <stop stopColor="#86f0f2" offset="1"></stop>
           </linearGradient>
           <linearGradient id="v2-text-uncommon" x1="100%" y1="34%" x2="0%" y2="66%">
             <stop stopColor="#90ee90" offset="0"></stop>

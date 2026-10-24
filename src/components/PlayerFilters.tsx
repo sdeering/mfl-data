@@ -115,7 +115,7 @@ export const PlayerFilters: React.FC<PlayerFiltersProps> = ({
       {onToggleSidebarFilters && (
         <div className="flex items-center justify-between gap-2">
           <button
-            className="text-left px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white hover:bg-gray-50 dark:hover:bg-gray-600 cursor-pointer"
+            className="inline-flex items-center h-9 px-3.5 rounded-xl border border-line-2 bg-btn text-fg text-[13px] font-semibold cursor-pointer hover:border-line-hover"
             onClick={onToggleSidebarFilters}
           >
             {showSidebarFilters ? 'Hide Filters' : 'Show Filters'}
@@ -124,7 +124,7 @@ export const PlayerFilters: React.FC<PlayerFiltersProps> = ({
             <button
               type="button"
               onClick={resetFilters}
-              className="text-sm text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
+              className="text-sm font-semibold text-accent-ink hover:text-accent-hover cursor-pointer"
               title="Reset filters"
             >
               Reset
@@ -134,26 +134,26 @@ export const PlayerFilters: React.FC<PlayerFiltersProps> = ({
       )}
 
       {/* Filter Content */}
-      <div className={`grid grid-cols-2 gap-3 ${showSidebarFilters ? '' : 'hidden'}`}>
+      <div className={`grid grid-cols-2 md:grid-cols-4 gap-x-5 gap-y-4 ${showSidebarFilters ? '' : 'hidden'}`}>
         {/* Retired Players */}
         {onIncludeRetiredChange && (
-          <label className="col-span-2 flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300 cursor-pointer">
+          <label className="col-span-full flex items-center gap-2 text-sm font-semibold text-fg-2 cursor-pointer">
             <input
               type="checkbox"
               checked={includeRetired}
               onChange={(e) => onIncludeRetiredChange(e.target.checked)}
-              className="h-4 w-4 rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500 cursor-pointer"
+              className="h-4 w-4 accent-[#c6f432] cursor-pointer"
             />
             Include retired players
           </label>
         )}
         {onExcludeRetiringChange && (
-          <label className="col-span-2 flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300 cursor-pointer">
+          <label className="col-span-full flex items-center gap-2 text-sm font-semibold text-fg-2 cursor-pointer">
             <input
               type="checkbox"
               checked={excludeRetiring}
               onChange={(e) => onExcludeRetiringChange(e.target.checked)}
-              className="h-4 w-4 rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500 cursor-pointer"
+              className="h-4 w-4 accent-[#c6f432] cursor-pointer"
             />
             Exclude players retiring at the end of this season
           </label>
@@ -161,15 +161,15 @@ export const PlayerFilters: React.FC<PlayerFiltersProps> = ({
 
         {/* Card Type Filter */}
         <div className="col-span-2">
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Card type</label>
+          <label className="block text-xs font-semibold text-muted mb-1.5">Card type</label>
           <div className="flex items-center gap-2 overflow-x-auto whitespace-nowrap py-1">
             {[
-              { key: 'common', label: 'Common', bg: 'bg-[#9f9f9f]', text: 'text-white' },
-              { key: 'limited', label: 'Limited', bg: 'bg-[#ecd17f]', text: 'text-black' },
-              { key: 'uncommon', label: 'Uncommon', bg: 'bg-[#71ff30]', text: 'text-black' },
-              { key: 'epic', label: 'Epic', bg: 'bg-[#0047ff]', text: 'text-white' },
-              { key: 'legendary', label: 'Legendary', bg: 'bg-[#fa53ff]', text: 'text-white' },
-              { key: 'ultimate', label: 'Ultimate', bg: 'bg-[#87f6f8]', text: 'text-black' },
+              { key: 'common', label: 'Common', bg: 'bg-[#454d49]', text: 'text-white' },
+              { key: 'limited', label: 'Limited', bg: 'bg-[#e9cf86]', text: 'text-black' },
+              { key: 'uncommon', label: 'Uncommon', bg: 'bg-[#8ae63a]', text: 'text-black' },
+              { key: 'epic', label: 'Epic', bg: 'bg-[#2f5bff]', text: 'text-white' },
+              { key: 'legendary', label: 'Legendary', bg: 'bg-[#ee5bf2]', text: 'text-white' },
+              { key: 'ultimate', label: 'Ultimate', bg: 'bg-[#86f0f2]', text: 'text-black' },
             ].map(opt => {
               const isSelected = localFilters.selectedCardTypes.includes(opt.key);
               return (
@@ -182,7 +182,7 @@ export const PlayerFilters: React.FC<PlayerFiltersProps> = ({
                       : [...localFilters.selectedCardTypes, opt.key];
                     updateFilter({ selectedCardTypes: newCardTypes });
                   }}
-                  className={`${opt.bg} ${opt.text} w-[30px] h-[35px] rounded-lg shadow-sm text-xs font-semibold cursor-pointer select-none flex items-center justify-center p-0 border ${isSelected ? 'border-2 border-white' : 'border-[var(--tier-common-foreground)]/15'}`}
+                  className={`${opt.bg} ${opt.text} w-[30px] h-[35px] rounded-lg shadow-sm text-xs font-semibold cursor-pointer select-none flex items-center justify-center p-0 border ${isSelected ? 'border-2 border-fg' : 'border-[var(--tier-common-foreground)]/15'}`}
                   title={opt.label}
                   aria-pressed={isSelected}
                 >
@@ -195,13 +195,13 @@ export const PlayerFilters: React.FC<PlayerFiltersProps> = ({
 
         {/* Position Filter */}
         <div className="col-span-2">
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+          <label className="block text-xs font-semibold text-muted mb-1.5">
             Position
           </label>
           <select
             value={localFilters.filterPosition}
             onChange={(e) => updateFilter({ filterPosition: e.target.value })}
-            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            className="w-full h-10 px-3 rounded-xl border border-line-2 bg-field text-fg text-sm font-semibold outline-none cursor-pointer focus:border-line-hover"
           >
             <option value="all">All Positions</option>
             <option disabled>────────────</option>
@@ -229,7 +229,7 @@ export const PlayerFilters: React.FC<PlayerFiltersProps> = ({
 
         {/* Overall Rating Slider */}
         <div>
-          <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+          <label className="block text-xs font-semibold text-muted mb-1.5">
             Overall {localFilters.overallMin} - {localFilters.overallMax}
           </label>
           <Slider.Root
@@ -240,17 +240,17 @@ export const PlayerFilters: React.FC<PlayerFiltersProps> = ({
             value={[localFilters.overallMin, localFilters.overallMax]}
             onValueChange={([min, max]) => updateFilter({ overallMin: min, overallMax: max })}
           >
-            <Slider.Track className="bg-gray-200 dark:bg-gray-600 relative grow rounded h-1" />
-            <Slider.Range className="absolute h-1 bg-blue-500 rounded" />
-            <Slider.Thumb className="block w-2.5 h-5 bg-gray-600 border border-gray-400 rounded-sm" aria-label="Overall min" />
-            <Slider.Thumb className="block w-2.5 h-5 bg-gray-600 border border-gray-400 rounded-sm" aria-label="Overall max" />
+            <Slider.Track className="bg-line-2 relative grow rounded h-1" />
+            <Slider.Range className="absolute h-1 bg-accent rounded" />
+            <Slider.Thumb className="block w-2.5 h-5 bg-panel border-2 border-accent rounded-sm cursor-grab" aria-label="Overall min" />
+            <Slider.Thumb className="block w-2.5 h-5 bg-panel border-2 border-accent rounded-sm cursor-grab" aria-label="Overall max" />
           </Slider.Root>
         </div>
 
         {/* Position Rating Slider (only show if calculatePositionRating is provided) */}
         {calculatePositionRating && (
           <div>
-            <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+            <label className="block text-xs font-semibold text-muted mb-1.5">
               Position rating {localFilters.positionRatingMin} - {localFilters.positionRatingMax}
             </label>
             <Slider.Root
@@ -261,10 +261,10 @@ export const PlayerFilters: React.FC<PlayerFiltersProps> = ({
               value={[localFilters.positionRatingMin, localFilters.positionRatingMax]}
               onValueChange={([min, max]) => updateFilter({ positionRatingMin: min, positionRatingMax: max })}
             >
-              <Slider.Track className="bg-gray-200 dark:bg-gray-600 relative grow rounded h-1" />
-              <Slider.Range className="absolute h-1 bg-blue-500 rounded" />
-              <Slider.Thumb className="block w-2.5 h-5 bg-gray-600 border border-gray-400 rounded-sm" aria-label="Position min" />
-              <Slider.Thumb className="block w-2.5 h-5 bg-gray-600 border border-gray-400 rounded-sm" aria-label="Position max" />
+              <Slider.Track className="bg-line-2 relative grow rounded h-1" />
+              <Slider.Range className="absolute h-1 bg-accent rounded" />
+              <Slider.Thumb className="block w-2.5 h-5 bg-panel border-2 border-accent rounded-sm cursor-grab" aria-label="Position min" />
+              <Slider.Thumb className="block w-2.5 h-5 bg-panel border-2 border-accent rounded-sm cursor-grab" aria-label="Position max" />
             </Slider.Root>
           </div>
         )}
@@ -279,7 +279,7 @@ export const PlayerFilters: React.FC<PlayerFiltersProps> = ({
           ['physical', 'PHY'],
         ] as Array<[keyof typeof localFilters.attrFilters, string]>).map(([key, label]) => (
           <div key={key} className="col-span-1">
-            <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+            <label className="block text-xs font-semibold text-muted mb-1.5">
               {label} {localFilters.attrFilters[key]} - {localFilters.attrFiltersMax[key]}
             </label>
             <Slider.Root
@@ -295,10 +295,10 @@ export const PlayerFilters: React.FC<PlayerFiltersProps> = ({
                 });
               }}
             >
-              <Slider.Track className="bg-gray-200 dark:bg-gray-600 relative grow rounded h-1" />
-              <Slider.Range className="absolute h-1 bg-blue-500 rounded" />
-              <Slider.Thumb className="block w-2.5 h-5 bg-gray-600 border border-gray-400 rounded-sm" aria-label={`${label} min`} />
-              <Slider.Thumb className="block w-2.5 h-5 bg-gray-600 border border-gray-400 rounded-sm" aria-label={`${label} max`} />
+              <Slider.Track className="bg-line-2 relative grow rounded h-1" />
+              <Slider.Range className="absolute h-1 bg-accent rounded" />
+              <Slider.Thumb className="block w-2.5 h-5 bg-panel border-2 border-accent rounded-sm cursor-grab" aria-label={`${label} min`} />
+              <Slider.Thumb className="block w-2.5 h-5 bg-panel border-2 border-accent rounded-sm cursor-grab" aria-label={`${label} max`} />
             </Slider.Root>
           </div>
         ))}

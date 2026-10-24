@@ -1,7 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import type { MFLPlayer } from '../types/mflApi';
 import { OverallRatingTooltip } from './OverallRatingTooltip';
+import { getTierColors } from '../utils/tierColors';
 import { calculateStatImpact, formatStatImpact } from '../utils/statImpactCalculator';
+
+const stepButtonClass =
+  'w-[22px] h-[22px] grid place-items-center rounded-md border border-line-2 bg-panel text-muted text-[13px] font-bold leading-none cursor-pointer transition-colors hover:text-fg hover:border-line-hover disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:text-muted disabled:hover:border-line-2';
 
 interface PlayerStatsGridProps {
   player: MFLPlayer;
@@ -14,47 +18,6 @@ interface PlayerStatsGridProps {
     physical?: number;
   }) => void;
 }
-
-// Function to get tier color based on rating value
-const getTierColor = (rating: number) => {
-  if (rating >= 95) {
-    return {
-      bg: 'bg-[#87f6f8]',
-      text: 'text-black',
-      border: 'border-[var(--tier-common-foreground)]/15'
-    };
-  } else if (rating >= 85) {
-    return {
-      bg: 'bg-[#fa53ff]',
-      text: 'text-white',
-      border: 'border-[var(--tier-common-foreground)]/15'
-    };
-  } else if (rating >= 75) {
-    return {
-      bg: 'bg-[#0047ff]',
-      text: 'text-white',
-      border: 'border-[var(--tier-common-foreground)]/15'
-    };
-  } else if (rating >= 65) {
-    return {
-      bg: 'bg-[#71ff30]',
-      text: 'text-black',
-      border: 'border-[var(--tier-common-foreground)]/15'
-    };
-  } else if (rating >= 55) {
-    return {
-      bg: 'bg-[#ecd17f]',
-      text: 'text-black',
-      border: 'border-[var(--tier-common-foreground)]/15'
-    };
-  } else {
-    return {
-      bg: 'bg-[#9f9f9f]',
-      text: 'text-white',
-      border: 'border-[var(--tier-common-foreground)]/15'
-    };
-  }
-};
 
 export const PlayerStatsGrid: React.FC<PlayerStatsGridProps> = ({ player, onAttributesChange }) => {
   // Check if player is a goalkeeper
@@ -163,94 +126,83 @@ export const PlayerStatsGrid: React.FC<PlayerStatsGridProps> = ({ player, onAttr
       ];
 
   return (
-    <div className="relative">
-      <div className={`grid grid-flow-row ${isGoalkeeper ? 'grid-cols-1' : 'grid-cols-6'} items-start justify-center`}>
-        {/* Header row */}
-        {stats.map((stat) => (
-          <div key={`header-${stat.label}`} className="border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 border-b px-2 py-1.5 text-center text-base font-semibold tracking-wide whitespace-nowrap uppercase" style={{ paddingBottom: '2px', marginBottom: '4px' }}>
-            {stat.label}
+    <div className="flex flex-wrap justify-center gap-2">
+      {stats.map((stat) => {
+        const tierColors = getTierColors(stat.value);
+        const isOverallRating = stat.label === 'GK'; // GK represents overall rating for goalkeepers
+        const isModified = !isOverallRating && 'originalValue' in stat && stat.value !== stat.originalValue;
+
+        // Calculate OVR impact for this stat (only for outfield players)
+        const primaryPosition = player.metadata.positions?.[0] || '';
+        const ovrImpact = !isGoalkeeper && primaryPosition 
+          ? calculateStatImpact(primaryPosition, stat.label)
+          : 0;
+
+        const box = (
+          <div
+            className={`grid place-items-center w-[50px] h-[46px] rounded-xl font-display text-xl font-extrabold tabular-nums ${isModified ? 'outline-2 outline-offset-2 outline-accent' : ''}`}
+            style={{ background: tierColors.bg, color: tierColors.fg }}
+          >
+            {stat.value}
           </div>
-        ))}
-        
-        {/* Values row */}
-        {stats.map((stat) => {
-          const tierColors = getTierColor(stat.value);
-          const isOverallRating = stat.label === 'GK'; // GK represents overall rating for goalkeepers
-          const isModified = !isOverallRating && 'originalValue' in stat && stat.value !== stat.originalValue;
-          
-          // Calculate OVR impact for this stat (only for outfield players)
-          const primaryPosition = player.metadata.positions?.[0] || '';
-          const ovrImpact = !isGoalkeeper && primaryPosition 
-            ? calculateStatImpact(primaryPosition, stat.label)
-            : 0;
-          
-          return (
-            <div key={`value-${stat.label}`} className="flex flex-col items-center justify-start gap-0.5 px-1 pt-1 relative">
-              <div className="relative group">
-                {isOverallRating ? (
-                  <OverallRatingTooltip player={player}>
-                    <div className={`flex items-center justify-center rounded-lg shadow-sm px-3 py-2 text-center font-bold ${tierColors.text} ${tierColors.bg} ${tierColors.border}`} style={{ fontSize: '22px' }}>
-                      {stat.value}
-                    </div>
-                  </OverallRatingTooltip>
-                ) : (
-                  <>
-                    <div className={`flex items-center justify-center rounded-lg shadow-sm px-3 py-2 text-center font-bold ${tierColors.text} ${tierColors.bg} ${tierColors.border} cursor-help ${isModified ? 'ring-2 ring-blue-500' : ''}`} style={{ fontSize: '22px' }}>
-                      {stat.value}
-                    </div>
-                    {/* Tooltip */}
-                    {!isGoalkeeper && primaryPosition && (
-                      <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 bg-gray-900 text-white opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-10" style={{ fontSize: '18px', border: '1px solid grey', borderRadius: '12px', padding: '6px 10px' }}>
-                        <div className="font-bold">+1 {stat.label} = {formatStatImpact(ovrImpact)} OVR</div>
-                        <div className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent -mt-px" style={{ borderTopColor: 'grey' }}></div>
-                      </div>
-                    )}
-                  </>
+        );
+
+        return (
+          <div key={stat.label} className="flex flex-col items-center gap-1.5">
+            <span className="text-[11px] font-bold tracking-[0.08em] uppercase text-muted">{stat.label}</span>
+            {isOverallRating ? (
+              <OverallRatingTooltip player={player}>{box}</OverallRatingTooltip>
+            ) : (
+              <div className="relative group cursor-help">
+                {box}
+                {/* Tooltip */}
+                {!isGoalkeeper && primaryPosition && (
+                  <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2.5 py-1.5 rounded-xl border border-line-2 bg-panel text-fg text-[13px] shadow-[0_12px_30px_rgba(0,0,0,.4)] opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-10">
+                    <div className="font-bold">+1 {stat.label} = {formatStatImpact(ovrImpact)} OVR</div>
+                  </div>
                 )}
               </div>
-              {/* +/- buttons for outfield players */}
-              {!isGoalkeeper && !isOverallRating && (
-                <div className="flex flex-col items-center mt-1 relative">
-                  <div className="flex items-center">
-                    <button
-                      onClick={() => updateAttribute(stat.label, -1)}
-                      className="w-6 h-6 flex items-center justify-center text-gray-700 dark:text-gray-300 text-sm font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed opacity-30 hover:opacity-100 hover:bg-gray-200 dark:hover:bg-gray-700"
-                      style={{ border: 0, background: 'none' }}
-                      disabled={'originalValue' in stat && stat.value <= stat.originalValue}
-                    >
-                      −
-                    </button>
-                    <button
-                      onClick={() => updateAttribute(stat.label, 1)}
-                      className="w-6 h-6 flex items-center justify-center text-gray-700 dark:text-gray-300 text-sm font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed opacity-30 hover:opacity-100 hover:bg-gray-200 dark:hover:bg-gray-700"
-                      style={{ border: 0, background: 'none' }}
-                      disabled={stat.value >= 99}
-                    >
-                      +
-                    </button>
-                  </div>
-                  {/* Button press counter (show net count) */}
-                  {buttonCounts[stat.label] > 0 && (
-                    <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                      <span className="text-green-600 dark:text-green-400">+{buttonCounts[stat.label]}</span>
-                    </div>
-                  )}
+            )}
+            {/* +/- buttons for outfield players */}
+            {!isGoalkeeper && !isOverallRating && (
+              <>
+                <div className="relative flex gap-1">
+                  <button
+                    onClick={() => updateAttribute(stat.label, -1)}
+                    className={stepButtonClass}
+                    disabled={'originalValue' in stat && stat.value <= stat.originalValue}
+                  >
+                    −
+                  </button>
+                  <button
+                    onClick={() => updateAttribute(stat.label, 1)}
+                    className={stepButtonClass}
+                    disabled={stat.value >= 99}
+                  >
+                    +
+                  </button>
                   {/* Reset button - floating on the right */}
                   {isDirty && stat.label === 'PHY' && (
                     <button
                       onClick={handleReset}
-                      className="absolute left-full ml-1 w-6 h-6 flex items-center justify-center bg-red-500 text-white rounded-full hover:bg-red-600 transition-colors text-xs font-bold"
+                      className="absolute left-full ml-1 w-[22px] h-[22px] grid place-items-center rounded-full border border-red-500/45 bg-red-500/12 text-danger-ink text-xs font-bold leading-none cursor-pointer transition-colors hover:bg-red-500/20"
                       title="Reset all changes"
                     >
                       ×
                     </button>
                   )}
                 </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
+                {/* Button press counter (show net count) */}
+                {buttonCounts[stat.label] > 0 && (
+                  <div className="text-xs font-semibold">
+                    <span className="text-green-600 dark:text-green-400">+{buttonCounts[stat.label]}</span>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 };

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import * as Slider from '@radix-ui/react-slider';
 import { useRouter } from 'next/navigation';
 import type { MFLPosition } from '../../src/types/positionOvr';
@@ -11,6 +12,29 @@ import { MFLPlayer } from '../../src/types/mflApi';
 import { getSquads, saveSquad, updateSquad, deleteSquad, loadSquad, SavedSquad } from '../../src/services/squadService';
 import { useToast, ToastContainer } from '../../src/components/Toast';
 import RetirementIcon from '../../src/components/RetirementIcon';
+import {
+  PageHeader,
+  Panel,
+  TierBadge,
+  TierText,
+  PositionChip,
+  KpiTile,
+  Select,
+  SortArrow,
+  btnPrimary,
+  btnSecondary,
+  btnPill,
+  btnDanger,
+  fieldClass,
+  labelClass,
+  tableClass,
+  theadRowClass,
+  thClass,
+  sortableThClass,
+  rowClass,
+  tdClass,
+} from '../../src/components/ui';
+import { getTierColors } from '../../src/utils/tierColors';
 import {
   DndContext,
   DragEndEvent,
@@ -341,6 +365,48 @@ const FORMATIONS: Formation[] = [
   }
 ];
 
+const spinnerClass = 'rounded-full border-2 border-accent border-t-transparent animate-spin';
+const smallPillClass =
+  'inline-flex items-center justify-center h-8 px-3 rounded-full border border-line-2 bg-panel text-fg-2 text-xs font-semibold whitespace-nowrap cursor-pointer transition-colors hover:border-line-hover disabled:opacity-50 disabled:cursor-not-allowed';
+const playerLinkClass =
+  'flex-none inline-grid place-items-center w-[18px] h-[18px] rounded-md border border-line-2 text-[10px] text-muted transition-colors hover:text-accent-ink hover:border-accent-ink';
+const multiSquadBadgeClass =
+  'relative flex-none inline-grid place-items-center w-[18px] h-[18px] rounded-full border border-orange-500/45 bg-orange-500/12 text-[10px] text-orange-ink cursor-help';
+const modalBackdropClass = 'fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60';
+const modalClass = 'w-full p-5 md:p-6 rounded-2xl border border-line-2 bg-panel shadow-[0_20px_50px_rgba(0,0,0,.45)]';
+const sliderRootClass = 'relative flex items-center select-none w-full h-5';
+const sliderTrackClass = 'relative grow h-1 rounded-full bg-line-2';
+const sliderRangeClass = 'absolute h-1 rounded-full bg-accent';
+const sliderThumbClass =
+  'block w-3.5 h-3.5 rounded-full bg-accent border-2 border-panel shadow-[0_0_0_1px_rgba(0,0,0,.3)] cursor-grab outline-none focus-visible:ring-2 focus-visible:ring-accent/50';
+const sliderLabelClass = 'block mb-1.5 text-xs font-semibold text-muted';
+
+/** List of the saved squads a player is in, floating above the warning badge they hover. */
+function MultiSquadPopover({ squadNames, position }: { squadNames: string[]; position: { x: number; y: number } }) {
+  return createPortal(
+    <div
+      className="fixed z-[99999] px-3 py-2 rounded-xl border border-line-2 bg-panel text-xs text-fg whitespace-nowrap shadow-[0_20px_50px_rgba(0,0,0,.45)]"
+      style={{
+        left: `${position.x}px`,
+        top: `${position.y}px`,
+        transform: 'translateX(-50%) translateY(-100%)',
+        marginTop: '-8px'
+      }}
+    >
+      <div className="font-semibold mb-1">Player in multiple squads:</div>
+      <div className="space-y-1">
+        {squadNames.map((squadName, index) => (
+          <div key={index} className="text-orange-ink">
+            • {squadName}
+          </div>
+        ))}
+      </div>
+      <div className="absolute top-full left-1/2 -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-line-2"></div>
+    </div>,
+    document.body
+  );
+}
+
 // Draggable Player Card Component
 interface DraggablePlayerCardProps {
   player: MFLPlayer;
@@ -392,17 +458,6 @@ function DraggablePlayerCard({ player, onAdd, onRemove, isInSquad = false, saved
     transform: CSS.Transform.toString(transform),
     transition,
     opacity: isDragging ? 0.5 : 1,
-    // background handled via class for light/dark
-  };
-
-  // Tiered text color for stats, matching card tiers
-  const getTierTextColor = (value: number): string => {
-    if (value >= 95) return '#87f6f8';        // Ultimate
-    if (value >= 85) return '#fa53ff';        // Legendary
-    if (value >= 75) return '#0047ff';        // Epic
-    if (value >= 65) return '#71ff30';        // Uncommon
-    if (value >= 55) return '#ecd17f';        // Limited
-    return '#9f9f9f';                          // Common
   };
 
   return (
@@ -412,34 +467,34 @@ function DraggablePlayerCard({ player, onAdd, onRemove, isInSquad = false, saved
       {...attributes}
       {...listeners}
       onClick={() => { if (isInSquad) { onRemove?.(player); } else { onAdd(player); } }}
-      className={`p-2 md:p-3 border rounded-lg cursor-pointer transition-colors ${
+      className={`flex flex-col gap-2 px-3.5 py-3 rounded-2xl border cursor-pointer transition-colors ${
         isInSquad
-          ? 'sb-selected bg-gray-100 dark:bg-[#1e1e1e] border-gray-300 dark:border-gray-600 opacity-80'
-          : 'border-gray-200 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 hover:border-blue-400 dark:hover:border-blue-500'
+          ? 'border-accent-ink/40 bg-accent/6 hover:border-accent-ink/70'
+          : 'border-line bg-inset hover:border-line-hover'
       }`}
     >
-                    <div className="flex items-center justify-between mb-1 cursor-pointer">
-        <div className="min-w-0">
-          <h3 className="font-medium text-gray-900 dark:text-white text-sm md:text-base truncate flex items-center gap-2">
-            <span className="flex items-center gap-1">
+      <div className="flex items-start gap-2.5">
+        <div className="flex-1 min-w-0 flex flex-col gap-[3px]">
+          <div className="flex items-center gap-1.5 min-w-0">
+            <span className="text-[15px] font-bold text-fg truncate">
               {player.metadata.firstName} {player.metadata.lastName}
-              <span className="text-[10px] text-gray-500 dark:text-gray-400">({player.id})</span>
             </span>
-            <RetirementIcon retirementYears={player.metadata.retirementYears} />
+            <span className="flex-none font-mono text-[11px] font-medium text-muted-3">{player.id}</span>
+            <RetirementIcon retirementYears={player.metadata.retirementYears} className="w-3.5 h-3.5" />
             <a
               href={`/players/${player.id}`}
               target="_blank"
               rel="noopener noreferrer"
               onClick={(e) => e.stopPropagation()}
-              className="flex-shrink-0 inline-flex items-center justify-center w-4 h-4 text-[9px] border border-gray-400 dark:border-gray-500 rounded-md text-gray-500 dark:text-gray-400 hover:text-blue-500 hover:border-blue-500 hover:ring-1 hover:ring-blue-500"
+              className={playerLinkClass}
               aria-label="Open player page"
               title="Open player page"
             >
               ↗
             </a>
             {isInAnySquad && !isPlayerInCurrentSquad && (
-              <div 
-                className="flex-shrink-0 inline-flex items-center justify-center w-4 h-4 text-[10px] bg-orange-100 dark:bg-orange-900/30 border border-orange-300 dark:border-orange-700 rounded-full text-orange-600 dark:text-orange-400 cursor-help relative"
+              <div
+                className={multiSquadBadgeClass}
                 onMouseEnter={(e) => {
                   setHoveredPlayerId(player.id);
                   const rect = e.currentTarget.getBoundingClientRect();
@@ -452,79 +507,44 @@ function DraggablePlayerCard({ player, onAdd, onRemove, isInSquad = false, saved
               >
                 ⚠
                 {hoveredPlayerId === player.id && (
-                  <div 
-                    className="fixed z-[99999] bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 text-xs px-3 py-2 rounded-lg shadow-xl border border-gray-700 dark:border-gray-300 whitespace-nowrap"
-                    style={{
-                      left: `${popupPosition.x}px`,
-                      top: `${popupPosition.y}px`,
-                      transform: 'translateX(-50%) translateY(-100%)',
-                      marginTop: '-8px'
-                    }}
-                  >
-                    <div className="font-semibold mb-1">Player in multiple squads:</div>
-                    <div className="space-y-1">
-                      {squadAppearances.map((squadName, index) => (
-                        <div key={index} className="text-orange-300 dark:text-orange-600">
-                          • {squadName}
-                        </div>
-                      ))}
-                    </div>
-                    <div className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-900 dark:border-t-gray-100"></div>
-                  </div>
+                  <MultiSquadPopover squadNames={squadAppearances} position={popupPosition} />
                 )}
               </div>
             )}
-          </h3>
-          <div className="text-xs md:text-sm text-gray-600 dark:text-gray-400 truncate">
-            {player.metadata.positions.slice(0,3).map((position) => {
-              const rating = calculatePositionRating(player, position as any);
-              const color = (() => {
-                if (rating >= 95) return 'var(--tier-ultimate)';
-                if (rating >= 85) return 'var(--tier-legendary)';
-                if (rating >= 75) return 'var(--tier-epic)';
-                if (rating >= 65) return 'var(--tier-uncommon)';
-                if (rating >= 55) return 'var(--tier-limited)';
-                return 'var(--tier-common)';
-              })();
-              return (
-                <span key={position} className="mr-2">
-                  {position} <span className="font-semibold" style={{ color }}>{rating}</span>
-                </span>
-              );
-            })}
+          </div>
+          <div className="flex flex-wrap gap-x-2 text-xs font-semibold text-muted">
+            {player.metadata.positions.slice(0,3).map((position) => (
+              <span key={position}>
+                {position} <TierText value={calculatePositionRating(player, position as any)} />
+              </span>
+            ))}
             {player.metadata.positions.length > 3 && (
               <span>+{player.metadata.positions.length - 3}</span>
             )}
           </div>
         </div>
-          <div className="text-right flex-shrink-0 pl-2 pointer-events-none">
-          <div
-            className="text-xl md:text-2xl font-bold leading-5"
-            style={{ color: (() => {
-              const o = player.metadata.overall;
-              if (o >= 95) return 'var(--tier-ultimate)';     // 95-99
-              if (o >= 85) return 'var(--tier-legendary)';    // 85-94
-              if (o >= 75) return 'var(--tier-epic)';         // 75-84
-              if (o >= 65) return 'var(--tier-uncommon)';     // 65-74
-              if (o >= 55) return 'var(--tier-limited)';      // 55-64
-              return 'var(--tier-common)';                    // <55
-            })() }}
+        <div className="flex-none flex flex-col items-center pointer-events-none">
+          <span
+            className="font-display text-2xl font-extrabold leading-none tabular-nums"
+            style={{ color: getTierColors(player.metadata.overall).text }}
           >
             {player.metadata.overall}
-          </div>
-          <div className="text-[10px] text-gray-500 dark:text-gray-500">OVR</div>
+          </span>
+          <span className="text-[9px] font-bold tracking-[0.1em] text-muted-3">OVR</span>
         </div>
       </div>
-      <div className="flex items-center justify-between text-xs md:text-sm gap-2">
-        <span className="font-medium" style={{ color: getTierTextColor(player.metadata.pace) }}>{player.metadata.pace}</span>
-        <span className="font-medium" style={{ color: getTierTextColor(player.metadata.shooting) }}>{player.metadata.shooting}</span>
-        <span className="font-medium" style={{ color: getTierTextColor(player.metadata.passing) }}>{player.metadata.passing}</span>
-        <span className="font-medium" style={{ color: getTierTextColor(player.metadata.dribbling) }}>{player.metadata.dribbling}</span>
-        <span className="font-medium" style={{ color: getTierTextColor(player.metadata.defense) }}>{player.metadata.defense}</span>
-        <span className="font-medium" style={{ color: getTierTextColor(player.metadata.physical) }}>{player.metadata.physical}</span>
+      <div className="grid grid-cols-6 pt-2 border-t border-divider text-[13px]">
+        {[
+          player.metadata.pace,
+          player.metadata.shooting,
+          player.metadata.passing,
+          player.metadata.dribbling,
+          player.metadata.defense,
+          player.metadata.physical,
+        ].map((value, i) => (
+          <TierText key={i} value={value} />
+        ))}
       </div>
-
-      {/* Action buttons removed per spec; click card to add */}
     </div>
   );
 }
@@ -577,23 +597,23 @@ function DroppablePositionSlot({ position, index, player, formation, activePlaye
       className={`absolute w-10 h-10 md:w-12 md:h-12 border-2 rounded-full flex items-center justify-center cursor-pointer transition-colors ${
         isOver
           ? canDrop
-            ? 'bg-green-100 dark:bg-green-900/30 border-green-500'
-            : 'bg-red-100 dark:bg-red-900/30 border-red-500'
+            ? 'bg-accent/15 border-accent'
+            : 'bg-red-500/12 border-red-500'
           : player
-          ? 'bg-green-100 dark:bg-green-900/30 border-green-500'
-          : 'bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 hover:bg-blue-50 dark:hover:bg-blue-900/30'
+          ? 'bg-accent/15 border-accent'
+          : 'bg-panel border-line-2 hover:bg-row-hover'
       }`}
       {...attributes}
       {...listeners}
       onClick={handleClickAssign}
     >
       {player ? (
-        <div className="text-xs font-medium text-green-700 dark:text-green-300 text-center">
+        <div className="text-xs font-medium text-accent-ink text-center">
           <div className="truncate">{player.player.metadata.firstName}</div>
           <div className="text-xs">{player.player.metadata.overall}</div>
         </div>
       ) : (
-        <span className="text-xs font-medium text-gray-600 dark:text-gray-400">
+        <span className="text-xs font-medium text-muted">
           {position}
         </span>
       )}
@@ -773,15 +793,6 @@ export default function SquadBuilderPage() {
     };
   }, [account, squad.players, selectedFormation.id]);
 
-  // Table/stat tier color helper (match sidebar/card tiers)
-  const getTierTextColorValue = (value: number): string => {
-    if (value >= 95) return '#87f6f8';      // Ultimate
-    if (value >= 85) return '#fa53ff';      // Legendary
-    if (value >= 75) return '#0047ff';      // Epic
-    if (value >= 65) return '#71ff30';      // Uncommon
-    if (value >= 55) return '#ecd17f';      // Limited
-    return '#9f9f9f';                        // Common
-  };
   const [selectedDeleteId, setSelectedDeleteId] = useState<string | null>(null);
 
   // Choose best available formation slot for a player (prefer valid within ±6 OVR, otherwise first empty)
@@ -1477,52 +1488,57 @@ export default function SquadBuilderPage() {
   // Loading state
   if (!hasCheckedWallet || isLoading) {
     return (
-      <div className="min-h-screen">
-        <div className="flex items-center justify-center h-64">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
-            <p className="text-gray-600 dark:text-gray-400">
-              {!hasCheckedWallet ? 'Checking wallet connection...' : 'Loading squad builder...'}
-            </p>
-          </div>
-        </div>
-      </div>
+      <Panel className="flex flex-col items-center justify-center gap-4 py-16 text-center">
+        <div className={`w-8 h-8 ${spinnerClass}`}></div>
+        <p className="m-0 text-sm font-medium text-muted">
+          {!hasCheckedWallet ? 'Checking wallet connection...' : 'Loading squad builder...'}
+        </p>
+      </Panel>
     );
   }
 
   // Error state
   if (error) {
     return (
-      <div className="min-h-screen">
-        <div className="flex items-start justify-center min-h-[calc(100vh-6rem)]">
-          <div className="text-center max-w-md">
-            <div className="mb-6">
-              <svg className="w-16 h-16 text-red-500 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
-              </svg>
-              <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">Error</h2>
-              <p className="text-gray-600 dark:text-gray-400 mb-4">{error}</p>
-            </div>
-            
-            <div className="space-y-3">
-              <button
-                onClick={() => window.location.reload()}
-                className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-              >
-                Try Again
-              </button>
-              <button
-                onClick={() => router.push('/')}
-                className="w-full px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
-              >
-                Back to Home
-              </button>
-            </div>
-          </div>
+      <Panel className="flex flex-col items-center gap-5 max-w-md mx-auto px-6 py-12 text-center">
+        <svg className="w-14 h-14 text-danger-ink" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
+        </svg>
+        <div className="flex flex-col gap-2">
+          <h2 className="m-0 font-display text-2xl font-bold text-fg">Error</h2>
+          <p className="m-0 text-sm text-muted">{error}</p>
         </div>
-      </div>
+        <div className="flex flex-col gap-2.5 w-full">
+          <button
+            onClick={() => window.location.reload()}
+            className={`${btnPrimary} w-full`}
+          >
+            Try Again
+          </button>
+          <button
+            onClick={() => router.push('/')}
+            className={`${btnPill} w-full`}
+          >
+            Back to Home
+          </button>
+        </div>
+      </Panel>
     );
   }
+
+  const squadSize = Object.keys(squad.players).length;
+  const squadColumns: [typeof tableSortKey, string, boolean][] = [
+    ['name', 'Player', false],
+    ['overall', 'OVR', true],
+    ['age', 'Age', true],
+    ['positions', 'Positions', false],
+    ['pace', 'PAC', true],
+    ['shooting', 'SHO', true],
+    ['passing', 'PAS', true],
+    ['dribbling', 'DRI', true],
+    ['defense', 'DEF', true],
+    ['physical', 'PHY', true],
+  ];
 
   return (
     <DndContext
@@ -1530,59 +1546,22 @@ export default function SquadBuilderPage() {
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
     >
-      <style jsx global>{`
-        /* Force consistent border color in dark mode for the main squad table */
-        .sb-main-squad-table table,
-        .sb-main-squad-table thead,
-        .sb-main-squad-table tbody,
-        .sb-main-squad-table tr,
-        .sb-main-squad-table th,
-        .sb-main-squad-table td {
-          border-color: #374151 !important;
-        }
-        .sb-main-squad-table thead {
-          border-bottom: 1px solid #374151 !important;
-        }
-        .sb-main-squad-table th,
-        .sb-main-squad-table td {
-          border-top-color: #374151 !important;
-          border-right-color: #374151 !important;
-          border-bottom-color: #374151 !important;
-          border-left-color: #374151 !important;
-        }
-        .sb-main-squad-table .border,
-        .sb-main-squad-table .border-b,
-        .sb-main-squad-table .border-t,
-        .sb-main-squad-table .border-l,
-        .sb-main-squad-table .border-r,
-        .sb-main-squad-table .divide-y > :not([hidden]) ~ :not([hidden]) {
-          border-color: #374151 !important;
-        }
-        .dark .sb-main-squad-table tbody {
-          background-color: #1e1e1e !important;
-        }
-        /* Enforce dark backgrounds */
-        .dark .sb-selected { background-color: #1e1e1e !important; }
-        .dark .sb-main-container { background-color: #1e1e1e !important; }
-      `}</style>
-      <div className="min-h-screen">
-          <div className="mb-6 flex items-center justify-between gap-3 flex-wrap">
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Squad Builder</h1>
-          <div className="flex items-center gap-2">
-            {tableSortedPlayers.length > 0 && (
-              <button
-                className="ml-2 px-3 py-1.5 text-sm rounded-lg border border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/20 cursor-pointer"
-                onClick={() => setShowStats(prev => !prev)}
-              >
-                {showStats ? 'Hide Squad Statistics' : 'Show Squad Statistics'}
-              </button>
-            )}
+      <div className="flex flex-col gap-5">
+        <PageHeader
+          title="Squad Builder"
+          actions={
+            <>
+              {tableSortedPlayers.length > 0 && (
+                <button
+                  className={btnPill}
+                  onClick={() => setShowStats(prev => !prev)}
+                >
+                  {showStats ? 'Hide Squad Statistics' : 'Show Squad Statistics'}
+                </button>
+              )}
 
-            {/* Inline Squad Actions (moved above table) */}
-            <div className="flex items-center gap-2 md:gap-3 flex-wrap">
-              {/* Load Squad (button styled like Show Stats) */}
               <button
-                className="px-3 py-1.5 text-sm rounded-lg border border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/20 cursor-pointer"
+                className={btnPill}
                 onClick={() => setShowLoadModal(true)}
                 title="Load Squad"
               >
@@ -1590,23 +1569,22 @@ export default function SquadBuilderPage() {
               </button>
 
               {/* Save Squad (only when there are players) */}
-              {Object.keys(squad.players).length > 0 && (
+              {squadSize > 0 && (
                 <button
-                  className="px-4 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors cursor-pointer text-sm inline-flex items-center gap-2 disabled:opacity-70"
+                  className={btnPrimary}
                   onClick={handleSaveSquad}
                   disabled={isSaving}
                 >
                   {isSaving && (
-                    <span className="inline-block w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" aria-hidden="true"></span>
+                    <span className="inline-block w-3 h-3 rounded-full border-2 border-accent-fg border-t-transparent animate-spin" aria-hidden="true"></span>
                   )}
                   {isSaving ? 'Saving…' : 'Save Squad'}
                 </button>
               )}
 
-              {/* Clear Squad */}
-              {Object.keys(squad.players).length > 0 && (
+              {squadSize > 0 && (
                 <button
-                  className="px-4 py-1.5 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors cursor-pointer text-sm"
+                  className={btnPill}
                   onClick={() => {
                     // Start a brand new squad
                     const defaultFormation = FORMATIONS[0];
@@ -1629,147 +1607,133 @@ export default function SquadBuilderPage() {
                 const current = savedSquads.find(s => s.squad_name === squad.name && s.formation_id === selectedFormation.id);
                 return current ? (
                   <button
-                    className="px-4 py-1.5 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors cursor-pointer text-sm"
+                    className={btnDanger}
                     onClick={() => handleDeleteSquad(current.id, current.squad_name)}
                   >
                     Delete Squad
                   </button>
                 ) : null;
               })()}
-            </div>
-          </div>
-        </div>
+            </>
+          }
+        />
 
         {isInitializing && (
-          <div className="flex items-center justify-center py-12">
-            <div className="text-center">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-              <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">Initializing Squad Builder</h3>
-              <p className="text-gray-600 dark:text-gray-400">Loading your players and squads...</p>
-            </div>
-          </div>
+          <Panel className="flex flex-col items-center justify-center gap-3 py-12 text-center">
+            <div className={`w-12 h-12 ${spinnerClass}`}></div>
+            <h3 className="m-0 font-display text-lg font-bold text-fg">Initializing Squad Builder</h3>
+            <p className="m-0 text-sm text-muted">Loading your players and squads...</p>
+          </Panel>
         )}
 
-        <div className={`grid grid-cols-1 lg:grid-cols-[calc(32%_-_50px)_calc(68%_+_50px)] gap-2 lg:gap-3 items-start ${isInitializing ? 'hidden' : ''}`}>        {/* Player Sidebar */}
-        <div className="min-w-0">
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4 min-h-[830px] mb-4">
-            {/* Header removed per spec */}
-            
+        <div className={`${isInitializing ? 'hidden' : 'grid'} grid-cols-1 lg:grid-cols-[minmax(340px,420px)_minmax(0,1fr)] gap-[18px] items-start`}>
+          {/* Player Sidebar */}
+          <Panel className="min-w-0 flex flex-col gap-2.5 p-3.5">
             {isLoadingPlayers && (
-              <div className="flex items-center justify-center py-8">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-                <span className="ml-2 text-gray-600 dark:text-gray-400">Loading players...</span>
+              <div className="flex items-center justify-center gap-2 py-8 text-sm font-medium text-muted">
+                <div className={`w-6 h-6 ${spinnerClass}`}></div>
+                <span>Loading players...</span>
               </div>
             )}
-            
+
             {playersError && (
-              <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4 mb-4">
-                <div className="flex items-center">
-                  <svg className="w-5 h-5 text-red-400 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  <div>
-                    <h3 className="text-sm font-medium text-red-800 dark:text-red-200">Failed to load players</h3>
-                    <p className="text-sm text-red-700 dark:text-red-300 mt-1">{playersError}</p>
-                    <button
-                      onClick={() => {
-                        if (account) {
-                          const loadPlayers = async () => {
-                            setIsLoadingPlayers(true);
-                            setPlayersError(null);
-                            try {
-                              const agencyPlayers = await supabaseDataService.getAgencyPlayers(account);
-                              setPlayers(agencyPlayers);
-                              setFilteredPlayers(agencyPlayers);
-                              // Silent on initial visit: no popup
-                            } catch (err) {
-                              const errorMessage = err instanceof Error ? err.message : 'Failed to load agency players';
-                              setPlayersError(errorMessage);
-                              showError('Loading Failed', errorMessage);
-                            } finally {
-                              setIsLoadingPlayers(false);
-                            }
-                          };
-                          loadPlayers();
-                        }
-                      }}
-                      className="mt-2 text-sm text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-200 underline"
-                    >
-                      Try again
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
-            
-            {/* Search and Filters */}
-            <div className="mb-4">
-              <div className="flex items-center gap-2 mb-2">
-                {/* Search Input - moved to left */}
-                <input
-                  type="text"
-                  placeholder="Search players..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-64 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
-                
-                {/* Filters Button */}
-                <div className="flex items-center gap-2 flex-1 justify-end">
+              <div className="flex items-start gap-2.5 p-4 rounded-2xl border border-red-500/45 bg-red-500/12">
+                <svg className="flex-none w-5 h-5 text-danger-ink" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <div className="flex flex-col gap-1 min-w-0">
+                  <h3 className="m-0 text-sm font-bold text-danger-ink">Failed to load players</h3>
+                  <p className="m-0 text-sm text-fg-3">{playersError}</p>
                   <button
-                    className="text-left px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white hover:bg-gray-50 dark:hover:bg-gray-600 cursor-pointer whitespace-nowrap"
-                    onClick={() => setShowSidebarFilters(v => !v)}
+                    onClick={() => {
+                      if (account) {
+                        const loadPlayers = async () => {
+                          setIsLoadingPlayers(true);
+                          setPlayersError(null);
+                          try {
+                            const agencyPlayers = await supabaseDataService.getAgencyPlayers(account);
+                            setPlayers(agencyPlayers);
+                            setFilteredPlayers(agencyPlayers);
+                            // Silent on initial visit: no popup
+                          } catch (err) {
+                            const errorMessage = err instanceof Error ? err.message : 'Failed to load agency players';
+                            setPlayersError(errorMessage);
+                            showError('Loading Failed', errorMessage);
+                          } finally {
+                            setIsLoadingPlayers(false);
+                          }
+                        };
+                        loadPlayers();
+                      }
+                    }}
+                    className="self-start mt-1 text-sm font-semibold text-danger-ink underline cursor-pointer"
                   >
-                    {showSidebarFilters ? 'Hide Filters' : 'Show Filters'}
+                    Try again
                   </button>
                 </div>
               </div>
+            )}
+
+            {/* Search and Filters */}
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                placeholder="Search players..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className={`${fieldClass} flex-1 min-w-0`}
+              />
+              <button
+                className={btnSecondary}
+                onClick={() => setShowSidebarFilters(v => !v)}
+              >
+                {showSidebarFilters ? 'Hide Filters' : 'Show Filters'}
+              </button>
             </div>
 
             {/* Filters */}
-            <div className="space-y-3 mb-2">
-              <div className={`grid grid-cols-2 gap-3 ${showSidebarFilters ? '' : 'hidden'}`}>
-                {/* Card Type Filter */}
-                <div className="col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Card type</label>
-                  <div className="flex items-center gap-2 overflow-x-auto whitespace-nowrap py-1">
-                    {[
-                      { key: 'common', label: 'Common', bg: 'bg-[#9f9f9f]', text: 'text-white' },
-                      { key: 'limited', label: 'Limited', bg: 'bg-[#ecd17f]', text: 'text-black' },
-                      { key: 'uncommon', label: 'Uncommon', bg: 'bg-[#71ff30]', text: 'text-black' },
-                      { key: 'epic', label: 'Epic', bg: 'bg-[#0047ff]', text: 'text-white' },
-                      { key: 'legendary', label: 'Legendary', bg: 'bg-[#fa53ff]', text: 'text-white' },
-                      { key: 'ultimate', label: 'Ultimate', bg: 'bg-[#87f6f8]', text: 'text-black' },
-                    ].map(opt => {
-                      const isSelected = selectedCardTypes.includes(opt.key);
-                      return (
-                        <button
-                          key={opt.key}
-                          type="button"
-                          onClick={() => {
-                            setSelectedCardTypes(prev => {
-                              return isSelected ? prev.filter(k => k !== opt.key) : [...prev, opt.key];
-                            });
-                          }}
-                          className={`${opt.bg} ${opt.text} w-[30px] h-[35px] rounded-lg shadow-sm text-xs font-semibold cursor-pointer select-none flex items-center justify-center p-0 border ${isSelected ? 'border-2 border-white' : 'border-[var(--tier-common-foreground)]/15'}`}
-                          title={opt.label}
-                          aria-pressed={isSelected}
-                        >
-                          <span className="sr-only">{opt.label}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
+            <div className={`${showSidebarFilters ? 'grid' : 'hidden'} grid-cols-2 gap-x-4 gap-y-3.5 p-3.5 rounded-2xl border border-line bg-inset`}>
+              {/* Card Type Filter */}
+              <div className="col-span-2">
+                <label className={sliderLabelClass}>Card type</label>
+                <div className="flex items-center gap-2 overflow-x-auto whitespace-nowrap p-1">
+                  {[
+                    { key: 'common', label: 'Common', minRating: 0 },
+                    { key: 'limited', label: 'Limited', minRating: 55 },
+                    { key: 'uncommon', label: 'Uncommon', minRating: 65 },
+                    { key: 'epic', label: 'Epic', minRating: 75 },
+                    { key: 'legendary', label: 'Legendary', minRating: 85 },
+                    { key: 'ultimate', label: 'Ultimate', minRating: 95 },
+                  ].map(opt => {
+                    const isSelected = selectedCardTypes.includes(opt.key);
+                    return (
+                      <button
+                        key={opt.key}
+                        type="button"
+                        onClick={() => {
+                          setSelectedCardTypes(prev => {
+                            return isSelected ? prev.filter(k => k !== opt.key) : [...prev, opt.key];
+                          });
+                        }}
+                        className={`flex-none w-[30px] h-[35px] rounded-lg border border-[rgba(var(--glass-rgb),.14)] cursor-pointer select-none flex items-center justify-center p-0 transition-shadow ${isSelected ? 'ring-2 ring-accent-ink ring-offset-2 ring-offset-inset' : ''}`}
+                        style={{ background: getTierColors(opt.minRating).bg }}
+                        title={opt.label}
+                        aria-pressed={isSelected}
+                      >
+                        <span className="sr-only">{opt.label}</span>
+                      </button>
+                    );
+                  })}
                 </div>
-                {/* Position Filter (moved inside collapsible) */}
-                <div className="col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Position
-                  </label>
-                  <select
+              </div>
+              {/* Position Filter (moved inside collapsible) */}
+              <div className="col-span-2">
+                <label className={labelClass}>
+                  Position
+                  <Select
                     value={filterPosition}
                     onChange={(e) => setFilterPosition(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="w-full"
                   >
                     <option value="all">All Positions</option>
                     <option disabled>────────────</option>
@@ -1792,117 +1756,109 @@ export default function SquadBuilderPage() {
                     <option value="__GROUP_DEFENDERS">Defenders (CB, LB, RB, LWB, RWB)</option>
                     <option value="__GROUP_MIDFIELDERS">Midfielders (CM, CDM, LM, RM)</option>
                     <option value="__GROUP_FORWARDS">Forwards (ST, CF, RW, LW, CAM)</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Overall {overallMin} - {overallMax}
-                  </label>
-                  <Slider.Root
-                    className="relative flex items-center select-none w-full h-5"
-                    min={0}
-                    max={100}
-                    step={1}
-                    value={[overallMin, overallMax]}
-                    onValueChange={([min, max]) => { setOverallMin(min); setOverallMax(max); }}
-                  >
-                    <Slider.Track className="bg-gray-200 dark:bg-gray-600 relative grow rounded h-1" />
-                    <Slider.Range className="absolute h-1 bg-blue-500 rounded" />
-                    <Slider.Thumb className="block w-2.5 h-5 bg-gray-600 border border-gray-400 rounded-sm" aria-label="Overall min" />
-                    <Slider.Thumb className="block w-2.5 h-5 bg-gray-600 border border-gray-400 rounded-sm" aria-label="Overall max" />
-                  </Slider.Root>
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Position rating {positionRatingMin} - {positionRatingMax}
-                  </label>
-                  <Slider.Root
-                    className="relative flex items-center select-none w-full h-5"
-                    min={0}
-                    max={100}
-                    step={1}
-                    value={[positionRatingMin, positionRatingMax]}
-                    onValueChange={([min, max]) => { setPositionRatingMin(min); setPositionRatingMax(max); }}
-                  >
-                    <Slider.Track className="bg-gray-200 dark:bg-gray-600 relative grow rounded h-1" />
-                    <Slider.Range className="absolute h-1 bg-blue-500 rounded" />
-                    <Slider.Thumb className="block w-2.5 h-5 bg-gray-600 border border-gray-400 rounded-sm" aria-label="Position min" />
-                    <Slider.Thumb className="block w-2.5 h-5 bg-gray-600 border border-gray-400 rounded-sm" aria-label="Position max" />
-                  </Slider.Root>
-                </div>
-                {([
-                  ['pace','PAC'],['shooting','SHO'],['passing','PAS'],['dribbling','DRI'],['defense','DEF'],['physical','PHY']
-                ] as Array<[keyof typeof debouncedAttr,string]>).map(([key,label]) => (
-                  <div key={key} className="col-span-1">
-                    <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
-                      {label} {attrFilters[key]} - {attrFiltersMax[key]}
-                    </label>
-                    <Slider.Root
-                      className="relative flex items-center select-none w-full h-5"
-                      min={0}
-                      max={100}
-                      step={1}
-                      value={[attrFilters[key], attrFiltersMax[key]]}
-                      onValueChange={([min, max]) => {
-                        setAttrFilters(prev => ({ ...prev, [key]: min }));
-                        setAttrFiltersMax(prev => ({ ...prev, [key]: max }));
-                      }}
-                    >
-                      <Slider.Track className="bg-gray-200 dark:bg-gray-600 relative grow rounded h-1" />
-                      <Slider.Range className="absolute h-1 bg-blue-500 rounded" />
-                      <Slider.Thumb className="block w-2.5 h-5 bg-gray-600 border border-gray-400 rounded-sm" aria-label={`${label} min`} />
-                      <Slider.Thumb className="block w-2.5 h-5 bg-gray-600 border border-gray-400 rounded-sm" aria-label={`${label} max`} />
-                    </Slider.Root>
-                  </div>
-                ))}
-                {/* Hide selected players toggle (inside filters area) */}
-                <div className="col-span-2 flex items-center gap-2">
-                  <input
-                    id="hide-selected"
-                    type="checkbox"
-                    checked={hideSelectedInSidebar}
-                    onChange={(e) => setHideSelectedInSidebar(e.target.checked)}
-                    className="w-4 h-4 rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
-                  />
-                  <label htmlFor="hide-selected" className="text-sm text-gray-700 dark:text-gray-300 select-none">
-                    Hide selected players
-                  </label>
-                  {isFiltersActive && (
-                    <button
-                      type="button"
-                      onClick={resetFilters}
-                      className="ml-auto text-sm text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
-                      title="Reset filters"
-                    >
-                      Reset Filters
-                    </button>
-                  )}
-                </div>
+                  </Select>
+                </label>
               </div>
-
-      
-              {/* Sort By removed per spec */}
+              <div>
+                <label className={sliderLabelClass}>
+                  Overall {overallMin} - {overallMax}
+                </label>
+                <Slider.Root
+                  className={sliderRootClass}
+                  min={0}
+                  max={100}
+                  step={1}
+                  value={[overallMin, overallMax]}
+                  onValueChange={([min, max]) => { setOverallMin(min); setOverallMax(max); }}
+                >
+                  <Slider.Track className={sliderTrackClass} />
+                  <Slider.Range className={sliderRangeClass} />
+                  <Slider.Thumb className={sliderThumbClass} aria-label="Overall min" />
+                  <Slider.Thumb className={sliderThumbClass} aria-label="Overall max" />
+                </Slider.Root>
+              </div>
+              <div>
+                <label className={sliderLabelClass}>
+                  Position rating {positionRatingMin} - {positionRatingMax}
+                </label>
+                <Slider.Root
+                  className={sliderRootClass}
+                  min={0}
+                  max={100}
+                  step={1}
+                  value={[positionRatingMin, positionRatingMax]}
+                  onValueChange={([min, max]) => { setPositionRatingMin(min); setPositionRatingMax(max); }}
+                >
+                  <Slider.Track className={sliderTrackClass} />
+                  <Slider.Range className={sliderRangeClass} />
+                  <Slider.Thumb className={sliderThumbClass} aria-label="Position min" />
+                  <Slider.Thumb className={sliderThumbClass} aria-label="Position max" />
+                </Slider.Root>
+              </div>
+              {([
+                ['pace','PAC'],['shooting','SHO'],['passing','PAS'],['dribbling','DRI'],['defense','DEF'],['physical','PHY']
+              ] as Array<[keyof typeof debouncedAttr,string]>).map(([key,label]) => (
+                <div key={key} className="col-span-1">
+                  <label className={sliderLabelClass}>
+                    {label} {attrFilters[key]} - {attrFiltersMax[key]}
+                  </label>
+                  <Slider.Root
+                    className={sliderRootClass}
+                    min={0}
+                    max={100}
+                    step={1}
+                    value={[attrFilters[key], attrFiltersMax[key]]}
+                    onValueChange={([min, max]) => {
+                      setAttrFilters(prev => ({ ...prev, [key]: min }));
+                      setAttrFiltersMax(prev => ({ ...prev, [key]: max }));
+                    }}
+                  >
+                    <Slider.Track className={sliderTrackClass} />
+                    <Slider.Range className={sliderRangeClass} />
+                    <Slider.Thumb className={sliderThumbClass} aria-label={`${label} min`} />
+                    <Slider.Thumb className={sliderThumbClass} aria-label={`${label} max`} />
+                  </Slider.Root>
+                </div>
+              ))}
+              {/* Hide selected players toggle (inside filters area) */}
+              <div className="col-span-2 flex items-center gap-2">
+                <input
+                  id="hide-selected"
+                  type="checkbox"
+                  checked={hideSelectedInSidebar}
+                  onChange={(e) => setHideSelectedInSidebar(e.target.checked)}
+                  className="w-4 h-4 cursor-pointer accent-accent"
+                />
+                <label htmlFor="hide-selected" className="text-sm font-medium text-fg-3 select-none cursor-pointer">
+                  Hide selected players
+                </label>
+                {isFiltersActive && (
+                  <button
+                    type="button"
+                    onClick={resetFilters}
+                    className="ml-auto text-sm font-semibold text-accent-ink hover:text-accent-hover cursor-pointer"
+                    title="Reset filters"
+                  >
+                    Reset Filters
+                  </button>
+                )}
+              </div>
             </div>
-
-            
-
-            {/* Summary */}
 
             {/* Pagination header (info) */}
             {filteredPlayers.length > pageSize && (
-              <div className="flex items-center justify-end mb-3 text-xs text-gray-700 dark:text-gray-300">
-                <span>Showing {Math.min((sidebarPage + 1) * pageSize, filteredPlayers.length)} of {filteredPlayers.length} players</span>
-              </div>
+              <span className="self-end text-xs font-medium text-muted">
+                Showing {Math.min((sidebarPage + 1) * pageSize, filteredPlayers.length)} of {filteredPlayers.length} players
+              </span>
             )}
 
             {/* Player List */}
-            <div className="space-y-2 min-h-[600px] overflow-y-auto scrollbar-thin scrollbar-thumb-gray-400 dark:scrollbar-thumb-gray-600 scrollbar-track-transparent">
+            <div className="flex flex-col gap-2.5">
               <SortableContext items={filteredPlayers.slice(sidebarPage*pageSize, sidebarPage*pageSize+pageSize).map(p => p.id.toString())} strategy={verticalListSortingStrategy}>
                 {filteredPlayers.slice(sidebarPage*pageSize, sidebarPage*pageSize+pageSize).map((player) => {
                   const isInSquad = Object.values(squad.players).some(sp => sp.player.id === player.id);
                   return (
-                  <div key={player.id} className="flex flex-col gap-1">
-                    <DraggablePlayerCard player={player} isInSquad={isInSquad} savedSquads={savedSquads} currentSquad={squad} onAdd={(p) => {
+                    <DraggablePlayerCard key={player.id} player={player} isInSquad={isInSquad} savedSquads={savedSquads} currentSquad={squad} onAdd={(p) => {
                       const targetPos = pickTargetPositionForPlayer(p, selectedFormation, squad);
                       if (!targetPos) return;
                       const newSquad: Squad = { ...squad, players: { ...squad.players, [targetPos]: { player: p, position: targetPos } } };
@@ -1915,24 +1871,23 @@ export default function SquadBuilderPage() {
                       addToHistory(newSquad);
                       setSquad(newSquad);
                     }} />
-                  </div>
                 )})}
               </SortableContext>
             </div>
             {/* Pagination footer with numbers: 1 line up to 5 pages, 2 lines when >5 */}
             {filteredPlayers.length > pageSize && (
-              <div className="mt-2 text-xs text-gray-700 dark:text-gray-300">
+              <div className="flex flex-col gap-1.5 pt-1">
                 {(() => {
                   const pageCount = Math.ceil(filteredPlayers.length / pageSize);
                   const half = Math.ceil(pageCount / 2);
                   const renderRange = (start: number, end: number) => (
-                    <div className="flex flex-wrap justify-center gap-1 mb-1">
+                    <div className="flex flex-wrap justify-center gap-1.5">
                       {Array.from({ length: end - start }).map((_, idx) => {
                         const i = start + idx;
                         return (
                           <button
                             key={i}
-                            className={`min-w-7 h-7 px-2 rounded border ${i===sidebarPage ? 'bg-blue-600 text-white border-blue-600' : 'bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700'} cursor-pointer`}
+                            className={`min-w-8 h-8 px-2 rounded-lg border text-xs font-bold cursor-pointer transition-colors ${i===sidebarPage ? 'bg-accent text-accent-fg border-accent' : 'bg-btn text-fg-3 border-line-2 hover:border-line-hover'}`}
                             onClick={() => setSidebarPage(i)}
                           >
                             {i + 1}
@@ -1956,508 +1911,354 @@ export default function SquadBuilderPage() {
                 })()}
               </div>
             )}
-          </div>
-        </div>
+          </Panel>
 
-        {/* Main Squad Builder Area */}
-        <div className="min-w-0">
-          <div className="sb-main-container bg-gray-100 dark:bg-[#1e1e1e] rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6 min-h-[830px]">
-            {/* Formation Selector with Analysis (hidden in table view) */}
-            {/* Formation analysis and field view removed */}
-
-            {/* Enhanced Squad Statistics (collapsible) */}
+          {/* Main Squad Builder Area */}
+          <div className="min-w-0 flex flex-col gap-[18px]">
+            {/* Squad Statistics (collapsible) */}
             {showStats && (
-            <div ref={statsRef} className="mb-4 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
-              
-              {/* Primary Statistics with Progress Bars (chemistry hidden per spec) */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-4 mb-6">
-                <div className="text-center">
-                  <div className="text-2xl font-bold text-blue-600 dark:text-blue-400 mb-1">
-                    {squadStats.averageOverall.toFixed(2)}
-                  </div>
-                  <div className="text-sm text-gray-600 dark:text-gray-400 mb-2">Avg Overall</div>
+              <div ref={statsRef} className="flex flex-col gap-3">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  <KpiTile label="Avg Overall" value={squadStats.averageOverall.toFixed(2)} accent />
+                  <KpiTile label="AVG (TOP11)" value={squadStats.top11Average.toFixed(2)} />
+                  <KpiTile label="AVG (TOP16)" value={squadStats.top16Average.toFixed(2)} />
+                  <KpiTile label="Players" value={squadStats.totalPlayers} />
                 </div>
-                <div className="text-center">
-                  <div className="text-2xl font-bold text-green-600 dark:text-green-400 mb-1">
-                    {squadStats.top11Average.toFixed(2)}
-                  </div>
-                  <div className="text-sm text-gray-600 dark:text-gray-400 mb-2">AVG (TOP11)</div>
-                </div>
-                <div className="text-center">
-                  <div className="text-2xl font-bold text-purple-600 dark:text-purple-400 mb-1">
-                    {squadStats.top16Average.toFixed(2)}
-                  </div>
-                  <div className="text-sm text-gray-600 dark:text-gray-400 mb-2">AVG (TOP16)</div>
-                </div>
-                <div className="text-center">
-                  <div className="text-2xl font-bold text-orange-600 dark:text-orange-400 mb-1">
-                    {squadStats.totalPlayers}
-                  </div>
-                  <div className="text-sm text-gray-600 dark:text-gray-400 mb-2">Players</div>
-                </div>
-              </div>
 
-              {/* Squad Stats Breakdown with Enhanced Visuals */}
-              <div className="grid grid-cols-3 gap-2 mb-4">
-                <div className="text-center p-3 bg-white dark:bg-gray-700 rounded-lg">
-                  <div className="text-lg font-semibold text-gray-900 dark:text-white mb-1">
-                    {squadStats.stats.pace}
-                  </div>
-                  <div className="text-xs text-gray-600 dark:text-gray-400 mb-2">AVG PAC</div>
-                  <div className="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-1">
-                    <div 
-                      className="bg-yellow-500 h-1 rounded-full transition-all duration-300"
-                      style={{ width: `${squadStats.stats.pace}%` }}
-                    ></div>
-                  </div>
-                </div>
-                <div className="text-center p-3 bg-white dark:bg-gray-700 rounded-lg">
-                  <div className="text-lg font-semibold text-gray-900 dark:text-white mb-1">
-                    {squadStats.stats.shooting}
-                  </div>
-                  <div className="text-xs text-gray-600 dark:text-gray-400 mb-2">AVG SHO</div>
-                  <div className="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-1">
-                    <div 
-                      className="bg-red-500 h-1 rounded-full transition-all duration-300"
-                      style={{ width: `${squadStats.stats.shooting}%` }}
-                    ></div>
-                  </div>
-                </div>
-                <div className="text-center p-3 bg-white dark:bg-gray-700 rounded-lg">
-                  <div className="text-lg font-semibold text-gray-900 dark:text-white mb-1">
-                    {squadStats.stats.passing}
-                  </div>
-                  <div className="text-xs text-gray-600 dark:text-gray-400 mb-2">AVG PAS</div>
-                  <div className="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-1">
-                    <div 
-                      className="bg-blue-500 h-1 rounded-full transition-all duration-300"
-                      style={{ width: `${squadStats.stats.passing}%` }}
-                    ></div>
-                  </div>
-                </div>
-                <div className="text-center p-3 bg-white dark:bg-gray-700 rounded-lg">
-                  <div className="text-lg font-semibold text-gray-900 dark:text-white mb-1">
-                    {squadStats.stats.dribbling}
-                  </div>
-                  <div className="text-xs text-gray-600 dark:text-gray-400 mb-2">AVG DRI</div>
-                  <div className="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-1">
-                    <div 
-                      className="bg-green-500 h-1 rounded-full transition-all duration-300"
-                      style={{ width: `${squadStats.stats.dribbling}%` }}
-                    ></div>
-                  </div>
-                </div>
-                <div className="text-center p-3 bg-white dark:bg-gray-700 rounded-lg">
-                  <div className="text-lg font-semibold text-gray-900 dark:text-white mb-1">
-                    {squadStats.stats.defense}
-                  </div>
-                  <div className="text-xs text-gray-600 dark:text-gray-400 mb-2">AVG DEF</div>
-                  <div className="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-1">
-                    <div 
-                      className="bg-indigo-500 h-1 rounded-full transition-all duration-300"
-                      style={{ width: `${squadStats.stats.defense}%` }}
-                    ></div>
-                  </div>
-                </div>
-                <div className="text-center p-3 bg-white dark:bg-gray-700 rounded-lg">
-                  <div className="text-lg font-semibold text-gray-900 dark:text-white mb-1">
-                    {squadStats.stats.physical}
-                  </div>
-                  <div className="text-xs text-gray-600 dark:text-gray-400 mb-2">AVG PHY</div>
-                  <div className="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-1">
-                    <div 
-                      className="bg-orange-500 h-1 rounded-full transition-all duration-300"
-                      style={{ width: `${squadStats.stats.physical}%` }}
-                    ></div>
-                  </div>
-                </div>
-              </div>
+                <Panel className="grid grid-cols-3 sm:grid-cols-6 gap-2.5 p-3.5">
+                  {([
+                    ['AVG PAC', squadStats.stats.pace],
+                    ['AVG SHO', squadStats.stats.shooting],
+                    ['AVG PAS', squadStats.stats.passing],
+                    ['AVG DRI', squadStats.stats.dribbling],
+                    ['AVG DEF', squadStats.stats.defense],
+                    ['AVG PHY', squadStats.stats.physical],
+                  ] as [string, number][]).map(([label, value]) => (
+                    <div key={label} className="flex flex-col items-center gap-2 px-2 py-3 rounded-2xl border border-line bg-inset">
+                      <span className="text-[11px] font-bold uppercase tracking-[0.1em] text-muted-2 whitespace-nowrap">{label}</span>
+                      <TierBadge value={value} />
+                      <div className="w-full h-1 rounded-full bg-line-2 overflow-hidden">
+                        <div
+                          className="h-1 rounded-full transition-all duration-300"
+                          style={{ width: `${value}%`, background: getTierColors(value).bg }}
+                        ></div>
+                      </div>
+                    </div>
+                  ))}
+                </Panel>
 
-              {/* Advanced Statistics */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="bg-white dark:bg-gray-700 rounded-lg p-3">
-                  <div className="flex items-center justify-between mb-2">
-                    <h4 className="text-sm font-medium text-gray-900 dark:text-white">Squad Balance</h4>
-                    {tableGroupFilter !== 'all' && (
-                      <button
-                        type="button"
-                        className="text-xs px-2 py-1 rounded border border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/20 cursor-pointer"
-                        onClick={() => setTableGroupFilter('all')}
-                        title="Reset group filter"
-                      >
-                        Reset
-                      </button>
-                    )}
-                  </div>
-                  <div className="space-y-2">
-                    {(() => {
-                      const normalize = (pos: string) => {
-                        const base = (pos || '').replace(/[0-9]+$/, '');
-                        if (base === 'CF') return 'ST';
-                        if (base === 'RWB') return 'RB';
-                        if (base === 'LWB') return 'LB';
-                        return base;
-                      };
-                      const counts = { attack: 0, midfield: 0, defense: 0, gk: 0 };
-                      Object.entries(squad.players).forEach(([slot, sp]) => {
-                        // Use getPlayerAllGroups to count players in all groups they can play
-                        const playerGroups = getPlayerAllGroups(sp.player);
-                        playerGroups.forEach(group => {
-                          if (group === 'gk') counts.gk++;
-                          else if (group === 'attack') counts.attack++;
-                          else if (group === 'midfield') counts.midfield++;
-                          else if (group === 'defense') counts.defense++;
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <Panel className="flex flex-col gap-3 p-[18px]">
+                    <div className="flex items-center justify-between gap-2 min-h-8">
+                      <h4 className="m-0 font-display text-lg font-bold text-fg">Squad Balance</h4>
+                      {tableGroupFilter !== 'all' && (
+                        <button
+                          type="button"
+                          className={smallPillClass}
+                          onClick={() => setTableGroupFilter('all')}
+                          title="Reset group filter"
+                        >
+                          Reset
+                        </button>
+                      )}
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      {(() => {
+                        const counts = { attack: 0, midfield: 0, defense: 0, gk: 0 };
+                        Object.entries(squad.players).forEach(([slot, sp]) => {
+                          // Use getPlayerAllGroups to count players in all groups they can play
+                          const playerGroups = getPlayerAllGroups(sp.player);
+                          playerGroups.forEach(group => {
+                            if (group === 'gk') counts.gk++;
+                            else if (group === 'attack') counts.attack++;
+                            else if (group === 'midfield') counts.midfield++;
+                            else if (group === 'defense') counts.defense++;
+                          });
                         });
-                      });
-                      return (
-                        <>
+                        return ([
+                          ['gk', 'Goalkeepers'],
+                          ['defense', 'Defense'],
+                          ['midfield', 'Midfield'],
+                          ['attack', 'Attack'],
+                        ] as const).map(([group, label]) => (
                           <button
+                            key={group}
                             type="button"
-                            className={`w-full flex justify-between items-center text-left px-2 py-1 rounded cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-900/20 ${tableGroupFilter==='gk' ? 'bg-blue-50 dark:bg-blue-900/20' : ''}`}
-                            onClick={() => setTableGroupFilter('gk')}
+                            className={`w-full flex justify-between items-center px-3 py-2 rounded-xl text-left text-sm cursor-pointer transition-colors ${tableGroupFilter===group ? 'bg-accent/12 text-accent-ink' : 'text-muted hover:bg-row-hover'}`}
+                            onClick={() => setTableGroupFilter(group)}
                           >
-                            <span className="text-xs text-gray-600 dark:text-gray-400">Goalkeepers</span>
-                            <span className="text-xs font-medium text-gray-900 dark:text-white">{counts.gk}</span>
+                            <span className="font-medium">{label}</span>
+                            <span className={`font-display font-bold ${tableGroupFilter===group ? '' : 'text-fg'}`}>{counts[group]}</span>
                           </button>
-                          <button
-                            type="button"
-                            className={`w-full flex justify-between items-center text-left px-2 py-1 rounded cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-900/20 ${tableGroupFilter==='defense' ? 'bg-blue-50 dark:bg-blue-900/20' : ''}`}
-                            onClick={() => setTableGroupFilter('defense')}
-                          >
-                            <span className="text-xs text-gray-600 dark:text-gray-400">Defense</span>
-                            <span className="text-xs font-medium text-gray-900 dark:text-white">{counts.defense}</span>
-                          </button>
-                          <button
-                            type="button"
-                            className={`w-full flex justify-between items-center text-left px-2 py-1 rounded cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-900/20 ${tableGroupFilter==='midfield' ? 'bg-blue-50 dark:bg-blue-900/20' : ''}`}
-                            onClick={() => setTableGroupFilter('midfield')}
-                          >
-                            <span className="text-xs text-gray-600 dark:text-gray-400">Midfield</span>
-                            <span className="text-xs font-medium text-gray-900 dark:text-white">{counts.midfield}</span>
-                          </button>
-                          <button
-                            type="button"
-                            className={`w-full flex justify-between items-center text-left px-2 py-1 rounded cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-900/20 ${tableGroupFilter==='attack' ? 'bg-blue-50 dark:bg-blue-900/20' : ''}`}
-                            onClick={() => setTableGroupFilter('attack')}
-                          >
-                            <span className="text-xs text-gray-600 dark:text-gray-400">Attack</span>
-                            <span className="text-xs font-medium text-gray-900 dark:text-white">{counts.attack}</span>
-                          </button>
-                        </>
-                      );
-                    })()}
-                  </div>
-                </div>
+                        ));
+                      })()}
+                    </div>
+                  </Panel>
 
-                <div className="bg-white dark:bg-gray-700 rounded-lg p-3">
-                  <h4 className="text-sm font-medium text-gray-900 dark:text-white mb-2">Age Analysis</h4>
-                  <div className="space-y-2">
-                    {(() => {
-                      const squadPlayers = Object.values(squad.players);
-                      if (squadPlayers.length === 0) return (
-                        <div className="text-xs text-gray-500 dark:text-gray-400">No players</div>
-                      );
-                      const ages = squadPlayers.map(sp => sp.player.metadata.age);
-                      const avgAge = Math.round(ages.reduce((sum, age) => sum + age, 0) / ages.length);
-                      const minAge = Math.min(...ages);
-                      const maxAge = Math.max(...ages);
-                      return (
-                        <>
-                          <div className="flex justify-between items-center">
-                            <span className="text-xs text-gray-600 dark:text-gray-400">Average</span>
-                            <span className="text-xs font-medium text-gray-900 dark:text-white">{avgAge}</span>
-                          </div>
-                          <div className="flex justify-between items-center">
-                            <span className="text-xs text-gray-600 dark:text-gray-400">Range</span>
-                            <span className="text-xs font-medium text-gray-900 dark:text-white">{minAge}-{maxAge}</span>
-                          </div>
-                        </>
-                      );
-                    })()}
-                  </div>
-                </div>
+                  <Panel className="flex flex-col gap-3 p-[18px]">
+                    <div className="flex items-center min-h-8">
+                      <h4 className="m-0 font-display text-lg font-bold text-fg">Age Analysis</h4>
+                    </div>
+                    <div className="flex flex-col gap-2">
+                      {(() => {
+                        const squadPlayers = Object.values(squad.players);
+                        if (squadPlayers.length === 0) return (
+                          <div className="text-sm text-muted">No players</div>
+                        );
+                        const ages = squadPlayers.map(sp => sp.player.metadata.age);
+                        const avgAge = Math.round(ages.reduce((sum, age) => sum + age, 0) / ages.length);
+                        const minAge = Math.min(...ages);
+                        const maxAge = Math.max(...ages);
+                        return (
+                          <>
+                            <div className="flex justify-between items-center text-sm">
+                              <span className="font-medium text-muted">Average</span>
+                              <span className="font-display font-bold text-fg">{avgAge}</span>
+                            </div>
+                            <div className="flex justify-between items-center text-sm">
+                              <span className="font-medium text-muted">Range</span>
+                              <span className="font-display font-bold text-fg">{minAge}-{maxAge}</span>
+                            </div>
+                          </>
+                        );
+                      })()}
+                    </div>
+                  </Panel>
 
-                <div className="bg-white dark:bg-gray-700 rounded-lg p-3">
-                  <div className="flex items-center justify-between mb-2">
-                    <h4 className="text-sm font-medium text-gray-900 dark:text-white">Position Coverage</h4>
-                  </div>
-                  <div className="space-y-2">
-                    {(() => {
-                      // Required positions for coverage metrics
-                      const requiredPositions = ['GK', 'CB', 'LB', 'RB', 'CDM', 'CM', 'CAM', 'LM', 'RM', 'LW', 'RW', 'ST'];
+                  <Panel className="flex flex-col gap-3 p-[18px]">
+                    <div className="flex items-center min-h-8">
+                      <h4 className="m-0 font-display text-lg font-bold text-fg">Position Coverage</h4>
+                    </div>
+                    <div className="flex flex-col gap-2">
+                      {(() => {
+                        // Required positions for coverage metrics
+                        const requiredPositions = ['GK', 'CB', 'LB', 'RB', 'CDM', 'CM', 'CAM', 'LM', 'RM', 'LW', 'RW', 'ST'];
 
-                      // Build playable map per position using threshold (within 5 of overall)
-                      const playable: Record<string, Set<string>> = {};
-                      requiredPositions.forEach(pos => { playable[pos] = new Set(); });
+                        // Build playable map per position using threshold (within 5 of overall)
+                        const playable: Record<string, Set<string>> = {};
+                        requiredPositions.forEach(pos => { playable[pos] = new Set(); });
 
-                      Object.values(squad.players).forEach(sp => {
-                        const p = sp.player;
-                        const overall = p.metadata.overall || 0;
-                        const threshold = Math.max(0, overall - 5);
-                        requiredPositions.forEach(pos => {
-                          const rating = calculatePositionRating(p, pos as any);
-                          if (rating >= threshold) {
-                            playable[pos].add(String(p.id));
-                          }
+                        Object.values(squad.players).forEach(sp => {
+                          const p = sp.player;
+                          const overall = p.metadata.overall || 0;
+                          const threshold = Math.max(0, overall - 5);
+                          requiredPositions.forEach(pos => {
+                            const rating = calculatePositionRating(p, pos as any);
+                            if (rating >= threshold) {
+                              playable[pos].add(String(p.id));
+                            }
+                          });
                         });
-                      });
 
-                      const total = requiredPositions.length;
-                      const coveredCount = requiredPositions.filter(pos => (playable[pos]?.size || 0) >= 1).length;
+                        const total = requiredPositions.length;
+                        const coveredCount = requiredPositions.filter(pos => (playable[pos]?.size || 0) >= 1).length;
 
-                      // Backup coverage: need 2 players per position without reusing the same player in another position
-                      const usedGlobally = new Set<string>();
-                      let backupCount = 0;
-                      for (const pos of requiredPositions) {
-                        const options = Array.from(playable[pos] || []);
-                        let picked = 0;
-                        for (const pid of options) {
-                          if (!usedGlobally.has(pid)) {
-                            usedGlobally.add(pid);
-                            picked++;
-                            if (picked === 2) break;
+                        // Backup coverage: need 2 players per position without reusing the same player in another position
+                        const usedGlobally = new Set<string>();
+                        let backupCount = 0;
+                        for (const pos of requiredPositions) {
+                          const options = Array.from(playable[pos] || []);
+                          let picked = 0;
+                          for (const pid of options) {
+                            if (!usedGlobally.has(pid)) {
+                              usedGlobally.add(pid);
+                              picked++;
+                              if (picked === 2) break;
+                            }
                           }
+                          if (picked === 2) backupCount++;
                         }
-                        if (picked === 2) backupCount++;
-                      }
 
-                      const coveragePercent = Math.max(0, Math.min(100, Math.round((coveredCount / total) * 100)));
-                      const backupPercent = Math.max(0, Math.min(100, Math.round((backupCount / total) * 100)));
+                        const coveragePercent = Math.max(0, Math.min(100, Math.round((coveredCount / total) * 100)));
+                        const backupPercent = Math.max(0, Math.min(100, Math.round((backupCount / total) * 100)));
 
-                      return (
-                        <>
-                          <div className="flex justify-between items-center">
-                            <span className="text-xs text-gray-600 dark:text-gray-400">Main Coverage</span>
-                            <span className="text-xs font-medium text-gray-900 dark:text-white">{coveragePercent}%</span>
-                          </div>
-                          <div className="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-2">
-                            <div 
-                              className="bg-blue-500 h-2 rounded-full transition-all duration-300"
-                              style={{ width: `${coveragePercent}%` }}
-                            ></div>
-                          </div>
+                        return (
+                          <>
+                            <div className="flex justify-between items-center text-sm">
+                              <span className="font-medium text-muted">Main Coverage</span>
+                              <span className="font-display font-bold text-fg">{coveragePercent}%</span>
+                            </div>
+                            <div className="w-full h-2 rounded-full bg-line-2 overflow-hidden">
+                              <div
+                                className="h-2 rounded-full bg-accent transition-all duration-300"
+                                style={{ width: `${coveragePercent}%` }}
+                              ></div>
+                            </div>
 
-                          <div className="flex justify-between items-center mt-3">
-                            <span className="text-xs text-gray-600 dark:text-gray-400">Backup Coverage</span>
-                            <span className="text-xs font-medium text-gray-900 dark:text-white">{backupPercent}%</span>
-                          </div>
-                          <div className="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-2">
-                            <div 
-                              className="bg-green-500 h-2 rounded-full transition-all duration-300"
-                              style={{ width: `${backupPercent}%` }}
-                            ></div>
-                          </div>
-                          <div className="mt-3 flex justify-end">
-              <button
-                type="button"
-                className="text-xs px-2 py-1 rounded border border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/20 cursor-pointer"
-                onClick={async () => {
-                  setIsCoverageLoading(true);
-                  try {
-                    const playersList = Object.values(squad.players).map(sp => sp.player);
-                    const ratingsMap: Record<string, Record<string, number>> = {};
-                    for (const p of playersList) {
-                      const playerForOVR = {
-                        id: p.id,
-                        name: `${p.metadata.firstName} ${p.metadata.lastName}`,
-                        attributes: {
-                          PAC: p.metadata.pace,
-                          SHO: p.metadata.shooting,
-                          PAS: p.metadata.passing,
-                          DRI: p.metadata.dribbling,
-                          DEF: p.metadata.defense,
-                          PHY: p.metadata.physical,
-                          GK: p.metadata.goalkeeping || 0
-                        },
-                        positions: (p.metadata.positions || []) as MFLPosition[],
-                        overall: p.metadata.overall
-                      };
-                      const res = rbCalculateAllPositionOVRs(playerForOVR);
-                      const map: Record<string, number> = {};
-                      if (res.success && res.results) {
-                        for (const key of Object.keys(res.results)) {
-                          const r = (res.results as any)[key];
-                          map[key] = r?.ovr ?? 0;
-                        }
-                      }
-                      ratingsMap[p.id.toString()] = map;
-                    }
-                    setCoverageRatings(ratingsMap);
-                  } finally {
-                    setIsCoverageLoading(false);
-                    setShowCoverageModal(true);
-                  }
-                }}
-                title="Show all positions coverage"
-              >
-                              Show all positions coverage
-                            </button>
-                          </div>
-                        </>
-                      );
-                    })()}
-                  </div>
+                            <div className="flex justify-between items-center mt-2 text-sm">
+                              <span className="font-medium text-muted">Backup Coverage</span>
+                              <span className="font-display font-bold text-fg">{backupPercent}%</span>
+                            </div>
+                            <div className="w-full h-2 rounded-full bg-line-2 overflow-hidden">
+                              <div
+                                className="h-2 rounded-full bg-[#6eb4ff] transition-all duration-300"
+                                style={{ width: `${backupPercent}%` }}
+                              ></div>
+                            </div>
+                            <div className="mt-2 flex justify-end">
+                              <button
+                                type="button"
+                                className={smallPillClass}
+                                onClick={async () => {
+                                  setIsCoverageLoading(true);
+                                  try {
+                                    const playersList = Object.values(squad.players).map(sp => sp.player);
+                                    const ratingsMap: Record<string, Record<string, number>> = {};
+                                    for (const p of playersList) {
+                                      const playerForOVR = {
+                                        id: p.id,
+                                        name: `${p.metadata.firstName} ${p.metadata.lastName}`,
+                                        attributes: {
+                                          PAC: p.metadata.pace,
+                                          SHO: p.metadata.shooting,
+                                          PAS: p.metadata.passing,
+                                          DRI: p.metadata.dribbling,
+                                          DEF: p.metadata.defense,
+                                          PHY: p.metadata.physical,
+                                          GK: p.metadata.goalkeeping || 0
+                                        },
+                                        positions: (p.metadata.positions || []) as MFLPosition[],
+                                        overall: p.metadata.overall
+                                      };
+                                      const res = rbCalculateAllPositionOVRs(playerForOVR);
+                                      const map: Record<string, number> = {};
+                                      if (res.success && res.results) {
+                                        for (const key of Object.keys(res.results)) {
+                                          const r = (res.results as any)[key];
+                                          map[key] = r?.ovr ?? 0;
+                                        }
+                                      }
+                                      ratingsMap[p.id.toString()] = map;
+                                    }
+                                    setCoverageRatings(ratingsMap);
+                                  } finally {
+                                    setIsCoverageLoading(false);
+                                    setShowCoverageModal(true);
+                                  }
+                                }}
+                                title="Show all positions coverage"
+                              >
+                                Show all positions coverage
+                              </button>
+                            </div>
+                          </>
+                        );
+                      })()}
+                    </div>
+                  </Panel>
                 </div>
               </div>
-            </div>
             )}
 
-            {/* Squad Validation removed per spec */}
-
-            {/* Field display removed */}
-
-            {/* Table View: reuse club page styles. Show only players currently in squad */}
-            {/* Squad Title (heading) */}
-            <div className="mb-[10px]">
-              <h3 className="text-[18px] font-semibold text-gray-900 dark:text-white">
-                {squad.name && squad.name.trim().length > 0 ? squad.name : 'SQUAD'}
-              </h3>
-            </div>
-            <div className="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden sb-main-squad-table">
-                <div className="overflow-x-auto">
-                  <table className="min-w-full">
-                    <thead className="bg-gray-50 dark:bg-gray-700 border-b border-gray-200 dark:border-gray-700">
+            {/* Squad table: only players currently in the squad */}
+            <Panel className="min-w-0 overflow-hidden">
+              <div className="flex items-center justify-between gap-3 px-5 py-[18px]">
+                <h2 className="m-0 font-display text-2xl font-extrabold tracking-[-0.01em] text-fg truncate">
+                  {squad.name && squad.name.trim().length > 0 ? squad.name : 'SQUAD'}
+                </h2>
+                <span className="flex-none text-[13px] font-semibold text-muted">
+                  {tableGroupFilter !== 'all' ? `${tableSortedPlayers.length} of ${squadSize}` : squadSize} {squadSize === 1 ? 'player' : 'players'}
+                </span>
+              </div>
+              <div className="overflow-x-auto">
+                <table className={tableClass}>
+                  <thead>
+                    <tr className={theadRowClass}>
+                      {squadColumns.map(([key, label, centered]) => (
+                        <th
+                          key={key}
+                          onClick={() => handleTableSort(key)}
+                          className={`${sortableThClass} ${centered ? '!text-center' : ''} ${key === 'name' ? '!pl-5' : ''} ${tableSortKey === key ? '!text-accent-ink' : ''}`}
+                        >
+                          {label}
+                          <SortArrow active={tableSortKey === key} direction={tableSortDir} />
+                        </th>
+                      ))}
+                      <th className={`${thClass} !pr-5`}>&nbsp;</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {tableSortedPlayers.length === 0 ? (
                       <tr>
-                        <th onClick={() => handleTableSort('name')} className="cursor-pointer p-[5px] text-left text-sm font-semibold text-gray-600 dark:text-white uppercase tracking-wider"> 
-                          <span className="inline-flex items-center gap-1">Player {tableSortKey==='name' ? (tableSortDir==='asc'?'↑':'↓') : ''}</span>
-                        </th>
-                        <th onClick={() => handleTableSort('overall')} className="cursor-pointer p-[5px] text-center text-sm font-semibold text-gray-600 dark:text-white uppercase tracking-wider">
-                          <span className="inline-flex items-center gap-1 justify-center">OVR {tableSortKey==='overall' ? (tableSortDir==='asc'?'↑':'↓') : ''}</span>
-                        </th>
-                        <th onClick={() => handleTableSort('age')} className="cursor-pointer p-[5px] text-center text-sm font-semibold text-gray-600 dark:text-white uppercase tracking-wider">
-                          <span className="inline-flex items-center gap-1 justify-center">Age {tableSortKey==='age' ? (tableSortDir==='asc'?'↑':'↓') : ''}</span>
-                        </th>
-                        <th onClick={() => handleTableSort('positions')} className="cursor-pointer p-[5px] text-left text-sm font-semibold text-gray-600 dark:text-white uppercase tracking-wider">
-                          <span className="inline-flex items-center gap-1">Positions {tableSortKey==='positions' ? (tableSortDir==='asc'?'↑':'↓') : ''}</span>
-                        </th>
-                        <th onClick={() => handleTableSort('pace')} className="cursor-pointer p-[5px] text-center text-sm font-semibold text-gray-600 dark:text-white uppercase tracking-wider">
-                          <span className="inline-flex items-center gap-1 justify-center">PAC {tableSortKey==='pace' ? (tableSortDir==='asc'?'↑':'↓') : ''}</span>
-                        </th>
-                        <th onClick={() => handleTableSort('shooting')} className="cursor-pointer p-[5px] text-center text-sm font-semibold text-gray-600 dark:text-white uppercase tracking-wider">
-                          <span className="inline-flex items-center gap-1 justify-center">SHO {tableSortKey==='shooting' ? (tableSortDir==='asc'?'↑':'↓') : ''}</span>
-                        </th>
-                        <th onClick={() => handleTableSort('passing')} className="cursor-pointer p-[5px] text-center text-sm font-semibold text-gray-600 dark:text-white uppercase tracking-wider">
-                          <span className="inline-flex items-center gap-1 justify-center">PAS {tableSortKey==='passing' ? (tableSortDir==='asc'?'↑':'↓') : ''}</span>
-                        </th>
-                        <th onClick={() => handleTableSort('dribbling')} className="cursor-pointer p-[5px] text-center text-sm font-semibold text-gray-600 dark:text-white uppercase tracking-wider">
-                          <span className="inline-flex items-center gap-1 justify-center">DRI {tableSortKey==='dribbling' ? (tableSortDir==='asc'?'↑':'↓') : ''}</span>
-                        </th>
-                        <th onClick={() => handleTableSort('defense')} className="cursor-pointer p-[5px] text-center text-sm font-semibold text-gray-600 dark:text-white uppercase tracking-wider">
-                          <span className="inline-flex items-center gap-1 justify-center">DEF {tableSortKey==='defense' ? (tableSortDir==='asc'?'↑':'↓') : ''}</span>
-                        </th>
-                        <th onClick={() => handleTableSort('physical')} className="cursor-pointer p-[5px] text-center text-sm font-semibold text-gray-600 dark:text-white uppercase tracking-wider">
-                          <span className="inline-flex items-center gap-1 justify-center">PHY {tableSortKey==='physical' ? (tableSortDir==='asc'?'↑':'↓') : ''}</span>
-                        </th>
-                        <th className="p-[5px] text-center text-sm font-semibold text-gray-600 dark:text-white uppercase tracking-wider">&nbsp;</th>
+                        <td colSpan={11} className="px-5 py-12 text-center text-sm font-medium text-muted">
+                          To add players to your squad click or drag them from the left sidebar
+                        </td>
                       </tr>
-                    </thead>
-                    <tbody className="bg-white dark:bg-gray-800">
-                      {tableSortedPlayers.length === 0 ? (
-                        <tr>
-                          <td colSpan={11} className="p-[15px] text-center text-base text-gray-600 dark:text-gray-400">
-                            To add players to your squad click or drag them from the left sidebar
-                          </td>
-                        </tr>
-                      ) : null}
-                      {tableSortedPlayers.map((p) => {
-                        const squadAppearances = getPlayerSquadAppearances(p.id);
-                        const isInMultipleSquads = squadAppearances.length > 1;
-                        
-                        return (
-                          <tr key={p.id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
-                            <td className="p-[5px] whitespace-nowrap text-base text-gray-900 dark:text-white">
-                              <div className="leading-tight">
-                                <div className="flex items-center gap-2">
-                                  <span>{p.metadata.firstName} {p.metadata.lastName}</span>
-                                  <RetirementIcon retirementYears={p.metadata.retirementYears} />
-                                  <a 
-                                    href={`/players/${p.id}`}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="flex-shrink-0 inline-flex items-center justify-center w-4 h-4 text-[9px] border border-gray-400 dark:border-gray-500 rounded-md text-gray-500 dark:text-gray-400 hover:text-blue-500 hover:border-blue-500 hover:ring-1 hover:ring-blue-500"
-                                    title="View player details"
+                    ) : null}
+                    {tableSortedPlayers.map((p) => {
+                      const squadAppearances = getPlayerSquadAppearances(p.id);
+                      const isInMultipleSquads = squadAppearances.length > 1;
+
+                      return (
+                        <tr key={p.id} className={rowClass}>
+                          <td className={`${tdClass} !pl-5`}>
+                            <div className="flex flex-col gap-px">
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-sm font-bold text-fg">{p.metadata.firstName} {p.metadata.lastName}</span>
+                                <RetirementIcon retirementYears={p.metadata.retirementYears} className="w-3.5 h-3.5" />
+                                <a
+                                  href={`/players/${p.id}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className={playerLinkClass}
+                                  title="View player details"
+                                >
+                                  ↗
+                                </a>
+                                {isInMultipleSquads && (
+                                  <div
+                                    className={multiSquadBadgeClass}
+                                    onMouseEnter={(e) => {
+                                      setHoveredPlayerId(p.id);
+                                      const rect = e.currentTarget.getBoundingClientRect();
+                                      setPopupPosition({
+                                        x: rect.left + rect.width / 2,
+                                        y: rect.top - 10
+                                      });
+                                    }}
+                                    onMouseLeave={() => setHoveredPlayerId(null)}
                                   >
-                                    ↗
-                                  </a>
-                                  {isInMultipleSquads && (
-                                    <div 
-                                      className="flex-shrink-0 inline-flex items-center justify-center w-4 h-4 text-[10px] bg-orange-100 dark:bg-orange-900/30 border border-orange-300 dark:border-orange-700 rounded-full text-orange-600 dark:text-orange-400 cursor-help relative"
-                                      onMouseEnter={(e) => {
-                                        setHoveredPlayerId(p.id);
-                                        const rect = e.currentTarget.getBoundingClientRect();
-                                        setPopupPosition({
-                                          x: rect.left + rect.width / 2,
-                                          y: rect.top - 10
-                                        });
-                                      }}
-                                      onMouseLeave={() => setHoveredPlayerId(null)}
-                                    >
-                                      ⚠
-                                      {hoveredPlayerId === p.id && (
-                                        <div 
-                                          className="fixed z-[99999] bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 text-xs px-3 py-2 rounded-lg shadow-xl border border-gray-700 dark:border-gray-300 whitespace-nowrap"
-                                          style={{
-                                            left: `${popupPosition.x}px`,
-                                            top: `${popupPosition.y}px`,
-                                            transform: 'translateX(-50%) translateY(-100%)',
-                                            marginTop: '-8px'
-                                          }}
-                                        >
-                                          <div className="font-semibold mb-1">Player in multiple squads:</div>
-                                          <div className="space-y-1">
-                                            {squadAppearances.map((squadName, index) => (
-                                              <div key={index} className="text-orange-300 dark:text-orange-600">
-                                                • {squadName}
-                                              </div>
-                                            ))}
-                                          </div>
-                                          <div className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-900 dark:border-t-gray-100"></div>
-                                        </div>
-                                      )}
-                                    </div>
-                                  )}
-                                </div>
-                                <div className="text-[10px] text-gray-500 dark:text-gray-400">ID: {p.id}</div>
+                                    ⚠
+                                    {hoveredPlayerId === p.id && (
+                                      <MultiSquadPopover squadNames={squadAppearances} position={popupPosition} />
+                                    )}
+                                  </div>
+                                )}
                               </div>
-                            </td>
-                            <td className="p-[5px] whitespace-nowrap text-base text-center">
-                              <span className="font-semibold" style={{ color: getTierTextColorValue(p.metadata.overall) }}>{p.metadata.overall}</span>
-                            </td>
-                          <td className="p-[5px] whitespace-nowrap text-base text-center text-[#9f9f9f]">
+                              <span className="font-mono text-[11px] font-medium text-muted-3">ID {p.id}</span>
+                            </div>
+                          </td>
+                          <td className={`${tdClass} text-center`}>
+                            <TierText value={p.metadata.overall} className="text-base" />
+                          </td>
+                          <td className={`${tdClass} text-center text-sm font-semibold text-fg-3`}>
                             {p.metadata.age}
                           </td>
-                          <td className="p-[5px] whitespace-nowrap text-base text-gray-900 dark:text-white">
-                            {p.metadata.positions.slice(0,3).map(pos => {
-                              const rating = calculatePositionRating(p, pos as any);
-                              return (
-                                <span key={pos} className="mr-2">
-                                  {pos} <span style={{ color: getTierTextColorValue(rating) }}>{rating}</span>
+                          <td className={`${tdClass} text-[13px] font-semibold text-fg-3`}>
+                            <div className="flex gap-2">
+                              {p.metadata.positions.slice(0,3).map(pos => (
+                                <span key={pos}>
+                                  {pos} <TierText value={calculatePositionRating(p, pos as any)} />
                                 </span>
-                              );
-                            })}
-                            {p.metadata.positions.length > 3 && (
-                              <span>+{p.metadata.positions.length - 3}</span>
-                            )}
+                              ))}
+                              {p.metadata.positions.length > 3 && (
+                                <span>+{p.metadata.positions.length - 3}</span>
+                              )}
+                            </div>
                           </td>
-                          <td className="p-[5px] whitespace-nowrap text-base text-center">
-                            <span className="font-semibold" style={{ color: getTierTextColorValue(p.metadata.pace) }}>{p.metadata.pace}</span>
-                          </td>
-                          <td className="p-[5px] whitespace-nowrap text-base text-center">
-                            <span className="font-semibold" style={{ color: getTierTextColorValue(p.metadata.shooting) }}>{p.metadata.shooting}</span>
-                          </td>
-                          <td className="p-[5px] whitespace-nowrap text-base text-center">
-                            <span className="font-semibold" style={{ color: getTierTextColorValue(p.metadata.passing) }}>{p.metadata.passing}</span>
-                          </td>
-                          <td className="p-[5px] whitespace-nowrap text-base text-center">
-                            <span className="font-semibold" style={{ color: getTierTextColorValue(p.metadata.dribbling) }}>{p.metadata.dribbling}</span>
-                          </td>
-                          <td className="p-[5px] whitespace-nowrap text-base text-center">
-                            <span className="font-semibold" style={{ color: getTierTextColorValue(p.metadata.defense) }}>{p.metadata.defense}</span>
-                          </td>
-                          <td className="p-[5px] whitespace-nowrap text-base text-center">
-                            <span className="font-semibold" style={{ color: getTierTextColorValue(p.metadata.physical) }}>{p.metadata.physical}</span>
-                          </td>
-                          <td className="p-[5px] whitespace-nowrap text-base text-center">
+                          {[
+                            p.metadata.pace,
+                            p.metadata.shooting,
+                            p.metadata.passing,
+                            p.metadata.dribbling,
+                            p.metadata.defense,
+                            p.metadata.physical,
+                          ].map((value, i) => (
+                            <td key={i} className={`${tdClass} text-center`}>
+                              <TierText value={value} className="text-sm" />
+                            </td>
+                          ))}
+                          <td className={`${tdClass} !pr-5 text-center`}>
                             <button
                               onClick={() => {
                                 const newSquad = { ...squad } as Squad;
@@ -2467,317 +2268,281 @@ export default function SquadBuilderPage() {
                                 addToHistory(newSquad);
                                 setSquad(newSquad);
                               }}
-                              className="ml-2 px-1.5 py-0.5 text-[10px] rounded border border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/20 cursor-pointer"
+                              className="inline-grid place-items-center w-7 h-7 rounded-lg border border-line-2 bg-panel text-muted cursor-pointer transition-colors hover:text-danger-ink hover:border-red-500/45"
                               aria-label="Remove from squad"
+                              title="Remove"
                             >
-                              ✕
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.6} aria-hidden="true">
+                                <path d="M6 6l12 12M18 6 6 18" />
+                              </svg>
                             </button>
                           </td>
                         </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-                {Object.keys(squad.players).length > 0 && (
-                  <div className="p-2 border-t border-gray-200 dark:border-gray-700 flex justify-end">
-                    <button
-                      type="button"
-                      onClick={handleExportSquadToExcel}
-                      className="inline-flex px-3 py-1.5 text-sm rounded border border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/20 cursor-pointer"
-                    >
-                      Export squad to Excel (CSV)
-                    </button>
-                  </div>
-                )}
+                      );
+                    })}
+                  </tbody>
+                </table>
               </div>
-
-            {/* Controls moved to header */}
+              {squadSize > 0 && (
+                <div className="flex justify-end px-5 py-3.5">
+                  <button
+                    type="button"
+                    onClick={handleExportSquadToExcel}
+                    className="inline-flex items-center justify-center h-10 px-4 rounded-full border border-pos-line bg-btn-pos text-pos-ink text-[13px] font-bold whitespace-nowrap cursor-pointer transition-colors hover:border-pos-ink"
+                  >
+                    Export squad to Excel (CSV)
+                  </button>
+                </div>
+              )}
+            </Panel>
           </div>
-        </div>
         </div>
 
         {/* Drag Overlay */}
-      <DragOverlay>
-        {activePlayer ? (
-          <div className="p-3 border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 shadow-lg">
-            {/* Player Header */}
-            <div className="flex items-center justify-between mb-2">
-              <div>
-                <h3 className="font-medium text-gray-900 dark:text-white text-sm">
-                  {activePlayer.metadata.firstName} {activePlayer.metadata.lastName}
-                </h3>
-                <p className="text-xs text-gray-600 dark:text-gray-400">
-                  {activePlayer.metadata.positions.join(', ')}
-                </p>
-              </div>
-              <div className="text-right">
-                <div className="text-lg font-bold text-gray-900 dark:text-white">
-                  {activePlayer.metadata.overall}
+        <DragOverlay>
+          {activePlayer ? (
+            <div className="flex flex-col gap-2.5 px-3.5 py-3 rounded-2xl border border-line-hover bg-panel shadow-[0_20px_50px_rgba(0,0,0,.45)]">
+              {/* Player Header */}
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <h3 className="m-0 text-sm font-bold text-fg truncate">
+                    {activePlayer.metadata.firstName} {activePlayer.metadata.lastName}
+                  </h3>
+                  <p className="m-0 text-xs font-medium text-muted">
+                    {activePlayer.metadata.positions.join(', ')}
+                  </p>
                 </div>
-                <div className="text-xs text-gray-500 dark:text-gray-500">OVR</div>
-              </div>
-            </div>
-
-            {/* Player Stats */}
-            <div className="grid grid-cols-3 gap-1 text-xs mb-2">
-              <div className="text-center">
-                <div className="font-medium text-gray-900 dark:text-white">
-                  {activePlayer.metadata.pace}
-                </div>
-                <div className="text-gray-500 dark:text-gray-500">PAC</div>
-              </div>
-              <div className="text-center">
-                <div className="font-medium text-gray-900 dark:text-white">
-                  {activePlayer.metadata.shooting}
-                </div>
-                <div className="text-gray-500 dark:text-gray-500">SHO</div>
-              </div>
-              <div className="text-center">
-                <div className="font-medium text-gray-900 dark:text-white">
-                  {activePlayer.metadata.passing}
-                </div>
-                <div className="text-gray-500 dark:text-gray-500">PAS</div>
-              </div>
-              <div className="text-center">
-                <div className="font-medium text-gray-900 dark:text-white">
-                  {activePlayer.metadata.dribbling}
-                </div>
-                <div className="text-gray-500 dark:text-gray-500">DRI</div>
-              </div>
-              <div className="text-center">
-                <div className="font-medium text-gray-900 dark:text-white">
-                  {activePlayer.metadata.defense}
-                </div>
-                <div className="text-gray-500 dark:text-gray-500">DEF</div>
-              </div>
-              <div className="text-center">
-                <div className="font-medium text-gray-900 dark:text-white">
-                  {activePlayer.metadata.physical}
-                </div>
-                <div className="text-gray-500 dark:text-gray-500">PHY</div>
-              </div>
-            </div>
-
-            {/* Position Ratings */}
-            <div className="border-t border-gray-200 dark:border-gray-600 pt-2">
-              <div className="text-xs text-gray-600 dark:text-gray-400 mb-1">Position Ratings:</div>
-              <div className="flex flex-wrap gap-1">
-                {activePlayer.metadata.positions.slice(0, 3).map((position) => {
-                  const rating = calculatePositionRating(activePlayer, position as any);
-                  return (
-                    <div
-                      key={position}
-                      className={`px-2 py-1 rounded text-xs font-medium ${
-                        rating >= 80
-                          ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300'
-                          : rating >= 70
-                          ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
-                          : rating >= 60
-                          ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300'
-                          : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400'
-                      }`}
-                    >
-                      {position} {rating}
-                    </div>
-                  );
-                })}
-                {activePlayer.metadata.positions.length > 3 && (
-                  <div className="px-2 py-1 rounded text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400">
-                    +{activePlayer.metadata.positions.length - 3}
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        ) : null}
-      </DragOverlay>
-
-      {/* moved export button inside the squad table container footer */}
-
-      {/* Save Squad Modal */}
-      {showSaveModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-gray-800 rounded-lg p-4 md:p-6 w-full max-w-md">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">
-              Name Your Squad
-            </h3>
-            <p className="text-sm text-gray-600 dark:text-gray-300 mb-3">Enter a name for your new squad.</p>
-            <input
-              type="text"
-              value={pendingSaveName}
-              onChange={(e) => setPendingSaveName(e.target.value)}
-              placeholder="e.g. 4-3-3 First XI"
-              className="w-full px-3 py-2 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white mb-4 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-            <div className="flex justify-end gap-2">
-              <button
-                className="px-4 py-2 rounded bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
-                onClick={() => setShowSaveModal(false)}
-              >
-                Cancel
-              </button>
-              <button
-                className="px-4 py-2 rounded bg-blue-600 text-white hover:bg-blue-700 transition-colors disabled:opacity-70"
-                onClick={handleConfirmSaveName}
-                disabled={isSaving || !pendingSaveName.trim()}
-              >
-                {isSaving ? 'Saving…' : 'Save'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Load Squad Modal */}
-      {showLoadModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-gray-800 rounded-lg p-4 md:p-6 w-full max-w-2xl max-h-[80vh] overflow-hidden">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-              Load Saved Squad
-            </h3>
-            
-            {isLoadingSquads ? (
-              <div className="flex items-center justify-center py-8">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-                <span className="ml-2 text-gray-600 dark:text-gray-400">Loading squads...</span>
-              </div>
-            ) : savedSquads.length === 0 ? (
-              <div className="text-center py-8">
-                <p className="text-gray-500 dark:text-gray-400">No saved squads found.</p>
-                <p className="text-sm text-gray-400 dark:text-gray-500 mt-2">
-                  Create and save a squad to see it here.
-                </p>
-              </div>
-            ) : (
-              <div className="space-y-3 max-h-96 overflow-y-auto">
-                {savedSquads.map((savedSquad) => (
-                  <div
-                    key={savedSquad.id}
-                    className="flex items-center justify-between p-4 border border-gray-200 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                <div className="flex-none flex flex-col items-center">
+                  <span
+                    className="font-display text-xl font-extrabold leading-none tabular-nums"
+                    style={{ color: getTierColors(activePlayer.metadata.overall).text }}
                   >
-                    <div className="flex-1">
-                      <h4 className="font-medium text-gray-900 dark:text-white">
-                        {savedSquad.squad_name}
-                      </h4>
-                      <div className="flex items-center space-x-4 text-sm text-gray-500 dark:text-gray-400 mt-1">
-                        <span>Players: {Object.keys(savedSquad.players).length}</span>
-                        <span>Updated: {new Date(savedSquad.updated_at).toLocaleDateString()}</span>
-                      </div>
-                    </div>
-                    
-                    <div className="flex flex-col sm:flex-row gap-2">
-                      <button
-                        onClick={() => handleLoadSquad(savedSquad)}
-                        className="px-3 py-1 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 transition-colors"
-                      >
-                        Load
-                      </button>
-                      <button
-                        onClick={() => handleDeleteSquad(savedSquad.id, savedSquad.squad_name)}
-                        disabled={isDeleting === savedSquad.id}
-                        className="px-3 py-1 bg-red-600 text-white text-sm rounded hover:bg-red-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
-                      >
-                        {isDeleting === savedSquad.id ? 'Deleting...' : 'Delete'}
-                      </button>
-                    </div>
+                    {activePlayer.metadata.overall}
+                  </span>
+                  <span className="text-[9px] font-bold tracking-[0.1em] text-muted-3">OVR</span>
+                </div>
+              </div>
+
+              {/* Player Stats */}
+              <div className="grid grid-cols-3 gap-1">
+                {([
+                  ['PAC', activePlayer.metadata.pace],
+                  ['SHO', activePlayer.metadata.shooting],
+                  ['PAS', activePlayer.metadata.passing],
+                  ['DRI', activePlayer.metadata.dribbling],
+                  ['DEF', activePlayer.metadata.defense],
+                  ['PHY', activePlayer.metadata.physical],
+                ] as [string, number][]).map(([label, value]) => (
+                  <div key={label} className="flex flex-col items-center">
+                    <TierText value={value} className="text-sm" />
+                    <span className="text-[10px] font-bold tracking-[0.08em] text-muted-3">{label}</span>
                   </div>
                 ))}
               </div>
-            )}
 
-            <div className="flex justify-end mt-6">
-              <button
-                onClick={() => setShowLoadModal(false)}
-                className="px-4 py-2 bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-black rounded-lg hover:bg-gray-400 dark:hover:bg-gray-500 transition-colors"
-              >
-                Close
-              </button>
+              {/* Position Ratings */}
+              <div className="flex flex-col gap-1.5 pt-2 border-t border-divider">
+                <span className="text-xs font-semibold text-muted">Position Ratings:</span>
+                <div className="flex flex-wrap gap-1">
+                  {activePlayer.metadata.positions.slice(0, 3).map((position) => (
+                    <PositionChip
+                      key={position}
+                      position={position}
+                      rating={calculatePositionRating(activePlayer, position as any)}
+                    />
+                  ))}
+                  {activePlayer.metadata.positions.length > 3 && (
+                    <span className="inline-flex items-center h-6 px-2.5 rounded-full border border-chip-line bg-chip text-[11px] font-bold text-fg-3">
+                      +{activePlayer.metadata.positions.length - 3}
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+          ) : null}
+        </DragOverlay>
+
+        {/* Save Squad Modal */}
+        {showSaveModal && (
+          <div className={modalBackdropClass}>
+            <div className={`${modalClass} max-w-md`}>
+              <h3 className="m-0 mb-1.5 font-display text-xl font-bold text-fg">
+                Name Your Squad
+              </h3>
+              <p className="m-0 mb-4 text-sm text-muted">Enter a name for your new squad.</p>
+              <input
+                type="text"
+                value={pendingSaveName}
+                onChange={(e) => setPendingSaveName(e.target.value)}
+                placeholder="e.g. 4-3-3 First XI"
+                className={`${fieldClass} w-full mb-5`}
+              />
+              <div className="flex justify-end gap-2">
+                <button
+                  className={btnPill}
+                  onClick={() => setShowSaveModal(false)}
+                >
+                  Cancel
+                </button>
+                <button
+                  className={btnPrimary}
+                  onClick={handleConfirmSaveName}
+                  disabled={isSaving || !pendingSaveName.trim()}
+                >
+                  {isSaving ? 'Saving…' : 'Save'}
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* Positions Coverage Modal */}
-      {showCoverageModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-gray-800 rounded-lg p-4 md:p-6 w-full max-w-4xl max-h-[80vh] overflow-y-auto">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">All Positions Coverage</h3>
-              <button
-                type="button"
-                className="px-3 py-1 text-sm rounded border border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/20 cursor-pointer"
-                onClick={() => setShowCoverageModal(false)}
-              >
-                Close
-              </button>
-            </div>
-            {(() => {
-              const order = ['GK','CB','LB','RB','LWB','RWB','CDM','CM','CAM','LM','RM','LW','RW','CF','ST'];
-              const grouped: Record<string, MFLPlayer[]> = {};
-              order.forEach(p => { grouped[p] = []; });
+        {/* Load Squad Modal */}
+        {showLoadModal && (
+          <div className={modalBackdropClass}>
+            <div className={`${modalClass} max-w-2xl max-h-[80vh] overflow-hidden`}>
+              <h3 className="m-0 mb-4 font-display text-xl font-bold text-fg">
+                Load Saved Squad
+              </h3>
 
-              const playersList = Object.values(squad.players).map(sp => sp.player);
-              const getRating = (pid: string, pos: string, player: MFLPlayer) => {
-                const viaCanonical = coverageRatings?.[pid]?.[pos];
-                if (typeof viaCanonical === 'number') return viaCanonical;
-                // Fallback to local calculator if canonical not precomputed
-                return calculatePositionRating(player, pos as any);
-              };
-
-              playersList.forEach(p => {
-                const pid = p.id.toString();
-                const overall = p.metadata.overall || 0;
-                const threshold = Math.max(0, overall - 5);
-                for (const pos of order) {
-                  const rating = getRating(pid, pos, p);
-                  if (rating >= threshold) {
-                    if (!grouped[pos]) grouped[pos] = [];
-                    if (!grouped[pos].some(existing => existing.id === p.id)) grouped[pos].push(p);
-                  }
-                }
-              });
-
-              return (
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-                  {order.map(pos => (
-                    <div key={pos} className="bg-gray-50 dark:bg-gray-700 rounded-lg p-3 border border-gray-200 dark:border-gray-600">
-                      <div className="mb-2">
-                        <h4 className="text-sm font-medium text-gray-900 dark:text-white">{pos}</h4>
+              {isLoadingSquads ? (
+                <div className="flex items-center justify-center gap-2 py-8 text-sm font-medium text-muted">
+                  <div className={`w-6 h-6 ${spinnerClass}`}></div>
+                  <span>Loading squads...</span>
+                </div>
+              ) : savedSquads.length === 0 ? (
+                <div className="flex flex-col items-center gap-1.5 py-8 text-center">
+                  <p className="m-0 text-sm font-medium text-muted">No saved squads found.</p>
+                  <p className="m-0 text-sm text-muted-3">
+                    Create and save a squad to see it here.
+                  </p>
+                </div>
+              ) : (
+                <div className="flex flex-col gap-2.5 max-h-96 overflow-y-auto">
+                  {savedSquads.map((savedSquad) => (
+                    <div
+                      key={savedSquad.id}
+                      className="flex items-center justify-between gap-3 p-4 rounded-2xl border border-line bg-inset transition-colors hover:border-line-hover"
+                    >
+                      <div className="flex-1 min-w-0">
+                        <h4 className="m-0 text-[15px] font-bold text-fg truncate">
+                          {savedSquad.squad_name}
+                        </h4>
+                        <div className="flex flex-wrap items-center gap-x-4 mt-1 text-xs font-medium text-muted">
+                          <span>Players: {Object.keys(savedSquad.players).length}</span>
+                          <span>Updated: {new Date(savedSquad.updated_at).toLocaleDateString()}</span>
+                        </div>
                       </div>
-                      <div className="space-y-1 max-h-64 overflow-y-auto">
-                        {(grouped[pos] || []).length === 0 ? (
-                          <div className="text-xs text-gray-500 dark:text-gray-400">No players</div>
-                        ) : (
-                          [...(grouped[pos] || [])]
-                            .sort((a, b) => (
-                              getRating(b.id.toString(), pos, b) - getRating(a.id.toString(), pos, a)
-                            ))
-                            .map(pl => {
-                              const pr = getRating(pl.id.toString(), pos, pl);
-                              return (
-                                <div key={`${pos}-${pl.id}`} className="text-xs flex items-center justify-between">
-                                  <span className="text-gray-900 dark:text-white truncate flex items-center gap-1">
-                                    {pl.metadata.firstName} {pl.metadata.lastName}
-                                    <RetirementIcon retirementYears={pl.metadata.retirementYears} className="w-3 h-3" />
-                                  </span>
-                                  <span className="ml-2 text-gray-600 dark:text-gray-300">{pr}</span>
-                                </div>
-                              );
-                            })
-                        )}
+
+                      <div className="flex flex-col sm:flex-row gap-2">
+                        <button
+                          onClick={() => handleLoadSquad(savedSquad)}
+                          className={btnPrimary}
+                        >
+                          Load
+                        </button>
+                        <button
+                          onClick={() => handleDeleteSquad(savedSquad.id, savedSquad.squad_name)}
+                          disabled={isDeleting === savedSquad.id}
+                          className={btnDanger}
+                        >
+                          {isDeleting === savedSquad.id ? 'Deleting...' : 'Delete'}
+                        </button>
                       </div>
                     </div>
                   ))}
                 </div>
-              );
-            })()}
-          </div>
-        </div>
-      )}
+              )}
 
-      {/* Toast Notifications */}
-      <ToastContainer toasts={toasts} onRemove={removeToast} />
+              <div className="flex justify-end mt-6">
+                <button
+                  onClick={() => setShowLoadModal(false)}
+                  className={btnPill}
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Positions Coverage Modal */}
+        {showCoverageModal && (
+          <div className={modalBackdropClass}>
+            <div className={`${modalClass} max-w-4xl max-h-[80vh] overflow-y-auto`}>
+              <div className="flex items-center justify-between gap-3 mb-4">
+                <h3 className="m-0 font-display text-xl font-bold text-fg">All Positions Coverage</h3>
+                <button
+                  type="button"
+                  className={btnPill}
+                  onClick={() => setShowCoverageModal(false)}
+                >
+                  Close
+                </button>
+              </div>
+              {(() => {
+                const order = ['GK','CB','LB','RB','LWB','RWB','CDM','CM','CAM','LM','RM','LW','RW','CF','ST'];
+                const grouped: Record<string, MFLPlayer[]> = {};
+                order.forEach(p => { grouped[p] = []; });
+
+                const playersList = Object.values(squad.players).map(sp => sp.player);
+                const getRating = (pid: string, pos: string, player: MFLPlayer) => {
+                  const viaCanonical = coverageRatings?.[pid]?.[pos];
+                  if (typeof viaCanonical === 'number') return viaCanonical;
+                  // Fallback to local calculator if canonical not precomputed
+                  return calculatePositionRating(player, pos as any);
+                };
+
+                playersList.forEach(p => {
+                  const pid = p.id.toString();
+                  const overall = p.metadata.overall || 0;
+                  const threshold = Math.max(0, overall - 5);
+                  for (const pos of order) {
+                    const rating = getRating(pid, pos, p);
+                    if (rating >= threshold) {
+                      if (!grouped[pos]) grouped[pos] = [];
+                      if (!grouped[pos].some(existing => existing.id === p.id)) grouped[pos].push(p);
+                    }
+                  }
+                });
+
+                return (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                    {order.map(pos => (
+                      <div key={pos} className="flex flex-col gap-2 p-3.5 rounded-2xl border border-line bg-inset">
+                        <h4 className="m-0 font-display text-base font-bold text-fg">{pos}</h4>
+                        <div className="flex flex-col gap-1 max-h-64 overflow-y-auto">
+                          {(grouped[pos] || []).length === 0 ? (
+                            <div className="text-xs text-muted">No players</div>
+                          ) : (
+                            [...(grouped[pos] || [])]
+                              .sort((a, b) => (
+                                getRating(b.id.toString(), pos, b) - getRating(a.id.toString(), pos, a)
+                              ))
+                              .map(pl => {
+                                const pr = getRating(pl.id.toString(), pos, pl);
+                                return (
+                                  <div key={`${pos}-${pl.id}`} className="flex items-center justify-between gap-2 text-[13px]">
+                                    <span className="flex items-center gap-1 min-w-0 font-medium text-fg-2">
+                                      <span className="truncate">{pl.metadata.firstName} {pl.metadata.lastName}</span>
+                                      <RetirementIcon retirementYears={pl.metadata.retirementYears} className="w-3 h-3" />
+                                    </span>
+                                    <TierText value={pr} />
+                                  </div>
+                                );
+                              })
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()}
+            </div>
+          </div>
+        )}
+
+        {/* Toast Notifications */}
+        <ToastContainer toasts={toasts} onRemove={removeToast} />
       </div>
     </DndContext>
   );

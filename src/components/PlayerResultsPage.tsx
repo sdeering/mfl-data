@@ -21,6 +21,7 @@ import PlayerRecentMatches from './PlayerRecentMatches';
 import { useLoading } from '../contexts/LoadingContext';
 // Direct supabase import removed - using API routes instead
 import { useWallet } from '../contexts/WalletContext';
+import { Panel, btnPrimary, btnSecondary, linkClass } from './ui';
 
 interface PlayerResultsPageProps {
   propPlayerId?: string;
@@ -30,6 +31,9 @@ interface PlayerResultsPageProps {
 
 const formatMintDate = (timestamp: number) =>
   new Date(timestamp).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+
+const externalLinkClass =
+  'flex items-center gap-2 h-[42px] px-5 rounded-full border border-line-2 bg-panel text-fg-2 text-sm font-semibold whitespace-nowrap cursor-pointer transition-colors hover:border-accent-ink hover:text-accent-ink';
 
 // Function to add player to recent searches
 const addToRecentSearches = (player: MFLPlayer) => {
@@ -412,244 +416,192 @@ const PlayerResultsPage: React.FC<PlayerResultsPageProps> = ({ propPlayerId, ini
   // Loading state - only show while fetching initial player data (or its mint stats)
   if ((isLoading && loadingStates.playerData) || isLoadingMint) {
     return (
-      <div className="min-h-screen">
-        <div className="p-6 bg-white dark:bg-[#111827]">
-          <div className="flex items-center justify-center h-64">
-            <div className="text-center">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
-              <p className="text-gray-600 dark:text-gray-400">{isLoadingMint ? 'Loading mint stats...' : 'Loading player data...'}</p>
-            </div>
-          </div>
+      <Panel className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-2 border-accent border-t-transparent mx-auto mb-4"></div>
+          <p className="m-0 text-sm font-medium text-muted">{isLoadingMint ? 'Loading mint stats...' : 'Loading player data...'}</p>
         </div>
-      </div>
+      </Panel>
     );
   }
 
   // Error state
   if (error) {
     return (
-      <div className="min-h-screen">
-        <div className="p-6 bg-white dark:bg-[#111827] pt-8">
-          <div className="flex items-start justify-center min-h-[calc(100vh-6rem)]">
-            <div className="text-center max-w-md">
-              <div className="mb-6">
-                <svg className="w-16 h-16 text-red-500 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
-                </svg>
-                <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">Search Error</h2>
-                <p className="text-gray-600 dark:text-gray-400 mb-4">{error}</p>
-              </div>
-              
-              <div className="space-y-3">
-                <button
-                  onClick={() => window.location.href = '/'}
-                  className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-                >
-                  Back to Search
-                </button>
-                <button
-                  onClick={() => window.location.reload()}
-                  className="w-full px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
-                >
-                  Try Again
-                </button>
-              </div>
-              
-              {error.includes('Player name search') && (
-                <div className="mt-6 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
-                  <h3 className="font-medium text-blue-900 dark:text-blue-100 mb-2">How to find a Player ID:</h3>
-                  <ul className="text-sm text-blue-800 dark:text-blue-200 space-y-1">
-                    <li>• Visit <a href="https://app.playmfl.com" target="_blank" rel="noopener noreferrer" className="underline">app.playmfl.com</a></li>
-                    <li>• Search for the player you want</li>
-                    <li>• Copy the Player ID from the URL or player page</li>
-                    <li>• Paste the ID here to search</li>
-                  </ul>
-                </div>
-              )}
-            </div>
+      <div className="flex justify-center">
+        <Panel className="w-full max-w-md px-6 py-8 text-center">
+          <div className="mb-6">
+            <svg className="w-14 h-14 text-danger-ink mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
+            </svg>
+            <h2 className="m-0 mb-2 font-display text-2xl font-bold">Search Error</h2>
+            <p className="m-0 text-sm text-muted">{error}</p>
           </div>
-        </div>
+
+          <div className="flex flex-col gap-2.5">
+            <button
+              onClick={() => window.location.href = '/'}
+              className={`${btnPrimary} w-full`}
+            >
+              Back to Search
+            </button>
+            <button
+              onClick={() => window.location.reload()}
+              className={`${btnSecondary} w-full`}
+            >
+              Try Again
+            </button>
+          </div>
+
+          {error.includes('Player name search') && (
+            <div className="mt-6 p-4 rounded-2xl border border-line bg-inset text-left">
+              <h3 className="m-0 mb-2 text-sm font-bold text-fg">How to find a Player ID:</h3>
+              <ul className="m-0 p-0 list-none text-sm text-muted space-y-1">
+                <li>• Visit <a href="https://app.playmfl.com" target="_blank" rel="noopener noreferrer" className={linkClass}>app.playmfl.com</a></li>
+                <li>• Search for the player you want</li>
+                <li>• Copy the Player ID from the URL or player page</li>
+                <li>• Paste the ID here to search</li>
+              </ul>
+            </div>
+          )}
+        </Panel>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-white dark:bg-[#111827]">
-      {/* Main Content Area - Responsive Layout */}
-              <div className="px-4 lg:px-0 mt-5 bg-white dark:bg-[#111827] rounded-lg">
-        {player && displayPlayer ? (
-          <>
-            {/* Mint view notice */}
-            {isMintView && (
-              <div className="max-w-2xl mx-auto mb-6 px-4 py-3 rounded-lg border border-purple-200 dark:border-purple-800 bg-purple-50 dark:bg-purple-900/20 text-sm text-purple-900 dark:text-purple-100 flex flex-wrap items-center justify-between gap-3">
-                {mintSnapshot && isBackfilledMint ? (
-                  <div>
-                    <p className="font-semibold">Viewing this player&apos;s earliest recorded stats, from {formatMintDate(mintSnapshot.date)}</p>
-                    <p className="mt-1 text-purple-800 dark:text-purple-200">
-                      MFL only started recording stat history in November 2024, so a player minted before then may have changed between its mint and this record.
-                    </p>
-                  </div>
-                ) : mintSnapshot ? (
-                  <p className="font-semibold">Viewing this player as minted on {formatMintDate(mintSnapshot.date)}</p>
-                ) : (
-                  <p className="font-semibold">MFL has no mint record for this player, so these are its current stats.</p>
-                )}
-                <Link
-                  href={`/players/${player.id}`}
-                  className="px-3 py-1.5 rounded-lg bg-purple-600 text-white font-medium hover:bg-purple-700 transition-colors whitespace-nowrap"
-                >
-                  View current player
-                </Link>
-              </div>
-            )}
-
-            {/* Row 1 - Main player information */}
-            <div key={`player-${player.id}`} className="flex flex-wrap justify-center gap-6 lg:gap-[30px] h-full mb-6">
-              {/* Column 1 - Player Card (Mobile: First, Desktop: Second) */}
-              <div className="w-full lg:w-[375px] lg:flex-shrink-0 flex flex-col order-1 lg:order-2">
-                <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4 text-center hidden">Player Card</h2>
-                <div className="flex flex-col items-center space-y-4 p-[5px]">
-                  <PlayerImage player={displayPlayer} />
-                  {/* Player Stats Grid */}
-                  <div className="w-full mt-4">
-                    {/* Keyed by view so training changes don't carry between current and mint */}
-                    <PlayerStatsGrid 
-                      key={isMintView ? 'mint' : 'current'}
-                      player={displayPlayer} 
-                      onAttributesChange={setModifiedAttributes}
-                    />
-                  </div>
+    <div className="flex flex-col gap-[22px]">
+      {player && displayPlayer ? (
+        <>
+          {/* Mint view notice */}
+          {isMintView && (
+            <div className="px-4 py-3 rounded-2xl border border-violet-line bg-violet-bg text-sm text-violet-ink-2 flex flex-wrap items-center justify-between gap-3">
+              {mintSnapshot && isBackfilledMint ? (
+                <div>
+                  <p className="m-0 font-semibold">Viewing this player&apos;s earliest recorded stats, from {formatMintDate(mintSnapshot.date)}</p>
+                  <p className="m-0 mt-1 text-violet-ink">
+                    MFL only started recording stat history in November 2024, so a player minted before then may have changed between its mint and this record.
+                  </p>
                 </div>
-              </div>
-
-              {/* Column 2 - Position Ratings (Mobile: Second, Desktop: Third) */}
-              <div className="w-full lg:w-[350px] lg:flex-shrink-0 order-2 lg:order-3">
-                <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-[5px] p-[5px]">Position Ratings</h2>
-                <div className="w-full p-[5px]">
-                  <PositionRatingsDisplay player={modifiedPlayer || displayPlayer} showMatchRatings={!isMintView} />
-                </div>
-              </div>
-
-              {/* Column 3 - Player Information (Mobile: Third, Desktop: First) */}
-              <div className="w-full lg:w-[350px] lg:flex-shrink-0 order-3 lg:order-1">
-                <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4 hidden">Player Information</h2>
-                <div className="w-full bg-white dark:bg-[#111827] p-[5px]">
-                  {isMintView && mintSnapshot ? (
-                    <PlayerStats 
-                      player={displayPlayer} 
-                      mintedOn={`${isBackfilledMint ? 'By ' : ''}${formatMintDate(mintSnapshot.date)}`}
-                    />
-                  ) : (
-                    <PlayerStats 
-                      player={player!} 
-                      marketValueEstimate={marketValueEstimate}
-                      progressionData={progressionData}
-                      matchCount={matchCount}
-                      isCalculatingMarketValue={isCalculatingMarketValue}
-                    />
-                  )}
-                </div>
-              </div>
-
-
+              ) : mintSnapshot ? (
+                <p className="m-0 font-semibold">Viewing this player as minted on {formatMintDate(mintSnapshot.date)}</p>
+              ) : (
+                <p className="m-0 font-semibold">MFL has no mint record for this player, so these are its current stats.</p>
+              )}
+              <Link
+                href={`/players/${player.id}`}
+                className="inline-flex items-center h-9 px-4 rounded-full bg-violet-ink text-violet-bg text-[13px] font-bold whitespace-nowrap transition-opacity hover:opacity-90"
+              >
+                View current player
+              </Link>
             </div>
+          )}
 
-            {/* Row 2 - External links and the mint view toggle (Full width) */}
-            {player!.id && (
-              <div className="w-full mb-6">
-                <div className="w-full p-[5px]">
-                  <div className="flex gap-2 max-w-2xl mx-auto flex-wrap">
-                    <button
-                      onClick={() => window.open(`https://app.playmfl.com/players/${player!.id}`, '_blank')}
-                      className="flex-1 min-w-[120px] px-3 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg border border-gray-200 dark:border-gray-600 hover:bg-gray-200 dark:hover:bg-gray-600 hover:text-gray-900 dark:hover:text-white transition-all duration-200 font-medium text-sm flex items-center justify-center space-x-2 cursor-pointer whitespace-nowrap"
-                    >
-                      <span>mfl.com</span>
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                      </svg>
-                    </button>
-                    <button
-                      onClick={() => window.open(`https://mfl-assistant.com/search?q=${encodeURIComponent(`${player!.metadata.firstName} ${player!.metadata.lastName}`)}`, '_blank')}
-                      className="flex-1 min-w-[160px] px-3 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg border border-gray-200 dark:border-gray-600 hover:bg-gray-200 dark:hover:bg-gray-600 hover:text-gray-900 dark:hover:text-white transition-all duration-200 font-medium text-sm flex items-center justify-center space-x-2 cursor-pointer whitespace-nowrap"
-                    >
-                      <span>mfl-assistant.com</span>
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                      </svg>
-                    </button>
-                    <Link
-                      href={isMintView ? `/players/${player.id}` : `/players/${player.id}?view=mint`}
-                      className="flex-1 min-w-[160px] px-3 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg border border-gray-200 dark:border-gray-600 hover:bg-gray-200 dark:hover:bg-gray-600 hover:text-gray-900 dark:hover:text-white transition-all duration-200 font-medium text-sm flex items-center justify-center cursor-pointer whitespace-nowrap"
-                    >
-                      {isMintView ? 'View current player' : 'View player mint'}
-                    </Link>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Row 3 - Progression Graph (Full width) */}
-            <div className="w-full mb-6">
-              <div className="w-full p-[5px]">
-                <PlayerProgressionGraph 
-                  playerId={player.id.toString()} 
-                  playerName={`${player.metadata.firstName} ${player.metadata.lastName}`}
-                  playerPositions={player.metadata.positions}
-                  asOf={isMintView && mintSnapshot ? mintSnapshot.date : undefined}
+          {/* Row 1 - Player information, card and position ratings (the card comes first once they stack) */}
+          <div key={`player-${player.id}`} className="@container grid grid-cols-[repeat(auto-fit,minmax(min(100%,320px),1fr))] gap-6 items-start">
+            {/* Player Information */}
+            <Panel className="px-[18px] py-2">
+              {isMintView && mintSnapshot ? (
+                <PlayerStats
+                  player={displayPlayer}
+                  mintedOn={`${isBackfilledMint ? 'By ' : ''}${formatMintDate(mintSnapshot.date)}`}
                 />
-              </div>
+              ) : (
+                <PlayerStats
+                  player={player!}
+                  marketValueEstimate={marketValueEstimate}
+                  progressionData={progressionData}
+                  matchCount={matchCount}
+                  isCalculatingMarketValue={isCalculatingMarketValue}
+                />
+              )}
+            </Panel>
+
+            {/* Player Card */}
+            <div className="flex flex-col items-center gap-4 @max-[664px]:order-first">
+              <PlayerImage player={displayPlayer} />
+              {/* Keyed by view so training changes don't carry between current and mint */}
+              <PlayerStatsGrid
+                key={isMintView ? 'mint' : 'current'}
+                player={displayPlayer}
+                onAttributesChange={setModifiedAttributes}
+              />
             </div>
 
-            {/* Row 4 - Sale History, Position Summary, and Recent Matches (Three columns).
-                All of it comes after the mint, so the mint view leaves it out */}
-            {!isMintView && (
-            <div className="flex flex-wrap gap-4 mb-6">
-              {/* Sale History */}
-              <div className="w-full lg:w-[400px]">
-                <div className="w-full p-[5px]">
-                  <PlayerSaleHistory 
-                    playerId={player.id.toString()} 
-                    playerName={`${player.metadata.firstName} ${player.metadata.lastName}`}
-                    playerMetadata={player.metadata}
-                    marketValueEstimate={marketValueEstimate}
-                  />
-                </div>
-              </div>
-
-              {/* Position Summary */}
-              <div className="w-full lg:w-[350px]">
-                <div className="w-full p-[5px]">
-                  <PlayerPositionSummary 
-                    playerId={player.id.toString()} 
-                    playerName={`${player.metadata.firstName} ${player.metadata.lastName}`}
-                  />
-                </div>
-              </div>
-
-              {/* Recent Matches */}
-              <div className="w-full lg:w-[397px]">
-                <div className="w-full p-[5px]">
-                  <PlayerRecentMatches 
-                    playerId={player.id.toString()} 
-                    playerName={`${player.metadata.firstName} ${player.metadata.lastName}`}
-                  />
-                </div>
-              </div>
-            </div>
-            )}
-          </>
-        ) : (
-          <div className="flex items-center justify-center h-64">
-            <div className="text-center">
-              <p className="text-gray-600">No player data available</p>
-              <p className="text-sm text-gray-400 mt-2">Debug: player={player ? 'exists' : 'null'}</p>
-            </div>
+            {/* Position Ratings */}
+            <Panel className="p-[18px] flex flex-col gap-2">
+              <h3 className="m-0 mb-1 font-display text-lg font-bold">Position Ratings</h3>
+              <PositionRatingsDisplay player={modifiedPlayer || displayPlayer} showMatchRatings={!isMintView} />
+            </Panel>
           </div>
-        )}
-      </div>
+
+          {/* Row 2 - External links and the mint view toggle */}
+          {player!.id && (
+            <div className="flex justify-center gap-2.5 flex-wrap">
+              <button
+                onClick={() => window.open(`https://app.playmfl.com/players/${player!.id}`, '_blank')}
+                className={externalLinkClass}
+              >
+                <span>mfl.com</span>
+                <span aria-hidden="true">↗</span>
+              </button>
+              <button
+                onClick={() => window.open(`https://mfl-assistant.com/search?q=${encodeURIComponent(`${player!.metadata.firstName} ${player!.metadata.lastName}`)}`, '_blank')}
+                className={externalLinkClass}
+              >
+                <span>mfl-assistant.com</span>
+                <span aria-hidden="true">↗</span>
+              </button>
+              <Link
+                href={isMintView ? `/players/${player.id}` : `/players/${player.id}?view=mint`}
+                className={externalLinkClass}
+              >
+                {isMintView ? 'View current player' : 'View player mint'}
+              </Link>
+            </div>
+          )}
+
+          {/* Row 3 - Progression Graph (Full width) */}
+          <PlayerProgressionGraph
+            playerId={player.id.toString()}
+            playerName={`${player.metadata.firstName} ${player.metadata.lastName}`}
+            playerPositions={player.metadata.positions}
+            asOf={isMintView && mintSnapshot ? mintSnapshot.date : undefined}
+          />
+
+          {/* Row 4 - Sale History, Position Summary, and Recent Matches (Three columns).
+              All of it comes after the mint, so the mint view leaves it out */}
+          {!isMintView && (
+          <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,360px),1fr))] gap-6 items-start">
+            <PlayerSaleHistory
+              playerId={player.id.toString()}
+              playerName={`${player.metadata.firstName} ${player.metadata.lastName}`}
+              playerMetadata={player.metadata}
+              marketValueEstimate={marketValueEstimate}
+            />
+
+            <PlayerPositionSummary
+              playerId={player.id.toString()}
+              playerName={`${player.metadata.firstName} ${player.metadata.lastName}`}
+            />
+
+            <PlayerRecentMatches
+              playerId={player.id.toString()}
+              playerName={`${player.metadata.firstName} ${player.metadata.lastName}`}
+            />
+          </div>
+          )}
+        </>
+      ) : (
+        <Panel className="flex items-center justify-center h-64">
+          <div className="text-center">
+            <p className="m-0 text-muted">No player data available</p>
+            <p className="m-0 text-sm text-muted-3 mt-2">Debug: player={player ? 'exists' : 'null'}</p>
+          </div>
+        </Panel>
+      )}
     </div>
   );
 };
 
 export default PlayerResultsPage;
-

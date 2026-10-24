@@ -13,7 +13,7 @@ module.exports = {
       pattern: /bg-\[#[0-9a-fA-F]{6}\]/,
     },
     // Also safelist specific colors we know we use
-    'bg-[#87f6f8]',
+    'bg-[#86f0f2]',
     'bg-[#7dffad]',
     'bg-[#9dffb3]',
     'bg-[#bdffc9]',

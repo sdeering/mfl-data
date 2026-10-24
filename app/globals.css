@@ -1,141 +1,241 @@
+@import "tailwindcss";
+
+/* `dark:` follows the theme toggle (the class on <html>), not the OS setting */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/*
+ * Design tokens. Dark is the default look; the light theme overrides them.
+ * Components use them through the Tailwind colours below (bg-panel, text-muted, border-line, ...).
+ */
+:root {
+  --bg: #080c0a;
+  --bg-rgb: 8, 12, 10;
+  --panel: #101713;
+  --panel-rgb: 16, 23, 19;
+  --field: #0b110e;
+  --field-rgb: 12, 20, 16;
+  --glass-rgb: 255, 255, 255;
+  --thead: #0c120f;
+  --inset: #0d1310;
+  --row-hover: #131c17;
+  --btn: #152019;
+  --btn-pos: #142019;
+  --chip: #1a2620;
+  --chip-line: #26362c;
+  --line: #1f2b24;
+  --line2: #2a3a30;
+  --line3: #243129;
+  --line-hover: #3a5245;
+  --divider: #18221c;
+  --text: #eef3ee;
+  --text2: #dfe7e1;
+  --text3: #c4d0c8;
+  --text4: #a9b6ae;
+  --muted: #93a39a;
+  --muted2: #7d8c84;
+  --muted3: #6f7d75;
+  --faint: #5d6b63;
+  --faint2: #4a5650;
+  --strong: #ffffff;
+  --accent-ink: #c6f432;
+  --accent-soft: #d8fb74;
+  --accent-hover: #dcff6e;
+  --warn-ink: #ffc773;
+  --danger-ink: #fca5a5;
+  --orange-ink: #fdba74;
+  --violet-ink: #d8b4fe;
+  --violet-ink2: #ead5ff;
+  --violet-bg: #1d1726;
+  --violet-line: #3a2a4d;
+  --pos-ink: #a8ecc1;
+  --pos-line: #2c5a3f;
+  --tile-tint: #1a2410;
+  --badge-bg: rgba(198, 244, 50, 0.12);
+  --badge-line: rgba(198, 244, 50, 0.3);
+  --badge-dot: #c6f432;
+  /* Card tier colours as text on the page background */
+  --rt-cyan: #86f0f2;
+  --rt-pink: #ee5bf2;
+  --rt-blue: #6f8dff;
+  --rt-green: #8ae63a;
+  --rt-sand: #e9cf86;
+  --rt-grey: #9aa49e;
+  /* Card tier fills and the ink on them */
+  --tier-ultimate: #86f0f2;
+  --tier-ultimate-foreground: #062022;
+  --tier-legendary: #ee5bf2;
+  --tier-legendary-foreground: #2a0630;
+  --tier-epic: #2f5bff;
+  --tier-epic-foreground: #ffffff;
+  --tier-uncommon: #8ae63a;
+  --tier-uncommon-foreground: #0d1a05;
+  --tier-limited: #e9cf86;
+  --tier-limited-foreground: #241c06;
+  --tier-common: #454d49;
+  --tier-common-foreground: #e3e8e5;
+  color-scheme: dark;
+}
+
+html.light {
+  --bg: #f3f6f1;
+  --bg-rgb: 243, 246, 241;
+  --panel: #ffffff;
+  --panel-rgb: 255, 255, 255;
+  --field: #f1f5ef;
+  --field-rgb: 255, 255, 255;
+  --glass-rgb: 15, 26, 19;
+  --thead: #f1f5ef;
+  --inset: #f6f9f4;
+  --row-hover: #f1f6ee;
+  --btn: #eef3ec;
+  --btn-pos: #eef6e6;
+  --chip: #eef3ec;
+  --chip-line: #d5ded4;
+  --line: #dde5dc;
+  --line2: #cfd9cf;
+  --line3: #d5ded4;
+  --line-hover: #a9bba9;
+  --divider: #e8eee6;
+  --text: #0f1a13;
+  --text2: #26342b;
+  --text3: #3a4a40;
+  --text4: #4d5c53;
+  --muted: #5d6c63;
+  --muted2: #66756c;
+  --muted3: #74827a;
+  --faint: #8b978f;
+  --faint2: #a6b0a9;
+  --strong: #0f1a13;
+  --accent-ink: #4f7300;
+  --accent-soft: #0b1406;
+  --accent-hover: #3d5600;
+  --warn-ink: #9a5b00;
+  --danger-ink: #b91c1c;
+  --orange-ink: #b45309;
+  --violet-ink: #7e22ce;
+  --violet-ink2: #6b21a8;
+  --violet-bg: #f3e8ff;
+  --violet-line: #e1ccf5;
+  --pos-ink: #166534;
+  --pos-line: #bfdcc6;
+  --tile-tint: #eef6dc;
+  --badge-bg: #c6f432;
+  --badge-line: #a9d41f;
+  --badge-dot: #0b1406;
+  --rt-cyan: #0e8a8d;
+  --rt-pink: #b0189f;
+  --rt-blue: #1f45e0;
+  --rt-green: #3f8a07;
+  --rt-sand: #9a7a1c;
+  --rt-grey: #7b857f;
+  color-scheme: light;
+}
+
+@theme inline {
+  --color-canvas: var(--bg);
+  --color-panel: var(--panel);
+  --color-field: var(--field);
+  --color-thead: var(--thead);
+  --color-inset: var(--inset);
+  --color-row-hover: var(--row-hover);
+  --color-btn: var(--btn);
+  --color-btn-pos: var(--btn-pos);
+  --color-chip: var(--chip);
+  --color-chip-line: var(--chip-line);
+  --color-line: var(--line);
+  --color-line-2: var(--line2);
+  --color-line-3: var(--line3);
+  --color-line-hover: var(--line-hover);
+  --color-divider: var(--divider);
+  --color-fg: var(--text);
+  --color-fg-2: var(--text2);
+  --color-fg-3: var(--text3);
+  --color-fg-4: var(--text4);
+  --color-muted: var(--muted);
+  --color-muted-2: var(--muted2);
+  --color-muted-3: var(--muted3);
+  --color-faint: var(--faint);
+  --color-faint-2: var(--faint2);
+  --color-strong: var(--strong);
+  --color-accent-ink: var(--accent-ink);
+  --color-accent-soft: var(--accent-soft);
+  --color-accent-hover: var(--accent-hover);
+  --color-warn-ink: var(--warn-ink);
+  --color-danger-ink: var(--danger-ink);
+  --color-orange-ink: var(--orange-ink);
+  --color-violet-ink: var(--violet-ink);
+  --color-violet-ink-2: var(--violet-ink2);
+  --color-violet-bg: var(--violet-bg);
+  --color-violet-line: var(--violet-line);
+  --color-pos-ink: var(--pos-ink);
+  --color-pos-line: var(--pos-line);
+  --color-tile-tint: var(--tile-tint);
+  --color-rt-cyan: var(--rt-cyan);
+  --color-rt-pink: var(--rt-pink);
+  --color-rt-blue: var(--rt-blue);
+  --color-rt-green: var(--rt-green);
+  --color-rt-sand: var(--rt-sand);
+  --color-rt-grey: var(--rt-grey);
+  --font-sans: var(--font-manrope), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-bricolage), var(--font-manrope), ui-sans-serif, sans-serif;
+  --font-mono: var(--font-jetbrains), ui-monospace, monospace;
+}
+
+@theme {
+  /* The lime accent and the dark ink that sits on it, the same in both themes */
+  --color-accent: #c6f432;
+  --color-accent-fg: #0b1406;
+  /* Grey takes the green-tinted neutrals of the design, so pages still using gray-* classes match */
+  --color-gray-50: #f3f6f1;
+  --color-gray-100: #eef3ec;
+  --color-gray-200: #dde5dc;
+  --color-gray-300: #cfd9cf;
+  --color-gray-400: #93a39a;
+  --color-gray-500: #6f7d75;
+  --color-gray-600: #4d5c53;
+  --color-gray-700: #1a2620;
+  --color-gray-800: #101713;
+  --color-gray-900: #0b110e;
+  --color-gray-950: #080c0a;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-manrope), ui-sans-serif, system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--muted3);
+}
+
+select option {
+  background: var(--panel);
+  color: var(--text);
+}
+
 /* Dual range slider thicker handles (rectangular) */
 .range-dual::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
   width: 10px;
   height: 20px;
-  background: #4b5563; /* gray-600 */
+  background: var(--line-hover);
   border-radius: 2px;
-  border: 1px solid #9ca3af; /* gray-400 */
+  border: 1px solid var(--muted);
 }
 
 .range-dual::-moz-range-thumb {
   width: 10px;
   height: 20px;
-  background: #4b5563;
+  background: var(--line-hover);
   border-radius: 2px;
-  border: 1px solid #9ca3af;
+  border: 1px solid var(--muted);
 }
 
 .range-dual {
   pointer-events: auto;
-}
-@import "tailwindcss";
-
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-  
-  /* Tier colors for player stats */
-  --tier-limited: #ecd17f;
-  --tier-limited-foreground: #000000;
-  --tier-common: #9f9f9f;
-  --tier-common-foreground: #ffffff;
-  --tier-uncommon: #71ff30;
-  --tier-uncommon-foreground: #000000;
-  --tier-epic: #0047ff;
-  --tier-epic-foreground: #ffffff;
-  --tier-legendary: #fa53ff;
-  --tier-legendary-foreground: #ffffff;
-  --tier-ultimate: #87f6f8;
-  --tier-ultimate-foreground: #000000;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-titillium-web);
-  --font-mono: var(--font-titillium-web);
-}
-
-.dark {
-  --background: #0a0a0a;
-  --foreground: #ededed;
-}
-
-body {
-  color: var(--foreground);
-  font-family: var(--font-titillium-web), Arial, Helvetica, sans-serif;
-}
-
-/* Force dark mode styles to work */
-.dark [class*="dark:bg-[#111827]"] {
-  background-color: #111827 !important;
-}
-
-.dark [class*="dark:text-white"] {
-  color: white !important;
-}
-
-.dark [class*="dark:text-gray-400"] {
-  color: #9ca3af !important;
-}
-
-.dark [class*="dark:border-gray-600"] {
-  border-color: #4b5563 !important;
-}
-
-.dark [class*="dark:bg-gray-700"] {
-  background-color: #374151 !important;
-}
-
-.dark [class*="dark:hover:text-blue-400"]:hover {
-  color: #60a5fa !important;
-}
-
-.dark [class*="dark:hover:bg-gray-700"]:hover {
-  background-color: #374151 !important;
-}
-
-.dark [class*="dark:hover:bg-gray-900"]:hover {
-  background-color: #111827 !important;
-}
-
-/* Additional dark mode styles for specific components */
-.dark [class*="dark:bg-gray-800"] {
-  background-color: #1f2937 !important;
-}
-
-.dark [class*="dark:bg-gray-900"] {
-  background-color: #111827 !important;
-}
-
-.dark [class*="dark:text-gray-300"] {
-  color: #d1d5db !important;
-}
-
-.dark [class*="dark:border-gray-700"] {
-  border-color: #374151 !important;
-}
-
-.dark [class*="dark:bg-blue-900/20"] {
-  background-color: rgba(30, 58, 138, 0.2) !important;
-}
-
-.dark [class*="dark:border-blue-800"] {
-  border-color: #1e40af !important;
-}
-
-.dark [class*="dark:text-blue-100"] {
-  color: #dbeafe !important;
-}
-
-.dark [class*="dark:text-blue-300"] {
-  color: #93c5fd !important;
-}
-
-.dark [class*="dark:text-blue-400"] {
-  color: #60a5fa !important;
-}
-
-.dark [class*="dark:text-green-400"] {
-  color: #4ade80 !important;
-}
-
-.dark [class*="dark:text-yellow-400"] {
-  color: #facc15 !important;
-}
-
-.dark [class*="dark:text-red-400"] {
-  color: #f87171 !important;
 }

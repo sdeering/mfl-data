@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useWallet } from '../contexts/WalletContext';
 import { clubsService, MFLClubData } from '../services/clubsService';
+import { PageHeader, Panel, SearchField, btnSecondary } from './ui';
 
 export default function ClubsPage() {
   const router = useRouter();
@@ -64,166 +65,147 @@ export default function ClubsPage() {
 
   if (!isConnected) {
     return (
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-        <div className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <div className="text-center">
-            <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">
-              MFL Clubs
-            </h1>
-            <p className="text-lg text-gray-600 dark:text-gray-400">
-              Please connect your wallet to view your clubs
-            </p>
-          </div>
-        </div>
+      <div className="flex flex-col gap-[22px]">
+        <PageHeader title="MFL Clubs" />
+        <Panel className="px-6 py-16 text-center">
+          <p className="m-0 text-[15px] font-medium text-muted">
+            Please connect your wallet to view your clubs
+          </p>
+        </Panel>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-        <div className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <div className="text-center">
-            <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">
-              MFL Clubs
-            </h1>
-            <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
-              <p className="text-red-800 dark:text-red-200">{error}</p>
-              <button
-                onClick={fetchClubs}
-                className="mt-2 px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors"
-              >
-                Try Again
-              </button>
-            </div>
-          </div>
-        </div>
+      <div className="flex flex-col gap-[22px]">
+        <PageHeader title="MFL Clubs" />
+        <Panel className="flex flex-col items-center gap-4 px-6 py-16 text-center">
+          <p className="m-0 text-[15px] font-semibold text-danger-ink">{error}</p>
+          <button onClick={fetchClubs} className={btnSecondary}>
+            Try Again
+          </button>
+        </Panel>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen">
-      {/* Header */}
-      <div className="mb-8">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-              MFL Clubs ({clubs.length} clubs)
-            </h1>
-          </div>
-          
-          {/* Search */}
-          <div className="w-full sm:w-64">
-            <input
-              type="text"
-              placeholder="Search clubs..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            />
-          </div>
-        </div>
-      </div>
+    <div className="flex flex-col gap-[22px]">
+      <PageHeader
+        title="MFL Clubs"
+        count={`(${clubs.length} clubs)`}
+        actions={
+          <SearchField
+            placeholder="Search clubs..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
+        }
+      />
 
-        {/* Loading State */}
-        {isLoadingClubs && (
-          <div className="text-center py-12">
-            <div className="text-gray-400 dark:text-gray-500 text-lg">
-              Loading clubs...
+      {isLoadingClubs && (
+        <Panel className="flex items-center justify-center gap-3 px-6 py-16">
+          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-accent"></div>
+          <span className="text-[15px] font-medium text-muted">Loading clubs...</span>
+        </Panel>
+      )}
+
+      {!isLoadingClubs && hasAttemptedFetch && filteredClubs.length === 0 && (
+        <Panel className="flex flex-col items-center gap-3 px-6 py-16 text-center">
+          <p className="m-0 font-display text-lg font-bold text-fg">
+            {searchTerm ? 'No clubs found matching your search' : 'No clubs found for this wallet'}
+          </p>
+          {!searchTerm && (
+            <div className="text-sm text-muted">
+              <p className="m-0">This wallet may not have any clubs associated with it.</p>
+              <p className="m-0 mt-2">Try refreshing or check if you&apos;re using the correct wallet.</p>
             </div>
-          </div>
-        )}
+          )}
+        </Panel>
+      )}
 
-        {/* Clubs Grid */}
-        {!isLoadingClubs && hasAttemptedFetch && filteredClubs.length === 0 && (
-          <div className="text-center py-12">
-            <div className="text-gray-400 dark:text-gray-500 text-lg mb-4">
-              {searchTerm ? 'No clubs found matching your search' : 'No clubs found for this wallet'}
-            </div>
-            {!searchTerm && (
-              <div className="text-gray-500 dark:text-gray-400 text-sm">
-                <p>This wallet may not have any clubs associated with it.</p>
-                <p className="mt-2">Try refreshing or check if you're using the correct wallet.</p>
-              </div>
-            )}
-          </div>
-        )}
+      {!isLoadingClubs && hasAttemptedFetch && filteredClubs.length > 0 && (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {filteredClubs.map((clubData) => {
+            const club = clubData.club;
+            return (
+              <div
+                key={club.id}
+                className="group relative flex flex-col overflow-hidden rounded-[22px] border border-line bg-panel/92 backdrop-blur-md cursor-pointer transition-colors hover:border-line-hover"
+                onClick={() => router.push(`/clubs/${club.id}`)}
+              >
+                <div className="h-1" style={{ background: club.mainColor }} />
 
-        {/* Clubs Display */}
-        {!isLoadingClubs && hasAttemptedFetch && filteredClubs.length > 0 && (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredClubs.map((clubData) => {
-              const club = clubData.club;
-              return (
+                {/* Club Header */}
                 <div
-                  key={club.id}
-                  className="bg-white dark:bg-gray-800 rounded-lg shadow-md hover:shadow-lg transition-shadow duration-200 overflow-hidden cursor-pointer"
-                  onClick={() => router.push(`/clubs/${club.id}`)}
+                  className="flex items-center gap-3.5 px-5 pt-5 pb-4"
+                  style={{ background: `linear-gradient(160deg, color-mix(in srgb, ${club.mainColor} 16%, transparent), transparent 70%)` }}
                 >
-                  {/* Club Header */}
-                  <div 
-                    className="h-24 relative"
-                    style={{ backgroundColor: club.mainColor }}
+                  <div
+                    className="flex-none grid place-items-center w-10 h-12 [clip-path:polygon(50%_0,100%_14%,100%_55%,50%_100%,0_55%,0_14%)]"
+                    style={{ background: club.secondaryColor || club.mainColor }}
+                    aria-hidden="true"
                   >
-                    <div className="absolute inset-0 bg-black bg-opacity-20"></div>
-                    <div className="absolute bottom-4 left-4 right-4">
-                      <h3 className="text-xl font-bold text-white drop-shadow-lg">
-                        {clubsService.formatClubName(club)}
-                      </h3>
-                      <p className="text-white text-sm drop-shadow-md opacity-90">
-                        {clubsService.formatCityCountry(club)}
-                      </p>
-                    </div>
+                    <div
+                      className="w-8 h-[38px] [clip-path:polygon(50%_0,100%_14%,100%_55%,50%_100%,0_55%,0_14%)]"
+                      style={{ background: club.mainColor }}
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1 min-w-0">
+                    <h3 className="m-0 font-display text-xl font-bold tracking-[-0.01em] text-fg truncate transition-colors group-hover:text-accent-ink">
+                      {clubsService.formatClubName(club)}
+                    </h3>
+                    <p className="m-0 text-[13px] font-medium text-muted truncate">
+                      {clubsService.formatCityCountry(club)}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Club Details */}
+                <div className="flex flex-col gap-4 px-5 pb-5">
+                  {/* Division */}
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-[13px] font-semibold text-muted">
+                      Division
+                    </span>
+                    <span
+                      className={`inline-flex items-center h-6 px-2.5 rounded-full text-[11px] font-bold whitespace-nowrap ${clubsService.getDivisionColor(club.division)}`}
+                    >
+                      {clubsService.getDivisionName(club.division)}
+                    </span>
                   </div>
 
-                  {/* Club Details */}
-                  <div className="p-6">
-                    <div className="space-y-4">
-                      {/* Division */}
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm font-medium text-gray-500 dark:text-gray-400">
-                          Division
-                        </span>
-                        <span 
-                          className={`px-3 py-1 rounded-full text-sm font-semibold ${clubsService.getDivisionColor(club.division)}`}
+                  {/* Competitions */}
+                  <div className="flex flex-col gap-2 pt-4 border-t border-divider">
+                    <h4 className="m-0 text-[11px] font-bold uppercase tracking-[0.1em] text-muted-2">
+                      Competitions
+                    </h4>
+                    <div className="flex flex-col gap-1.5">
+                      {clubData.competitions.map((competition) => (
+                        <div
+                          key={competition.id}
+                          className="flex items-center gap-2 text-[13px] font-medium text-muted"
                         >
-                          {clubsService.getDivisionName(club.division)}
-                        </span>
-                      </div>
-
-                      {/* Competitions */}
-                      <div>
-                        <h4 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">
-                          Competitions
-                        </h4>
-                        <div className="space-y-2">
-                          {clubData.competitions.map((competition) => (
-                            <div
-                              key={competition.id}
-                              className="flex items-center space-x-2 text-sm"
-                            >
-                              <span className="text-lg">
-                                {clubsService.getCompetitionTypeIcon(competition.type)}
-                              </span>
-                              <span className="text-gray-900 dark:text-white">
-                                {competition.name}
-                              </span>
-                              <span className="text-gray-500 dark:text-gray-400 text-xs">
-                                ({competition.code})
-                              </span>
-                            </div>
-                          ))}
+                          <span aria-hidden="true">
+                            {clubsService.getCompetitionTypeIcon(competition.type)}
+                          </span>
+                          <span className="text-fg-4">
+                            {competition.name}
+                          </span>
+                          <span className="text-xs text-muted-3">
+                            ({competition.code})
+                          </span>
                         </div>
-                      </div>
-
+                      ))}
                     </div>
                   </div>
                 </div>
-              );
-            })}
-          </div>
-        )}
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

@@ -220,7 +220,7 @@ describe('ThemeToggle', () => {
       
       const moonIcon = screen.getByTestId('moon-icon');
       expect(moonIcon).toBeInTheDocument();
-      expect(moonIcon).toHaveClass('text-blue-400');
+      expect(moonIcon).toHaveClass('text-[#facc15]');
     });
 
     it('should have proper icon sizing', () => {
