@@ -5,12 +5,28 @@ export interface SquadPlayer {
   position: string;
 }
 
+/** How squads were saved before lineups: one formation's players keyed by position ("CB1"), extras as "EXTRA1"... */
+export type SquadPlayers = { [position: string]: SquadPlayer };
+
+export interface SavedLineup {
+  name: string;
+  formation: string;
+  xi: (number | null)[];
+  bench: (number | null)[];
+}
+
+/** How squads are saved now: the lineups by player ID, and each of those players as they were when saved. */
+export interface SquadLineups {
+  lineups: SavedLineup[];
+  players: Record<string, MFLPlayer>;
+}
+
 export interface Squad {
   id?: string;
   wallet_address: string;
   squad_name: string;
   formation_id: string;
-  players: { [position: string]: SquadPlayer };
+  players: SquadPlayers | SquadLineups;
   created_at?: string;
   updated_at?: string;
 }
@@ -20,7 +36,7 @@ export interface SavedSquad {
   wallet_address: string;
   squad_name: string;
   formation_id: string;
-  players: { [position: string]: SquadPlayer };
+  players: SquadPlayers | SquadLineups;
   created_at: string;
   updated_at: string;
 }
@@ -47,7 +63,7 @@ export async function saveSquad(
   walletAddress: string,
   squadName: string,
   formationId: string,
-  players: { [position: string]: SquadPlayer }
+  players: SquadPlayers | SquadLineups
 ): Promise<SavedSquad> {
   try {
     const response = await fetch('/api/squads', {
@@ -82,7 +98,7 @@ export async function updateSquad(
   walletAddress: string,
   squadName: string,
   formationId: string,
-  players: { [position: string]: SquadPlayer }
+  players: SquadPlayers | SquadLineups
 ): Promise<SavedSquad> {
   try {
     const response = await fetch(`/api/squads/${squadId}`, {

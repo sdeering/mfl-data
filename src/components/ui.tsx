@@ -37,19 +37,23 @@ export const tdClass = 'px-3 py-3 whitespace-nowrap';
 export const SortArrow: React.FC<{ active: boolean; direction: 'asc' | 'desc' }> = ({ active, direction }) =>
   active ? <span className="ml-1 text-accent-ink">{direction === 'asc' ? '↑' : '↓'}</span> : null;
 
-/** Page title, with an optional muted count after it and a line underneath. */
+/** Page title, with an optional muted count after it, a badge beside it and a line underneath. */
 export const PageHeader: React.FC<{
   title: React.ReactNode;
   count?: React.ReactNode;
+  badge?: React.ReactNode;
   subtitle?: React.ReactNode;
   actions?: React.ReactNode;
-}> = ({ title, count, subtitle, actions }) => (
+}> = ({ title, count, badge, subtitle, actions }) => (
   <div className="flex flex-wrap items-end justify-between gap-4">
     <div className="flex flex-col gap-1.5 min-w-0">
-      <h1 className="m-0 font-display font-extrabold text-[32px] sm:text-[44px] leading-none tracking-[-0.03em] text-fg">
-        {title}
-        {count !== undefined && <span className="font-semibold text-muted"> {count}</span>}
-      </h1>
+      <div className="flex items-center gap-3.5">
+        <h1 className="m-0 font-display font-extrabold text-[32px] sm:text-[44px] leading-none tracking-[-0.03em] text-fg">
+          {title}
+          {count !== undefined && <span className="font-semibold text-muted"> {count}</span>}
+        </h1>
+        {badge}
+      </div>
       {subtitle && <p className="m-0 text-[15px] font-medium text-muted">{subtitle}</p>}
     </div>
     {actions && <div className="flex flex-wrap gap-2">{actions}</div>}
@@ -57,13 +61,14 @@ export const PageHeader: React.FC<{
 );
 
 /** Rounded translucent card that sections of a page sit in. */
-export const Panel: React.FC<React.HTMLAttributes<HTMLElement> & { as?: 'section' | 'div' }> = ({
+export const Panel: React.FC<React.HTMLAttributes<HTMLElement> & { as?: 'section' | 'div'; ref?: React.Ref<HTMLElement> }> = ({
   as: Tag = 'section',
   className = '',
   children,
+  ref,
   ...rest
 }) => (
-  <Tag className={`rounded-[22px] border border-line bg-panel/92 backdrop-blur-md ${className}`} {...rest}>
+  <Tag ref={ref as React.Ref<HTMLDivElement>} className={`rounded-[22px] border border-line bg-panel/92 backdrop-blur-md ${className}`} {...rest}>
     {children}
   </Tag>
 );
