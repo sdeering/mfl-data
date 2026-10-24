@@ -3,11 +3,14 @@ import {
   FORMATIONS,
   Lineup,
   assignPlayer,
+  autoFillFromSquad,
   autoFillLineup,
   bestFreeSlot,
   changeFormation,
   emptyBench,
   emptyXi,
+  formationLabel,
+  FORMATION_NAMES,
   fromSavedSquad,
   positionFit,
   savedSquadPlayerIds,
@@ -60,8 +63,8 @@ describe('positionFit', () => {
 
 describe('autoFillLineup', () => {
   it('puts the best player still free in each position, and the next best on the bench with a keeper first', () => {
-    const { xi, bench } = autoFillLineup('4-3-3', squad)
-    // 4-3-3: GK, LB, CB, CB, RB, CM, CDM, CM, LW, ST, RW
+    const { xi, bench } = autoFillLineup('4-3-3_defend', squad)
+    // 4-3-3 (def): GK, LB, CB, CB, RB, CM, CDM, CM, LW, ST, RW
     expect(xi).toEqual(ids([keeperA, lb, cbA, cbB, rb, cmA, cdm, cmB, lw, stA, rw]))
     expect(bench).toEqual([...ids([keeperB, cbC, stB]), null, null, null, null])
   })
@@ -70,6 +73,50 @@ describe('autoFillLineup', () => {
     const retired = player(30, ['ST'], 99, { retirementYears: 0 })
     const { xi, bench } = autoFillLineup('4-3-3', [...squad, retired])
     expect([...xi, ...bench]).not.toContain(30)
+  })
+})
+
+describe('autoFillFromSquad', () => {
+  // A 4-4-2 squad without a keeper or wide players: a back four, two holding midfielders and two strikers
+  const lineupSquad = [cbA, cbB, lb, rb, cdm, cmA, stA, stB]
+  const outsiders = [keeperA, keeperB, cbC, lw, rw, cmB, player(50, ['ST'], 99)]
+
+  it("puts the squad's players where they can play, and only brings in players for positions none of them can", () => {
+    const { xi, bench } = autoFillFromSquad('4-3-3_defend', lineupSquad, outsiders)
+    // 4-3-3 (def): GK, LB, CB, CB, RB, CM, CDM, CM, LW, ST, RW
+    expect(xi.slice(0, 5)).toEqual([keeperA.id, lb.id, cbA.id, cbB.id, rb.id])
+    expect(xi[6]).toBe(cdm.id)
+    expect(xi[5]).toBe(cmA.id)
+    // No one in the squad plays the wings, but the strikers stay strikers, even with a better one outside
+    expect([xi[8], xi[10]]).toEqual([lw.id, rw.id])
+    expect(xi[9]).toBe(stA.id)
+    expect(xi).not.toContain(50)
+    // CM is somewhere the CDM or a CB can't play, so the other one comes from outside too
+    expect(xi[7]).toBe(cmB.id)
+    // The bench is squad players only
+    expect(bench).toEqual([stB.id, null, null, null, null, null, null])
+  })
+
+  it('puts every squad player in the XI, out of position if need be, when there is no one else', () => {
+    const { xi } = autoFillFromSquad('4-3-3_defend', [...lineupSquad, cmB, cbC, lw], [])
+    expect(new Set(xi)).toEqual(new Set([...lineupSquad, cmB, cbC, lw].map(p => p.id)))
+  })
+})
+
+describe('formations', () => {
+  it('has every MFL formation, each a keeper and ten outfield positions', () => {
+    expect(FORMATION_NAMES).toHaveLength(25)
+    for (const name of FORMATION_NAMES) {
+      expect(FORMATIONS[name]).toHaveLength(11)
+      expect(FORMATIONS[name].filter(([position]) => position === 'GK')).toEqual([['GK', 50, 90]])
+    }
+  })
+
+  it("shows MFL's variants as the game names them", () => {
+    expect(formationLabel('4-3-3')).toBe('4-3-3')
+    expect(formationLabel('4-3-3_defend')).toBe('4-3-3 (def)')
+    expect(formationLabel('4-3-3_false9')).toBe('4-3-3 (false 9)')
+    expect(formationLabel('3-5-2_B')).toBe('3-5-2 (B)')
   })
 })
 

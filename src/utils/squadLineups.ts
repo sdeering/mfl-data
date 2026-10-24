@@ -16,19 +16,50 @@ export type Slot = [position: MFLPosition, x: number, y: number];
 
 const GK: Slot = ['GK', 50, 90];
 const BACK_FOUR: Slot[] = [['LB', 14, 70], ['CB', 37, 75], ['CB', 63, 75], ['RB', 86, 70]];
-const BACK_THREE: Slot[] = [['CB', 27, 74], ['CB', 50, 77], ['CB', 73, 74]];
+const BACK_THREE: Slot[] = [['CB', 27, 74], ['CB', 50, 76], ['CB', 73, 74]];
+const BACK_FIVE: Slot[] = [['LWB', 8, 60], ['CB', 28, 74], ['CB', 50, 76], ['CB', 72, 74], ['RWB', 92, 60]];
 
-/** Each formation's positions, with where they stand as % across and down the pitch (own goal at the bottom). */
+/**
+ * Every formation MFL has, keyed by MFL's own name for it, with its positions and where they stand
+ * as % across and down the pitch (own goal at the bottom).
+ */
 export const FORMATIONS: Record<string, Slot[]> = {
-  '4-3-3': [GK, ...BACK_FOUR, ['CM', 28, 50], ['CDM', 50, 58], ['CM', 72, 50], ['LW', 18, 24], ['ST', 50, 17], ['RW', 82, 24]],
-  '4-4-2': [GK, ...BACK_FOUR, ['LM', 13, 45], ['CM', 38, 51], ['CM', 62, 51], ['RM', 87, 45], ['ST', 38, 20], ['ST', 62, 20]],
-  '4-2-3-1': [GK, ...BACK_FOUR, ['CDM', 37, 58], ['CDM', 63, 58], ['LW', 17, 34], ['CAM', 50, 37], ['RW', 83, 34], ['ST', 50, 16]],
-  '4-1-2-1-2': [GK, ...BACK_FOUR, ['CDM', 50, 61], ['CM', 27, 48], ['CM', 73, 48], ['CAM', 50, 36], ['ST', 38, 17], ['ST', 62, 17]],
-  '3-5-2': [GK, ...BACK_THREE, ['LWB', 11, 46], ['CM', 33, 48], ['CDM', 50, 58], ['CM', 67, 48], ['RWB', 89, 46], ['ST', 38, 19], ['ST', 62, 19]],
+  '3-4-2-1': [GK, ...BACK_THREE, ['LM', 13, 48], ['CM', 38, 52], ['CM', 62, 52], ['RM', 87, 48], ['CF', 32, 32], ['CF', 68, 32], ['ST', 50, 16]],
   '3-4-3': [GK, ...BACK_THREE, ['LM', 13, 47], ['CM', 38, 52], ['CM', 62, 52], ['RM', 87, 47], ['LW', 20, 23], ['ST', 50, 17], ['RW', 80, 23]],
-  '5-3-2': [GK, ['LWB', 9, 62], ['CB', 30, 75], ['CB', 50, 77], ['CB', 70, 75], ['RWB', 91, 62], ['CM', 29, 48], ['CM', 50, 53], ['CM', 71, 48], ['ST', 38, 19], ['ST', 62, 19]],
+  '3-4-3_diamond': [GK, ...BACK_THREE, ['LM', 13, 46], ['CDM', 50, 58], ['CAM', 50, 37], ['RM', 87, 46], ['LW', 20, 22], ['ST', 50, 16], ['RW', 80, 22]],
+  '3-5-2': [GK, ...BACK_THREE, ['LM', 9, 42], ['CM', 30, 50], ['CDM', 50, 59], ['CM', 70, 50], ['RM', 91, 42], ['ST', 38, 19], ['ST', 62, 19]],
+  '3-5-2_B': [GK, ...BACK_THREE, ['LM', 11, 44], ['CDM', 32, 57], ['CAM', 50, 40], ['CDM', 68, 57], ['RM', 89, 44], ['ST', 38, 19], ['ST', 62, 19]],
+  '4-1-2-1-2': [GK, ...BACK_FOUR, ['CDM', 50, 59], ['LM', 16, 45], ['RM', 84, 45], ['CAM', 50, 37], ['ST', 38, 17], ['ST', 62, 17]],
+  '4-1-2-1-2_narrow': [GK, ...BACK_FOUR, ['CDM', 50, 61], ['CM', 27, 48], ['CM', 73, 48], ['CAM', 50, 36], ['ST', 38, 17], ['ST', 62, 17]],
+  '4-1-3-2': [GK, ...BACK_FOUR, ['CDM', 50, 58], ['LM', 18, 42], ['CM', 50, 43], ['RM', 82, 42], ['ST', 38, 19], ['ST', 62, 19]],
+  '4-1-4-1': [GK, ...BACK_FOUR, ['CDM', 50, 59], ['LM', 13, 40], ['CM', 34, 44], ['CM', 66, 44], ['RM', 87, 40], ['ST', 50, 17]],
+  '4-2-2-2': [GK, ...BACK_FOUR, ['CDM', 37, 58], ['CDM', 63, 58], ['CAM', 25, 38], ['CAM', 75, 38], ['ST', 38, 18], ['ST', 62, 18]],
+  '4-2-3-1': [GK, ...BACK_FOUR, ['CDM', 37, 58], ['CDM', 63, 58], ['LM', 17, 37], ['CAM', 50, 38], ['RM', 83, 37], ['ST', 50, 16]],
+  '4-2-4': [GK, ...BACK_FOUR, ['CM', 37, 52], ['CM', 63, 52], ['LW', 14, 26], ['ST', 38, 19], ['ST', 62, 19], ['RW', 86, 26]],
+  '4-3-1-2': [GK, ...BACK_FOUR, ['CM', 26, 50], ['CM', 50, 54], ['CM', 74, 50], ['CAM', 50, 37], ['ST', 38, 18], ['ST', 62, 18]],
+  '4-3-2-1': [GK, ...BACK_FOUR, ['CM', 26, 52], ['CM', 50, 55], ['CM', 74, 52], ['CF', 33, 33], ['CF', 67, 33], ['ST', 50, 16]],
+  '4-3-3': [GK, ...BACK_FOUR, ['CM', 28, 50], ['CM', 50, 55], ['CM', 72, 50], ['LW', 18, 24], ['ST', 50, 17], ['RW', 82, 24]],
+  '4-3-3_attack': [GK, ...BACK_FOUR, ['CM', 28, 52], ['CAM', 50, 42], ['CM', 72, 52], ['LW', 18, 24], ['ST', 50, 17], ['RW', 82, 24]],
+  '4-3-3_defend': [GK, ...BACK_FOUR, ['CM', 28, 50], ['CDM', 50, 58], ['CM', 72, 50], ['LW', 18, 24], ['ST', 50, 17], ['RW', 82, 24]],
+  '4-3-3_false9': [GK, ...BACK_FOUR, ['CM', 28, 50], ['CDM', 50, 58], ['CM', 72, 50], ['LW', 18, 22], ['CF', 50, 30], ['RW', 82, 22]],
+  '4-4-1-1': [GK, ...BACK_FOUR, ['LM', 13, 47], ['CM', 38, 52], ['CM', 62, 52], ['RM', 87, 47], ['CF', 50, 33], ['ST', 50, 16]],
+  '4-4-2': [GK, ...BACK_FOUR, ['LM', 13, 45], ['CM', 38, 51], ['CM', 62, 51], ['RM', 87, 45], ['ST', 38, 20], ['ST', 62, 20]],
+  '4-4-2_B': [GK, ...BACK_FOUR, ['LM', 13, 45], ['CDM', 38, 56], ['CDM', 62, 56], ['RM', 87, 45], ['ST', 38, 20], ['ST', 62, 20]],
+  '5-2-3': [GK, ...BACK_FIVE, ['CM', 37, 50], ['CM', 63, 50], ['LW', 18, 24], ['ST', 50, 17], ['RW', 82, 24]],
+  '5-3-2': [GK, ...BACK_FIVE, ['LM', 22, 44], ['CM', 50, 50], ['RM', 78, 44], ['ST', 38, 19], ['ST', 62, 19]],
+  '5-4-1': [GK, ...BACK_FIVE, ['LM', 22, 42], ['CDM', 50, 57], ['RM', 78, 42], ['CAM', 50, 36], ['ST', 50, 17]],
+  '5-4-1_flat': [GK, ...BACK_FIVE, ['LM', 14, 44], ['CM', 37, 47], ['CM', 63, 47], ['RM', 86, 44], ['ST', 50, 19]],
 };
 export const FORMATION_NAMES = Object.keys(FORMATIONS);
+
+// MFL's variants of a formation, as its game shows them
+const VARIANT_LABELS: Record<string, string> = { diamond: 'diamond', B: 'B', narrow: 'narrow', attack: 'att', defend: 'def', false9: 'false 9', flat: 'flat' };
+
+/** "4-3-3 (def)" for MFL's "4-3-3_defend". */
+export const formationLabel = (formation: string) => {
+  const [shape, variant] = formation.split('_');
+  return variant ? `${shape} (${VARIANT_LABELS[variant] ?? variant})` : shape;
+};
 const DEFAULT_FORMATION = '4-3-3';
 
 export const ALL_POSITIONS: MFLPosition[] = ['GK', 'CB', 'LB', 'RB', 'LWB', 'RWB', 'CDM', 'CM', 'CAM', 'LM', 'RM', 'LW', 'RW', 'CF', 'ST'];
@@ -78,39 +109,71 @@ export const lineupPlayerIds = (lineup: Lineup) => [...lineup.xi, ...lineup.benc
 const isGoalkeeper = (player: MFLPlayer) => player.metadata.positions[0] === 'GK';
 
 /**
- * Puts the given players into the formation's positions, best fit first: of every player and position
- * the highest rating is filled, then the next, so each position gets the best player still free for it.
+ * Puts players into the formation's empty positions, best fit first: of every player and position the
+ * highest rating is filled, then the next, so each position gets the best player still free for it.
+ * `accept` limits which fits count, e.g. none out of position.
  */
-function placeBestFit(formation: string, players: MFLPlayer[]): (number | null)[] {
-  const slots = FORMATIONS[formation];
+function fillPositions(
+  formation: string,
+  players: MFLPlayer[],
+  xi: (number | null)[] = emptyXi(),
+  accept: (fit: PositionFit) => boolean = () => true,
+): (number | null)[] {
+  const filled = [...xi];
+  const placed = new Set(filled);
   const pairs: [score: number, id: number, index: number][] = [];
   for (const player of players) {
-    slots.forEach(([position], index) => {
+    if (placed.has(player.id)) continue;
+    FORMATIONS[formation].forEach(([position], index) => {
+      if (filled[index] !== null) return;
+      const fit = positionFit(player, position);
       // A thousandth of the overall settles ties in favour of the better player
-      pairs.push([positionFit(player, position).rating + player.metadata.overall / 1000, player.id, index]);
+      if (accept(fit)) pairs.push([fit.rating + player.metadata.overall / 1000, player.id, index]);
     });
   }
   pairs.sort((a, b) => b[0] - a[0]);
 
-  const xi = emptyXi();
-  const placed = new Set<number>();
   for (const [, id, index] of pairs) {
-    if (xi[index] === null && !placed.has(id)) {
-      xi[index] = id;
+    if (filled[index] === null && !placed.has(id)) {
+      filled[index] = id;
       placed.add(id);
     }
   }
-  return xi;
+  return filled;
+}
+
+/** The best of the players not in the XI, a goalkeeper first. */
+function benchFrom(players: MFLPlayer[], xi: (number | null)[]): (number | null)[] {
+  const rest = players.filter(player => !xi.includes(player.id)).sort((a, b) => b.metadata.overall - a.metadata.overall);
+  const keeper = rest.find(isGoalkeeper);
+  const bench = (keeper ? [keeper, ...rest.filter(player => player !== keeper)] : rest).slice(0, BENCH_SIZE).map(player => player.id);
+  return [...bench, ...emptyBench()].slice(0, BENCH_SIZE);
 }
 
 /** The best XI the players can make in a formation, with the next best on the bench (a goalkeeper first). Never a retired player. */
 export function autoFillLineup(formation: string, players: MFLPlayer[]): Pick<Lineup, 'xi' | 'bench'> {
   const available = players.filter(player => !isRetiredPlayer(player));
-  const xi = placeBestFit(formation, available);
-  const rest = available.filter(player => !xi.includes(player.id)).sort((a, b) => b.metadata.overall - a.metadata.overall);
-  const keeper = rest.find(isGoalkeeper);
-  const bench = (keeper ? [keeper, ...rest.filter(player => player !== keeper)] : rest).slice(0, BENCH_SIZE).map(player => player.id);
-  return { xi, bench: [...bench, ...emptyBench()].slice(0, BENCH_SIZE) };
+  const xi = fillPositions(formation, available);
+  return { xi, bench: benchFrom(available, xi) };
+}
+
+/**
+ * Auto-fill for a squad that already has players. They fill the formation first, each where they play
+ * naturally or at an alternative position. Only positions none of them can play are filled from `others`,
+ * again by players who can play there. Any position still empty takes a squad player out of position,
+ * then anyone. The bench is the squad players left over.
+ */
+export function autoFillFromSquad(formation: string, squad: MFLPlayer[], others: MFLPlayer[]): Pick<Lineup, 'xi' | 'bench'> {
+  const squadPlayers = squad.filter(player => !isRetiredPlayer(player));
+  const inSquad = new Set(squadPlayers.map(player => player.id));
+  const newcomers = others.filter(player => !isRetiredPlayer(player) && !inSquad.has(player.id));
+
+  const playsThere = (fit: PositionFit) => fit.kind !== 'out';
+  let xi = fillPositions(formation, squadPlayers, emptyXi(), playsThere);
+  xi = fillPositions(formation, newcomers, xi, playsThere);
+  xi = fillPositions(formation, squadPlayers, xi);
+  xi = fillPositions(formation, newcomers, xi);
+  return { xi, bench: benchFrom(squadPlayers, xi) };
 }
 
 /** A squad to start from: the best XI in two formations. */
@@ -163,7 +226,7 @@ export function removePlayer(lineup: Lineup, playerId: number): Lineup {
 /** Switches formation, keeping the same starters and moving each to the new position they suit best. */
 export function changeFormation(lineup: Lineup, formation: string, playersById: Map<number, MFLPlayer>): Lineup {
   const starters = lineup.xi.map(id => (id === null ? undefined : playersById.get(id))).filter((p): p is MFLPlayer => !!p);
-  return { ...lineup, formation, xi: placeBestFit(formation, starters) };
+  return { ...lineup, formation, xi: fillPositions(formation, starters) };
 }
 
 /** "Lineup C" for the third lineup, and so on. */

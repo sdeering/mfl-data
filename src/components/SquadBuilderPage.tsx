@@ -10,6 +10,8 @@ import {
   BENCH_SIZE,
   FORMATIONS,
   FORMATION_NAMES,
+  autoFillFromSquad,
+  formationLabel,
   Lineup,
   SlotRef,
   assignPlayer,
@@ -28,6 +30,7 @@ import {
   XI_SIZE,
 } from '../utils/squadLineups';
 import { currentSeason } from '../utils/playerSeasons';
+import { isRetiringThisSeason } from '../utils/appSettings';
 import { useToast, ToastContainer } from './Toast';
 import WalletGate from './WalletGate';
 import { PageHeader, Panel, Select, btnDanger, btnPill, btnPrimary } from './ui';
@@ -503,7 +506,7 @@ export default function SquadBuilderPage() {
                       className="flex items-center gap-2 h-[34px] pl-3.5 pr-1.5 text-[13px] font-bold whitespace-nowrap cursor-pointer"
                     >
                       {l.name}
-                      <span className="font-mono text-xs font-semibold opacity-75">{l.formation}</span>
+                      <span className="font-mono text-xs font-semibold opacity-75">{formationLabel(l.formation)}</span>
                     </button>
                     {lineups.length > 1 ? (
                       <button
@@ -543,7 +546,7 @@ export default function SquadBuilderPage() {
                 >
                   {FORMATION_NAMES.map(name => (
                     <option key={name} value={name}>
-                      {name}
+                      {formationLabel(name)}
                     </option>
                   ))}
                 </Select>
@@ -551,16 +554,23 @@ export default function SquadBuilderPage() {
               <button
                 type="button"
                 onClick={() => {
-                  // From the players the list shows. Hiding selected players leaves this lineup's own in, as they are what it rebuilds.
+                  // New players come from those the list shows. Hiding selected players leaves the squad's own in, as they are what it rebuilds.
                   const shown = filterPool(players, search, filters, player => otherSquads.has(player.id));
-                  if (shown.length === 0) {
+                  // The players already in the squad's lineups go first, less any the retiring filter hides
+                  const squad = [...new Set(lineups.flatMap(lineupPlayerIds))]
+                    .map(id => playersById.get(id))
+                    .filter((player): player is MFLPlayer => !!player && !(filters.hideRetiring && isRetiringThisSeason(player)));
+                  if (squad.length === 0 && shown.length === 0) {
                     info('No Players', 'No players match the search and filters.', 2500);
                     return;
                   }
-                  updateLineup(current => ({ ...current, ...autoFillLineup(current.formation, shown) }));
+                  updateLineup(current => ({
+                    ...current,
+                    ...(squad.length > 0 ? autoFillFromSquad(current.formation, squad, shown) : autoFillLineup(current.formation, shown)),
+                  }));
                   setSelected(null);
                 }}
-                title="Fills the lineup from the players the list shows"
+                title="Fills the lineup from the squad's players, and from the players the list shows for any position they can't play"
                 className="inline-flex items-center justify-center h-10 px-4 rounded-full border border-pos-line bg-btn-pos text-pos-ink text-[13px] font-bold whitespace-nowrap cursor-pointer transition-colors hover:border-pos-ink"
               >
                 Auto-fill best XI

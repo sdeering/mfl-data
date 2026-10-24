@@ -2,7 +2,7 @@ import React from 'react';
 import Link from 'next/link';
 import type { MFLPlayer } from '../../types/mflApi';
 import type { MFLPosition } from '../../types/positionOvr';
-import { ALL_POSITIONS, FORMATIONS, Lineup, positionFit } from '../../utils/squadLineups';
+import { ALL_POSITIONS, FORMATIONS, Lineup, formationLabel, positionFit } from '../../utils/squadLineups';
 import { getTierColors } from '../../utils/tierColors';
 import RetirementIcon from '../RetirementIcon';
 import { Panel, tableClass, tdClass, thClass, theadRowClass, rowClass } from '../ui';
@@ -34,7 +34,7 @@ export function lineupCsv(lineup: Lineup, playersById: Map<number, MFLPlayer>): 
   const lines = lineupRows(lineup, playersById).map(({ role, player }) => {
     const m = player.metadata;
     return [
-      lineup.name, lineup.formation, role, player.id, m.firstName, m.lastName, fullName(player), m.overall,
+      lineup.name, formationLabel(lineup.formation), role, player.id, m.firstName, m.lastName, fullName(player), m.overall,
       role === 'SUB' ? '' : positionFit(player, role as MFLPosition).rating, m.age, m.positions.join(' '),
       m.preferredFoot, (m.nationalities || []).join(' '), m.height, m.pace, m.shooting, m.passing, m.dribbling, m.defense, m.physical, m.goalkeeping,
       ...ALL_POSITIONS.map(position => positionFit(player, position).rating),

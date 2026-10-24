@@ -1,6 +1,6 @@
 import React from 'react';
 import type { SavedSquad } from '../../services/squadService';
-import { fromSavedSquad, lineupPlayerIds } from '../../utils/squadLineups';
+import { formationLabel, fromSavedSquad, lineupPlayerIds } from '../../utils/squadLineups';
 import { btnDanger, btnPill, btnPrimary, fieldClass } from '../ui';
 
 const backdropClass = 'fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60';
@@ -92,7 +92,7 @@ export function LoadSquadModal({ squads, isLoading, deletingId, onLoad, onDelete
                     <h4 className="m-0 text-[15px] font-bold text-fg truncate">{squad.squad_name}</h4>
                     <div className="flex flex-wrap items-center gap-x-4 mt-1 text-xs font-medium text-muted">
                       <span>
-                        {lineups.length === 1 ? lineups[0].formation : `${lineups.length} lineups`} · {playerCount} players
+                        {lineups.length === 1 ? formationLabel(lineups[0].formation) : `${lineups.length} lineups`} · {playerCount} players
                       </span>
                       <span>Updated {new Date(squad.updated_at).toLocaleDateString()}</span>
                     </div>

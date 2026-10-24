@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import type { MFLPlayer } from '../../types/mflApi';
-import { FORMATIONS, Lineup, PositionFit, SlotRef, XI_SIZE, positionFit } from '../../utils/squadLineups';
+import { FORMATIONS, Lineup, PositionFit, SlotRef, XI_SIZE, formationLabel, positionFit } from '../../utils/squadLineups';
 import { getTierColors } from '../../utils/tierColors';
 import { Panel, fieldClass } from '../ui';
 import { CloseIcon, FIT_COLORS, FIT_LABELS, FIT_SHORT_LABELS, PlayerAvatar, fullName } from './shared';
@@ -127,7 +127,7 @@ function Summary({ lineup, playersById, onSelect }: LineupPanelProps) {
     <>
       <div className="flex flex-col gap-0.5">
         <h3 className="m-0 font-display text-xl font-bold text-fg">
-          {lineup.name} · {lineup.formation}
+          {lineup.name} · {formationLabel(lineup.formation)}
         </h3>
         <span className="text-[13px] font-medium text-muted">Click any position to see the best-matching players</span>
       </div>

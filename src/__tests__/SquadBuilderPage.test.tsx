@@ -249,8 +249,9 @@ describe('Squad Builder', () => {
     expect(screen.queryByRole('button', { name: /: Striker One/ })).not.toBeInTheDocument()
   })
 
-  it('auto-fills from only the players the filters leave', async () => {
+  it('auto-fills an empty squad from only the players the filters leave', async () => {
     await renderBuilder()
+    fireEvent.click(screen.getByRole('button', { name: 'Clear Squad' }))
     const pool = screen.getByRole('region', { name: 'Your players' })
     fireEvent.click(within(pool).getByRole('button', { name: 'Show Filters' }))
     // Legendary (85+) leaves just Centre One
@@ -260,6 +261,31 @@ describe('Squad Builder', () => {
     expect(screen.getByRole('button', { name: 'CB: Centre One, 85' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /^GK: / })).not.toBeInTheDocument()
     expect(screen.queryAllByRole('button', { name: /^Sub \d: / })).toHaveLength(0)
+  })
+
+  it("auto-fills from the squad's own players first, and from the list only for positions none of them play", async () => {
+    // A squad of a keeper, a centre back and the weaker striker
+    window.localStorage.setItem(
+      'mfl-data-squad-builder:0xtest',
+      JSON.stringify({ name: '', active: 0, lineups: [{ id: 1, name: 'Lineup A', formation: '4-3-3', xi: [1, null, 3, null, null, null, null, null, null, 14, null], bench: Array(7).fill(null) }] })
+    )
+    await renderBuilder()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Auto-fill best XI' }))
+    expect(screen.getByRole('button', { name: 'GK: Keeper One, 80' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'ST: Striker Two, 74' })).toBeInTheDocument()
+    // Striker One is better, but the squad already has a striker
+    expect(screen.queryByRole('button', { name: /: Striker One/ })).not.toBeInTheDocument()
+    // No one in the squad plays the wings, so they come from the list
+    expect(screen.getByRole('button', { name: 'LW: Left Wing, 77' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Pick a player for sub 1' })).toBeInTheDocument()
+  })
+
+  it('offers every MFL formation, by the names the game uses', async () => {
+    await renderBuilder()
+    const options = within(screen.getByLabelText('Formation')).getAllByRole('option').map(option => option.textContent)
+    expect(options).toHaveLength(25)
+    expect(options).toEqual(expect.arrayContaining(['4-3-3', '4-3-3 (def)', '4-3-3 (false 9)', '5-4-1 (flat)', '3-4-2-1']))
   })
 
   it('pages the player list, staying on the page after placing a player from it', async () => {
