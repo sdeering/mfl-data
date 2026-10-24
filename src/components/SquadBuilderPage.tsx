@@ -31,12 +31,14 @@ import {
 import { useToast, ToastContainer } from './Toast';
 import WalletGate from './WalletGate';
 import { PageHeader, Panel, Select, btnDanger, btnPill, btnPrimary } from './ui';
-import PlayerPool, { POSITION_GROUPS, PoolUse } from './squadBuilder/PlayerPool';
+import PlayerPool, { POOL_PAGE_SIZE, PoolUse } from './squadBuilder/PlayerPool';
+import { DEFAULT_POOL_FILTERS, PoolFilters, filterPool } from './squadBuilder/poolFilters';
+import SquadAnalysis, { SquadGroup } from './squadBuilder/SquadAnalysis';
 import { LineupBench, LineupPitch } from './squadBuilder/LineupPitch';
 import LineupPanel from './squadBuilder/LineupPanel';
-import SquadStatsTable, { lineupCsv } from './squadBuilder/SquadStatsTable';
+import SquadStatsTable, { lineupCsv, lineupRows } from './squadBuilder/SquadStatsTable';
 import { LoadSquadModal, SaveSquadModal } from './squadBuilder/SquadModals';
-import { CloseIcon, DragHandlers, fullName } from './squadBuilder/shared';
+import { CloseIcon, DragHandlers } from './squadBuilder/shared';
 
 const spinnerClass = 'rounded-full border-2 border-accent border-t-transparent animate-spin';
 
@@ -102,8 +104,12 @@ export default function SquadBuilderPage() {
   const panelRef = useRef<HTMLElement>(null);
 
   const [search, setSearch] = useState('');
-  const [group, setGroup] = useState('All');
+  const [filters, setFilters] = useState<PoolFilters>(DEFAULT_POOL_FILTERS);
+  // The list follows the sliders a moment after they stop moving
+  const [appliedFilters, setAppliedFilters] = useState<PoolFilters>(DEFAULT_POOL_FILTERS);
+  const [poolPage, setPoolPage] = useState(0);
   const [showFilters, setShowFilters] = useState(false);
+  const [statsGroup, setStatsGroup] = useState<SquadGroup | null>(null);
   const [pickQuery, setPickQuery] = useState('');
   const [showStats, setShowStats] = useState(false);
 
@@ -222,14 +228,15 @@ export default function SquadBuilderPage() {
     return names;
   }, [savedSquads, squadName]);
 
+  useEffect(() => {
+    const timer = window.setTimeout(() => setAppliedFilters(filters), 200);
+    return () => window.clearTimeout(timer);
+  }, [filters]);
+
   const poolPlayers = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    const wanted = POSITION_GROUPS[group];
-    return players
-      .filter(player => !q || fullName(player).toLowerCase().includes(q) || String(player.id).includes(q))
-      .filter(player => !wanted || player.metadata.positions.some(position => wanted.includes(position)))
-      .sort((a, b) => b.metadata.overall - a.metadata.overall);
-  }, [players, search, group]);
+    const picked = new Set(lineup ? lineupPlayerIds(lineup) : []);
+    return filterPool(players, search, appliedFilters, player => picked.has(player.id) || otherSquads.has(player.id));
+  }, [players, search, appliedFilters, lineup, otherSquads]);
 
   if (isReady && !walletAddress) {
     return <WalletGate title="Squad Builder" description="your players and build squads from them" />;
@@ -466,11 +473,20 @@ export default function SquadBuilderPage() {
           players={poolPlayers}
           totalCount={players.length}
           search={search}
-          onSearch={setSearch}
+          onSearch={value => {
+            setSearch(value);
+            setPoolPage(0);
+          }}
           showFilters={showFilters}
           onToggleFilters={() => setShowFilters(shown => !shown)}
-          group={group}
-          onGroup={setGroup}
+          filters={filters}
+          onFilters={next => {
+            setFilters(next);
+            setPoolPage(0);
+          }}
+          // Placing a player leaves the list on its page, unless hiding them empties the last one
+          page={Math.min(poolPage, Math.max(0, Math.ceil(poolPlayers.length / POOL_PAGE_SIZE) - 1))}
+          onPage={setPoolPage}
           whereIs={whereIs}
           onPlace={place}
           onDropBack={playerId => {
@@ -587,7 +603,12 @@ export default function SquadBuilderPage() {
         />
       </div>
 
-      {showStats && <SquadStatsTable lineup={lineup} playersById={playersById} onExport={handleExport} />}
+      {showStats && (
+        <div className="flex flex-col gap-3">
+          <SquadAnalysis players={lineupRows(lineup, playersById).map(row => row.player)} group={statsGroup} onGroup={setStatsGroup} />
+          <SquadStatsTable lineup={lineup} playersById={playersById} group={statsGroup} onExport={handleExport} />
+        </div>
+      )}
 
       {showSaveModal && (
         <SaveSquadModal name={pendingName} onName={setPendingName} onSave={confirmSaveName} onCancel={() => setShowSaveModal(false)} isSaving={isSaving} />

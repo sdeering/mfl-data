@@ -34,6 +34,15 @@ const agency = [
   player(14, 'Striker', 'Two', ['ST'], 74),
 ]
 
+// The filter range sliders measure themselves with ResizeObserver, which jsdom does not provide
+beforeAll(() => {
+  (global as any).ResizeObserver = class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  }
+})
+
 const mockWallet: { isConnected: boolean; account: string | null; viewedAddress: string | null; isReady: boolean } = {
   isConnected: true,
   account: '0xTEST',
@@ -202,5 +211,61 @@ describe('Squad Builder', () => {
     await renderBuilder()
     expect(screen.queryByRole('button', { name: 'GK: Keeper One, 80' })).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Pick a player for GK' })).toBeInTheDocument()
+  })
+
+  it('filters the players by card type, and can hide the ones already picked', async () => {
+    await renderBuilder()
+    const pool = screen.getByRole('region', { name: 'Your players' })
+    fireEvent.click(within(pool).getByRole('button', { name: 'Show Filters' }))
+
+    fireEvent.click(within(pool).getByRole('button', { name: 'Legendary' }))
+    await waitFor(() => expect(within(pool).queryByText('Centre Two')).not.toBeInTheDocument())
+    expect(within(pool).getByText('Centre One')).toBeInTheDocument()
+
+    fireEvent.click(within(pool).getByRole('button', { name: 'Reset Filters' }))
+    await within(pool).findByText('Centre Two')
+
+    // Both lineups start with all 14 players picked
+    fireEvent.click(within(pool).getByLabelText('Hide selected players'))
+    expect(await within(pool).findByText('No players match.')).toBeInTheDocument()
+    expect(within(pool).getAllByRole('slider').length).toBeGreaterThan(0)
+  })
+
+  it('pages the player list, staying on the page after placing a player from it', async () => {
+    const many = Array.from({ length: 45 }, (_, i) => player(100 + i, 'Squad', `Player ${String(i + 1).padStart(2, '0')}`, ['CM'], 90 - Math.floor(i / 2)))
+    supabaseDataService.getAgencyPlayers.mockResolvedValue(many)
+    await renderBuilder()
+    const pool = screen.getByRole('region', { name: 'Your players' })
+    expect(within(pool).getByText('Squad Player 20')).toBeInTheDocument()
+    expect(within(pool).queryByText('Squad Player 21')).not.toBeInTheDocument()
+
+    const pages = within(pool).getByRole('navigation', { name: 'Pages of players' })
+    fireEvent.click(within(pages).getByRole('button', { name: '2' }))
+    expect(within(pool).getByText('Squad Player 21')).toBeInTheDocument()
+    expect(within(pool).getByText('Showing 21-40 of 45')).toBeInTheDocument()
+
+    // The lineup's XI and bench take the best 18, so free a place first
+    fireEvent.click(screen.getByRole('button', { name: 'Remove Squad Player 01' }))
+    fireEvent.click(within(pool).getByText('Squad Player 25'))
+    expect(screen.getAllByRole('button', { name: /: Squad Player 25/ }).length).toBeGreaterThan(0)
+    expect(within(pages).getByRole('button', { name: '2' })).toHaveAttribute('aria-current', 'page')
+  })
+
+  it("shows the lineup's balance, ages and position coverage with its statistics", async () => {
+    await renderBuilder()
+    fireEvent.click(screen.getByRole('button', { name: 'Show Squad Statistics' }))
+
+    expect(screen.getByText('AVG (TOP11)')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Age Analysis' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Position Coverage' })).toBeInTheDocument()
+
+    // Picking a group in Squad Balance narrows the table to it
+    fireEvent.click(screen.getByRole('button', { name: /^Goalkeepers/ }))
+    expect(within(screen.getByRole('table')).getAllByRole('row')).toHaveLength(3)
+    fireEvent.click(screen.getByRole('button', { name: 'Reset' }))
+    expect(within(screen.getByRole('table')).getAllByRole('row')).toHaveLength(15)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Show all positions coverage' }))
+    expect(screen.getByRole('dialog', { name: 'All Positions Coverage' })).toBeInTheDocument()
   })
 })

@@ -7,6 +7,7 @@ import { getTierColors } from '../../utils/tierColors';
 import RetirementIcon from '../RetirementIcon';
 import { Panel, tableClass, tdClass, thClass, theadRowClass, rowClass } from '../ui';
 import { RatingText, STAT_KEYS, STAT_LABELS, fullName } from './shared';
+import { SquadGroup, playerGroups } from './SquadAnalysis';
 
 /** The lineup's players in order, each with their role: a position in the XI, or SUB. */
 export function lineupRows(lineup: Lineup, playersById: Map<number, MFLPlayer>): { role: string; player: MFLPlayer }[] {
@@ -46,19 +47,30 @@ export function lineupCsv(lineup: Lineup, playersById: Map<number, MFLPlayer>): 
 interface SquadStatsTableProps {
   lineup: Lineup;
   playersById: Map<number, MFLPlayer>;
+  /** Only the players who can play in this group, picked in Squad Balance */
+  group: SquadGroup | null;
   onExport: () => void;
 }
 
-export default function SquadStatsTable({ lineup, playersById, onExport }: SquadStatsTableProps) {
-  const rows = lineupRows(lineup, playersById);
+export default function SquadStatsTable({ lineup, playersById, group, onExport }: SquadStatsTableProps) {
+  const allRows = lineupRows(lineup, playersById);
+  const rows = group ? allRows.filter(({ player }) => playerGroups(player).includes(group)) : allRows;
   return (
     <Panel className="min-w-0 overflow-hidden">
       <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-[18px]">
-        <h2 className="m-0 font-display text-[22px] font-extrabold text-fg">Squad statistics · {lineup.name}</h2>
+        <h2 className="m-0 font-display text-[22px] font-extrabold text-fg">
+          Squad statistics · {lineup.name}
+          {group && (
+            <span className="font-semibold text-muted">
+              {' '}
+              ({rows.length} of {allRows.length})
+            </span>
+          )}
+        </h2>
         <button
           type="button"
           onClick={onExport}
-          disabled={rows.length === 0}
+          disabled={allRows.length === 0}
           className="inline-flex items-center justify-center h-[38px] px-4 rounded-full border border-pos-line bg-btn-pos text-pos-ink text-[13px] font-bold whitespace-nowrap cursor-pointer transition-colors hover:border-pos-ink disabled:opacity-50 disabled:cursor-not-allowed"
         >
           Export squad to Excel (CSV)
@@ -84,7 +96,7 @@ export default function SquadStatsTable({ lineup, playersById, onExport }: Squad
             {rows.length === 0 && (
               <tr>
                 <td colSpan={11} className="px-5 py-10 text-center text-sm font-medium text-muted">
-                  No players in this lineup yet.
+                  {group ? 'No players in this group.' : 'No players in this lineup yet.'}
                 </td>
               </tr>
             )}
