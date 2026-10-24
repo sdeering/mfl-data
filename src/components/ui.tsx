@@ -19,6 +19,9 @@ export const fieldClass =
   'h-10 px-3.5 rounded-xl border border-line-3 bg-field text-strong text-sm font-medium outline-none focus:border-line-hover';
 export const selectClass =
   'appearance-none h-10 pl-3.5 pr-9 rounded-xl border border-line-2 bg-field text-fg text-sm font-semibold cursor-pointer outline-none focus:border-line-hover';
+// For a row of many filters
+export const selectCompactClass =
+  'appearance-none h-10 pl-2.5 pr-6 rounded-xl border border-line-2 bg-field text-fg text-[13px] font-semibold cursor-pointer outline-none focus:border-line-hover';
 export const labelClass = 'flex flex-col gap-1.5 text-xs font-semibold text-muted';
 export const linkClass = 'text-accent-ink hover:text-accent-hover';
 
@@ -151,13 +154,31 @@ export const SearchField: React.FC<React.InputHTMLAttributes<HTMLInputElement> &
   </div>
 );
 
-/** Native select styled as in the design, with its own chevron. */
-export const Select: React.FC<React.SelectHTMLAttributes<HTMLSelectElement>> = ({ className = '', children, ...select }) => (
-  <span className="relative inline-block">
-    <select className={`${selectClass} ${className}`} {...select}>
+/**
+ * Native select styled as in the design, with its own chevron. `compact` trims it for a row of many filters;
+ * `block` makes it fill its container (give the select `w-full` too).
+ */
+export const Select: React.FC<React.SelectHTMLAttributes<HTMLSelectElement> & { compact?: boolean; block?: boolean }> = ({
+  className = '',
+  compact = false,
+  block = false,
+  children,
+  ...select
+}) => (
+  <span className={`relative ${block ? 'block' : 'inline-block'}`}>
+    <select className={`${compact ? selectCompactClass : selectClass} ${className}`} {...select}>
       {children}
     </select>
-    <svg className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-muted" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.4} aria-hidden="true">
+    <svg
+      className={`absolute ${compact ? 'right-2' : 'right-3'} top-1/2 -translate-y-1/2 pointer-events-none text-muted`}
+      width={compact ? 11 : 14}
+      height={compact ? 11 : 14}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2.4}
+      aria-hidden="true"
+    >
       <path d="m6 9 6 6 6-6" />
     </svg>
   </span>

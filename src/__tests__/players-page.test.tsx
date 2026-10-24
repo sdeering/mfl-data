@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import PlayerResultsPage from '../components/PlayerResultsPage';
 import { mflApi } from '../services/mflApi';
 import { LoadingProvider } from '../contexts/LoadingContext';
@@ -214,5 +214,24 @@ describe('Players Page Tests', () => {
     expect(await screen.findByText('Retirement in 5 years', {}, { timeout: 10000 })).toBeInTheDocument();
     expect(screen.queryByText('Retired')).not.toBeInTheDocument();
     expect(screen.queryByText(/career is over/)).not.toBeInTheDocument();
+  });
+
+  it('keeps links to other sites in an Other menu', async () => {
+    servePlayer(mockPlayer);
+
+    render(
+      <TestWrapper>
+        <PlayerResultsPage propPlayerId="12345" />
+      </TestWrapper>
+    );
+
+    const other = await screen.findByRole('button', { name: 'Other' }, { timeout: 10000 });
+    expect(screen.queryByRole('menuitem', { name: /mfl-assistant\.com/ })).not.toBeInTheDocument();
+
+    fireEvent.click(other);
+    expect(screen.getByRole('menuitem', { name: /mfl-assistant\.com/ })).toHaveAttribute(
+      'href',
+      'https://mfl-assistant.com/search?q=Test%20Player'
+    );
   });
 });

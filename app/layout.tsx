@@ -26,7 +26,7 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  title: 'MFL Data',
+  title: 'MFL Data - Free PlayMFL Tools',
   description: 'MFL Player Search Tool',
   keywords: ['MFL', '@playMFL', 'Metaverse', 'Football', 'league', 'football', 'calculator', 'player', 'ratings'],
   authors: [{ name: 'DogeSports' }],
@@ -35,12 +35,12 @@ export const metadata: Metadata = {
   applicationName: 'MFL Data',
   manifest: '/manifest.json',
   icons: {
-    icon: [
-      { url: '/favicon.ico', sizes: '48x48', type: 'image/x-icon' },
-    ],
+    // app/favicon.ico is linked automatically for browsers without SVG icons
+    icon: [{ url: '/icon.svg', type: 'image/svg+xml' }],
+    apple: [{ url: '/apple-icon.png', sizes: '180x180', type: 'image/png' }],
   },
   openGraph: {
-    title: 'MFL Data',
+    title: 'MFL Data - Free PlayMFL Tools',
     description: 'MFL Player Search Tool',
     type: 'website',
     url: 'https://mfldata.com',
@@ -48,7 +48,7 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'MFL Data',
+    title: 'MFL Data - Free PlayMFL Tools',
     description: 'MFL Player Search Tool',
     site: '@dogesports69',
   },

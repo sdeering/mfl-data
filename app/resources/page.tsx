@@ -89,8 +89,18 @@ const COACH_TOOLS = [
   },
 ];
 
-const ExternalLink: React.FC<{ href: string; className: string; children: React.ReactNode }> = ({ href, className, children }) => (
-  <a href={href} target="_blank" rel="noopener noreferrer" className={`transition-colors ${className}`}>
+// A box's main link stretches over the whole box (the box must be `relative`), so clicking anywhere in it follows the link.
+// Any other link in the box sits above it with `relative z-10`.
+const stretchedClass = "after:absolute after:inset-0 after:content-['']";
+const boxHoverClass = 'relative transition-colors hover:border-line-hover';
+
+const ExternalLink: React.FC<{ href: string; className: string; stretched?: boolean; children: React.ReactNode }> = ({
+  href,
+  className,
+  stretched = false,
+  children,
+}) => (
+  <a href={href} target="_blank" rel="noopener noreferrer" className={`transition-colors ${stretched ? stretchedClass : ''} ${className}`}>
     {children} ↗
   </a>
 );
@@ -112,12 +122,12 @@ export default function ResourcesPage() {
         </div>
         <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,380px),1fr))] gap-2.5">
           {PODCASTS.map(podcast => (
-            <div key={podcast.name} className="flex gap-3.5 px-4 py-3.5 rounded-2xl border border-line bg-inset">
+            <div key={podcast.name} className={`flex gap-3.5 px-4 py-3.5 rounded-2xl border border-line bg-inset ${boxHoverClass}`}>
               <span className="flex-none grid place-items-center w-10 h-10 rounded-full border border-violet-line bg-violet-bg font-display text-sm font-extrabold text-violet-ink">
                 {podcast.name.replace(/[^A-Za-z]/g, '').slice(0, 2).toUpperCase()}
               </span>
               <div className="flex flex-col gap-1 min-w-0">
-                <ExternalLink href={podcast.url} className="self-start text-[15px] font-bold text-violet-ink hover:text-violet-ink-2">
+                <ExternalLink stretched href={podcast.url} className="self-start text-[15px] font-bold text-violet-ink hover:text-violet-ink-2">
                   {podcast.name}
                 </ExternalLink>
                 <p className="m-0 text-sm leading-normal text-fg-4 text-pretty">
@@ -125,7 +135,7 @@ export default function ResourcesPage() {
                   {podcast.tutorialUrl && (
                     <>
                       {' '}
-                      <ExternalLink href={podcast.tutorialUrl} className="font-semibold text-violet-ink hover:text-violet-ink-2">
+                      <ExternalLink href={podcast.tutorialUrl} className="relative z-10 font-semibold text-violet-ink hover:text-violet-ink-2 hover:underline">
                         Beginner Tutorial
                       </ExternalLink>{' '}
                       and private members area with more live streams, videos and tutorials.
@@ -140,11 +150,11 @@ export default function ResourcesPage() {
 
       <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,340px),1fr))] gap-4">
         {SITES.map(site => (
-          <Panel key={site.name} className="flex flex-col gap-3 p-[22px]">
+          <Panel key={site.name} className={`flex flex-col gap-3 p-[22px] ${boxHoverClass}`}>
             <span className={`grid place-items-center w-10 h-10 rounded-xl font-display text-[15px] font-extrabold ${site.tile}`}>
               {site.initials}
             </span>
-            <ExternalLink href={site.url} className={`self-start font-display text-[22px] font-bold ${site.link}`}>
+            <ExternalLink stretched href={site.url} className={`self-start font-display text-[22px] font-bold ${site.link}`}>
               {site.name}
             </ExternalLink>
             <p className="m-0 text-sm leading-relaxed text-fg-4 text-pretty">{site.description}</p>
@@ -153,12 +163,13 @@ export default function ResourcesPage() {
       </div>
 
       <Panel className="flex flex-col gap-4 p-[22px]">
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="relative flex flex-wrap items-center gap-3">
           <span className="grid place-items-center w-10 h-10 rounded-xl bg-orange-400/16 font-display text-[15px] font-extrabold text-orange-600 dark:text-orange-400">
             MC
           </span>
           <div className="flex flex-col gap-0.5">
             <ExternalLink
+              stretched
               href="https://mfl-coach.com"
               className="self-start font-display text-[22px] font-bold text-orange-600 dark:text-orange-400 hover:text-orange-500 dark:hover:text-orange-300"
             >
@@ -169,9 +180,9 @@ export default function ResourcesPage() {
         </div>
         <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,260px),1fr))] gap-2.5">
           {COACH_TOOLS.map(tool => (
-            <div key={tool.name} className="flex flex-col gap-1.5 p-4 rounded-2xl border border-line bg-inset">
+            <div key={tool.name} className={`flex flex-col gap-1.5 p-4 rounded-2xl border border-line bg-inset ${boxHoverClass}`}>
               <span className="text-[11px] font-bold uppercase tracking-[0.1em] text-muted-3">{tool.kicker}</span>
-              <ExternalLink href={tool.url} className="self-start text-base font-bold text-orange-ink hover:text-orange-600 dark:hover:text-orange-300">
+              <ExternalLink stretched href={tool.url} className="self-start text-base font-bold text-orange-ink hover:text-orange-600 dark:hover:text-orange-300">
                 {tool.name}
               </ExternalLink>
               <span className="text-sm leading-normal text-fg-4 text-pretty">{tool.description}</span>

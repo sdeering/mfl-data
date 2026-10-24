@@ -90,6 +90,10 @@ function getPositionRating(player: MFLListing['player'], position: MFLPosition):
 const isOverallKey = (field: SortField): field is OverallKey => OVERALL_COLUMNS.some(column => column.key === field);
 
 const checkboxBoxClass = 'flex items-center justify-center h-10';
+// Each dropdown takes its share of the row, so every filter fits on one line on a wide screen.
+// Narrower, the filters wrap instead, and the minimum widths keep each one usable.
+const fieldClass = 'flex-1 min-w-[4.5rem] min-[90rem]:min-w-0';
+const wideFieldClass = 'flex-[1.75] min-w-[7.5rem] min-[90rem]:min-w-0';
 const checkboxClass = 'h-[18px] w-[18px] cursor-pointer accent-accent';
 
 function formatListedAgo(timestamp: number, now: number): string {
@@ -461,16 +465,19 @@ export default function ScoutPage() {
 
         {/* Filters - applied on Search, so MFL is only asked once per change of mind */}
         <form
-          className="flex flex-wrap items-end gap-3 px-[18px] py-4"
+          className="flex flex-wrap min-[90rem]:flex-nowrap items-end gap-2 px-[18px] py-4"
           aria-label="Listing filters"
           onSubmit={e => {
             e.preventDefault();
             search(draftFilters);
           }}
         >
-          <label className={`${labelClass} whitespace-nowrap`}>
+          <label className={`${labelClass} ${wideFieldClass} whitespace-nowrap`}>
             Position
             <Select
+              compact
+              block
+              className="w-full"
               title="Players who can play this position, not only as their primary one"
               value={draftFilters.position}
               onChange={e => setDraftFilters(current => ({ ...current, position: e.target.value }))}
@@ -483,9 +490,12 @@ export default function ScoutPage() {
             </Select>
           </label>
           {NUMBER_SELECTS.map(({ filter, label, title }) => (
-            <label key={filter} className={`${labelClass} whitespace-nowrap`}>
+            <label key={filter} className={`${labelClass} ${fieldClass} whitespace-nowrap`}>
               {label}
               <Select
+                compact
+                block
+                className="w-full"
                 title={title}
                 value={draftFilters[filter] ?? ''}
                 onChange={e => setDraftFilters(current => ({ ...current, [filter]: e.target.value === '' ? null : Number(e.target.value) }))}
@@ -496,7 +506,7 @@ export default function ScoutPage() {
             </label>
           ))}
           {/* The tick boxes sit as tall as the dropdowns, so the row stays level */}
-          <label className={`${labelClass} whitespace-nowrap`}>
+          <label className={`${labelClass} flex-none whitespace-nowrap`}>
             Free agent
             <span className={checkboxBoxClass}>
               <input
@@ -508,7 +518,7 @@ export default function ScoutPage() {
               />
             </span>
           </label>
-          <label className={`${labelClass} whitespace-nowrap`}>
+          <label className={`${labelClass} flex-none whitespace-nowrap`}>
             Off Pri
             <span className={checkboxBoxClass}>
               <input
@@ -520,7 +530,7 @@ export default function ScoutPage() {
               />
             </span>
           </label>
-          <label className={`${labelClass} whitespace-nowrap`}>
+          <label className={`${labelClass} flex-none whitespace-nowrap`}>
             New mint
             <span className={checkboxBoxClass}>
               <input
@@ -532,16 +542,19 @@ export default function ScoutPage() {
               />
             </span>
           </label>
-          <label className={`${labelClass} whitespace-nowrap`}>
+          <label className={`${labelClass} ${wideFieldClass} whitespace-nowrap`}>
             Listings
             <Select
+              compact
+              block
+              className="w-full"
               value={draftFilters.limit}
               onChange={e => setDraftFilters(current => ({ ...current, limit: Number(e.target.value) }))}
             >
               {LISTING_LIMITS.map(limit => <option key={limit} value={limit}>Newest {limit}</option>)}
             </Select>
           </label>
-          <div className="flex gap-2">
+          <div className="flex flex-none gap-2">
             <button type="submit" disabled={isBusy} className={btnPrimary}>
               Search
             </button>

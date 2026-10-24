@@ -36,6 +36,57 @@ const formatMintDate = (timestamp: number) =>
 const externalLinkClass =
   'flex items-center gap-2 h-[42px] px-5 rounded-full border border-line-2 bg-panel text-fg-2 text-sm font-semibold whitespace-nowrap cursor-pointer transition-colors hover:border-accent-ink hover:text-accent-ink';
 
+/** Links to other sites about the player, kept behind one button so more can be added without crowding the row. */
+const OtherLinksMenu: React.FC<{ links: { label: string; href: string }[] }> = ({ links }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const handlePointerDown = (event: PointerEvent) => {
+      if (!menuRef.current?.contains(event.target as Node)) setIsOpen(false);
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setIsOpen(false);
+    };
+    document.addEventListener('pointerdown', handlePointerDown);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isOpen]);
+
+  return (
+    <div ref={menuRef} className="relative">
+      <button type="button" onClick={() => setIsOpen(!isOpen)} aria-expanded={isOpen} aria-haspopup="menu" className={externalLinkClass}>
+        Other
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.6} className={`transition-transform ${isOpen ? 'rotate-180' : ''}`} aria-hidden="true">
+          <path d="m6 9 6 6 6-6" />
+        </svg>
+      </button>
+      {isOpen && (
+        <div role="menu" className="absolute right-0 top-[calc(100%+6px)] z-30 min-w-[220px] p-1.5 rounded-2xl border border-line-2 bg-panel shadow-[0_20px_50px_rgba(0,0,0,.45)] flex flex-col gap-0.5">
+          {links.map(link => (
+            <a
+              key={link.href}
+              role="menuitem"
+              href={link.href}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={() => setIsOpen(false)}
+              className="flex items-center justify-between gap-3 h-10 px-3 rounded-[10px] text-sm font-semibold text-fg-2 transition-colors hover:bg-chip hover:text-fg"
+            >
+              {link.label}
+              <span aria-hidden="true">↗</span>
+            </a>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
 // Function to add player to recent searches
 const addToRecentSearches = (player: MFLPlayer) => {
   try {
@@ -577,19 +628,20 @@ const PlayerResultsPage: React.FC<PlayerResultsPageProps> = ({ propPlayerId, ini
                 <span>mfl.com</span>
                 <span aria-hidden="true">↗</span>
               </button>
-              <button
-                onClick={() => window.open(`https://mfl-assistant.com/search?q=${encodeURIComponent(`${player!.metadata.firstName} ${player!.metadata.lastName}`)}`, '_blank')}
-                className={externalLinkClass}
-              >
-                <span>mfl-assistant.com</span>
-                <span aria-hidden="true">↗</span>
-              </button>
               <Link
                 href={isMintView ? `/players/${player.id}` : `/players/${player.id}?view=mint`}
                 className={externalLinkClass}
               >
                 {isMintView ? 'View current player' : 'View player mint'}
               </Link>
+              <OtherLinksMenu
+                links={[
+                  {
+                    label: 'mfl-assistant.com',
+                    href: `https://mfl-assistant.com/search?q=${encodeURIComponent(`${player!.metadata.firstName} ${player!.metadata.lastName}`)}`,
+                  },
+                ]}
+              />
             </div>
           )}
 
