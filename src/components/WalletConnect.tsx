@@ -18,7 +18,15 @@ const WalletConnect: React.FC<WalletConnectProps> = ({
   const { isConnected, account, connectWallet, disconnectWallet, isLoading, error } = useWallet();
   const { startSync, stopSync, isSyncing, progress } = useSupabaseSyncUI();
   const [showDropdown, setShowDropdown] = useState(false);
+  const [copied, setCopied] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Show the tick for a moment after copying the address
+  useEffect(() => {
+    if (!copied) return;
+    const timer = setTimeout(() => setCopied(false), 1500);
+    return () => clearTimeout(timer);
+  }, [copied]);
 
   const formatAddress = (address: string) => {
     return `${address.slice(0, 6)}...${address.slice(-4)}`;
@@ -60,6 +68,16 @@ const WalletConnect: React.FC<WalletConnectProps> = ({
     setShowDropdown(false);
   };
 
+  const handleCopyAddress = async () => {
+    if (!account) return;
+    try {
+      await navigator.clipboard.writeText(account);
+      setCopied(true);
+    } catch (error) {
+      console.error('Copying the wallet address failed:', error);
+    }
+  };
+
   const handleSync = () => {
     startSync(true); // Force refresh = true (clear all relationships and pull fresh)
   };
@@ -92,10 +110,29 @@ const WalletConnect: React.FC<WalletConnectProps> = ({
         </button>
 
         {showDropdown && (
-          <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 z-50">
+          <div className="absolute right-0 mt-2 w-56 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 z-50">
             <div className="p-3 border-b border-gray-200 dark:border-gray-700">
               <p className="text-sm text-gray-600 dark:text-gray-400">Connected as</p>
-              <p className="text-sm font-medium text-gray-900 dark:text-white break-all">{account}</p>
+              <div className="flex items-center gap-1.5">
+                <p className="min-w-0 text-sm font-medium text-gray-900 dark:text-white break-all">{account}</p>
+                <button
+                  type="button"
+                  onClick={handleCopyAddress}
+                  className={`flex-shrink-0 p-1 rounded-md transition-colors cursor-pointer ${copied ? 'text-green-600 dark:text-green-400' : 'text-gray-500 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-gray-100 dark:hover:bg-gray-700'}`}
+                  aria-label={copied ? 'Copied' : 'Copy wallet address'}
+                  title={copied ? 'Copied' : 'Copy wallet address'}
+                >
+                  {copied ? (
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                  ) : (
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                    </svg>
+                  )}
+                </button>
+              </div>
             </div>
             <div className="p-1">
               {isSyncing ? (
