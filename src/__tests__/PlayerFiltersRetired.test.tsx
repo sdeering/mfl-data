@@ -47,5 +47,27 @@ describe('PlayerFilters - include retired players', () => {
     render(<PlayerFilters filters={filters} onFiltersChange={jest.fn()} showSidebarFilters={true} />);
 
     expect(screen.queryByLabelText('Include retired players')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Exclude players retiring at the end of this season')).not.toBeInTheDocument();
+  });
+});
+
+describe('PlayerFilters - exclude players retiring this season', () => {
+  it('offers the tick box and reports changes when the page supports it', () => {
+    const onExcludeRetiringChange = jest.fn();
+    render(
+      <PlayerFilters
+        filters={filters}
+        onFiltersChange={jest.fn()}
+        showSidebarFilters={true}
+        excludeRetiring={false}
+        onExcludeRetiringChange={onExcludeRetiringChange}
+      />
+    );
+
+    const checkbox = screen.getByLabelText('Exclude players retiring at the end of this season');
+    expect(checkbox).not.toBeChecked();
+
+    fireEvent.click(checkbox);
+    expect(onExcludeRetiringChange).toHaveBeenCalledWith(true);
   });
 });

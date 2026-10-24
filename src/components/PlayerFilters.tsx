@@ -38,6 +38,9 @@ interface PlayerFiltersProps {
   // Pages listing owned players pass these to offer an "Include retired players" tick box
   includeRetired?: boolean;
   onIncludeRetiredChange?: (includeRetired: boolean) => void;
+  // ...and these for an "Exclude players retiring at the end of this season" tick box
+  excludeRetiring?: boolean;
+  onExcludeRetiringChange?: (excludeRetiring: boolean) => void;
 }
 
 export const PlayerFilters: React.FC<PlayerFiltersProps> = ({
@@ -48,6 +51,8 @@ export const PlayerFilters: React.FC<PlayerFiltersProps> = ({
   calculatePositionRating,
   includeRetired = false,
   onIncludeRetiredChange,
+  excludeRetiring = false,
+  onExcludeRetiringChange,
 }) => {
   const [localFilters, setLocalFilters] = useState<FilterState>(filters);
 
@@ -140,6 +145,17 @@ export const PlayerFilters: React.FC<PlayerFiltersProps> = ({
               className="h-4 w-4 rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500 cursor-pointer"
             />
             Include retired players
+          </label>
+        )}
+        {onExcludeRetiringChange && (
+          <label className="col-span-2 flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={excludeRetiring}
+              onChange={(e) => onExcludeRetiringChange(e.target.checked)}
+              className="h-4 w-4 rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500 cursor-pointer"
+            />
+            Exclude players retiring at the end of this season
           </label>
         )}
 

@@ -42,6 +42,9 @@ export function saveAppSettings(settings: AppSettings): void {
  */
 export const isRetiredPlayer = (player: MFLPlayer): boolean => player.metadata.retirementYears === 0;
 
+/** Players in their final season, who retire when it ends. */
+export const isRetiringThisSeason = (player: MFLPlayer): boolean => player.metadata.retirementYears === 1;
+
 /** Drops retired players when the "hide retired players" setting is on. */
 export function applyRetiredPlayersSetting<T extends MFLPlayer>(players: T[]): T[] {
   return loadAppSettings().hideRetiredPlayers ? players.filter(player => !isRetiredPlayer(player)) : players;

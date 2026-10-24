@@ -10,8 +10,9 @@ import { OverallRatingTooltip } from './OverallRatingTooltip';
 // Removed market value sync UI on agency page
 import * as XLSX from 'xlsx';
 import { PlayerFilters, FilterState, applyFilters } from './PlayerFilters';
-import { loadAppSettings, isRetiredPlayer } from '../utils/appSettings';
+import { loadAppSettings, isRetiredPlayer, isRetiringThisSeason } from '../utils/appSettings';
 import { calculateAllPositionOVRs } from '../utils/ruleBasedPositionCalculator';
+import { rankPositionRatings } from '../utils/positionRatingOrder';
 import RetirementIcon from './RetirementIcon';
 
 const AgencyPage: React.FC = () => {
@@ -41,6 +42,7 @@ const AgencyPage: React.FC = () => {
   useEffect(() => {
     setIncludeRetired(!loadAppSettings().hideRetiredPlayers);
   }, []);
+  const [excludeRetiring, setExcludeRetiring] = useState(false);
   const [filters, setFilters] = useState<FilterState>({
     filterPosition: 'all',
     selectedCardTypes: [],
@@ -453,7 +455,10 @@ const AgencyPage: React.FC = () => {
   // Filter and sort players based on search term, filters, and sort settings
   useEffect(() => {
     let filtered = includeRetired ? players : players.filter(player => !isRetiredPlayer(player));
-    
+    if (excludeRetiring) {
+      filtered = filtered.filter(player => !isRetiringThisSeason(player));
+    }
+
     // Apply filters first
     filtered = applyFilters(filtered, filters);
     
@@ -485,7 +490,7 @@ const AgencyPage: React.FC = () => {
     
     // Reset to first page when search term or filters change
     setCurrentPage(1);
-  }, [searchTerm, players, sortField, sortDirection, filters, includeRetired]);
+  }, [searchTerm, players, sortField, sortDirection, filters, includeRetired, excludeRetiring]);
 
   // Update displayed players based on current page
   useEffect(() => {
@@ -734,6 +739,8 @@ const AgencyPage: React.FC = () => {
                       showSidebarFilters={true}
                       includeRetired={includeRetired}
                       onIncludeRetiredChange={setIncludeRetired}
+                      excludeRetiring={excludeRetiring}
+                      onExcludeRetiringChange={setExcludeRetiring}
                     />
                   </div>
                 )}
@@ -947,13 +954,27 @@ const AgencyPage: React.FC = () => {
                       {(() => {
                         const positionRatings = getAllPositionRatings(player);
                         return (
-                          <div className="flex items-center gap-1">
-                            {player.metadata.positions.map(position => {
-                              const rating = positionRatings[position as MFLPosition];
+                          <div className="flex items-center gap-1.5">
+                            {rankPositionRatings(
+                              player.metadata.positions,
+                              position => positionRatings[position as MFLPosition]?.ovr ?? 0
+                            ).map(({ position, rating, isPrimary, diff }) => {
+                              const tierColors = getTierColor(rating);
                               return (
-                                <span key={position} className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
-                                  {position}
-                                  {rating?.success && <span className="font-bold">{rating.ovr}</span>}
+                                <span
+                                  key={position}
+                                  className="inline-flex items-center gap-0.5"
+                                  title={isPrimary ? 'Primary position' : diff > 0 ? `+${diff} vs primary position` : undefined}
+                                >
+                                  <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium ${tierColors.bg} ${tierColors.text} ${tierColors.border}`}>
+                                    {position}
+                                    {rating > 0 && <span className="font-bold">{rating}</span>}
+                                  </span>
+                                  {diff > 0 && (
+                                    <span className="text-xs text-green-600 dark:text-green-400">
+                                      +{diff}
+                                    </span>
+                                  )}
                                 </span>
                               );
                             })}
