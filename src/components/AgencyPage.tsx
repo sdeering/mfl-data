@@ -12,6 +12,7 @@ import * as XLSX from 'xlsx';
 import { PlayerFilters, FilterState, applyFilters } from './PlayerFilters';
 import { loadAppSettings, isRetiredPlayer } from '../utils/appSettings';
 import { calculateAllPositionOVRs } from '../utils/ruleBasedPositionCalculator';
+import RetirementIcon from './RetirementIcon';
 
 const AgencyPage: React.FC = () => {
   const { isConnected, account } = useWallet();
@@ -76,6 +77,18 @@ const AgencyPage: React.FC = () => {
 
   const getClubName = (player: MFLPlayer): string => {
     return player.activeContract?.club.name || 'No Club';
+  };
+
+  // Rating at every position, from the same rule-based calculator as the squad builder
+  const getAllPositionRatings = (player: MFLPlayer) => {
+    const m = player.metadata;
+    return calculateAllPositionOVRs({
+      id: player.id,
+      name: `${m.firstName} ${m.lastName}`,
+      attributes: { PAC: m.pace, SHO: m.shooting, PAS: m.passing, DRI: m.dribbling, DEF: m.defense, PHY: m.physical, GK: m.goalkeeping || 0 },
+      positions: (m.positions || []) as MFLPosition[],
+      overall: m.overall
+    }).results;
   };
 
   // Helper function to get tier color based on rating value (same as PlayerStatsGrid)
@@ -194,14 +207,7 @@ const AgencyPage: React.FC = () => {
       // Market value removed from export
       
       // Get position ratings and primary position
-      const m = player.metadata;
-      const positionRatings = calculateAllPositionOVRs({
-        id: player.id,
-        name: `${m.firstName} ${m.lastName}`,
-        attributes: { PAC: m.pace, SHO: m.shooting, PAS: m.passing, DRI: m.dribbling, DEF: m.defense, PHY: m.physical, GK: m.goalkeeping || 0 },
-        positions: (m.positions || []) as MFLPosition[],
-        overall: m.overall
-      }).results;
+      const positionRatings = getAllPositionRatings(player);
       const primaryPosition = player.metadata.positions?.[0] || 'N/A';
       
       // Define position order
@@ -903,20 +909,23 @@ const AgencyPage: React.FC = () => {
                   <tr key={player.id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
                     <td className="px-3 py-2 whitespace-nowrap">
                       <div>
-                        <button
-                          onClick={(e) => {
-                            if (e.ctrlKey || e.metaKey) {
-                              // Open in new window/tab when Ctrl/Cmd is held
-                              window.open(`/players/${player.id}`, '_blank');
-                            } else {
-                              // Normal navigation
-                              router.push(`/players/${player.id}`);
-                            }
-                          }}
-                          className="text-lg font-semibold text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 transition-colors cursor-pointer"
-                        >
-                          {formatPlayerName(player)}
-                        </button>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={(e) => {
+                              if (e.ctrlKey || e.metaKey) {
+                                // Open in new window/tab when Ctrl/Cmd is held
+                                window.open(`/players/${player.id}`, '_blank');
+                              } else {
+                                // Normal navigation
+                                router.push(`/players/${player.id}`);
+                              }
+                            }}
+                            className="text-lg font-semibold text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 transition-colors cursor-pointer"
+                          >
+                            {formatPlayerName(player)}
+                          </button>
+                          <RetirementIcon retirementYears={player.metadata.retirementYears} />
+                        </div>
                         <div className="text-sm text-gray-500 dark:text-gray-400">
                           ID: {player.id}
                         </div>
@@ -935,9 +944,22 @@ const AgencyPage: React.FC = () => {
                       })()}
                     </td>
                     <td className="px-3 py-2 whitespace-nowrap">
-                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
-                        {formatPositions(player)}
-                      </span>
+                      {(() => {
+                        const positionRatings = getAllPositionRatings(player);
+                        return (
+                          <div className="flex items-center gap-1">
+                            {player.metadata.positions.map(position => {
+                              const rating = positionRatings[position as MFLPosition];
+                              return (
+                                <span key={position} className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
+                                  {position}
+                                  {rating?.success && <span className="font-bold">{rating.ovr}</span>}
+                                </span>
+                              );
+                            })}
+                          </div>
+                        );
+                      })()}
                     </td>
                     <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-900 dark:text-white">
                       {player.metadata.age}
