@@ -158,4 +158,24 @@ describe('HomePage', () => {
       }
     });
   });
+
+  it('lists each tool in a box linking to it, marking the ones that need a wallet', () => {
+    renderWithProviders(<HomePage />);
+
+    const tools = [
+      { title: 'Agency Overview', path: '/agency', needsWallet: true },
+      { title: 'Club Overview', path: '/clubs', needsWallet: true },
+      { title: 'Player Progression Overview', path: '/player-progression', needsWallet: true },
+      { title: 'Player Compare Tool', path: '/compare', needsWallet: false },
+      { title: 'Player Scouting Tool', path: '/scout', needsWallet: false },
+      { title: 'Squad Builder Tool', path: '/squad-builder', needsWallet: true },
+      { title: 'MFL Resources Links', path: '/resources', needsWallet: false },
+    ];
+
+    for (const tool of tools) {
+      const box = screen.getByRole('link', { name: new RegExp(tool.title) });
+      expect(box).toHaveAttribute('href', tool.path);
+      expect(box.textContent?.includes('Needs wallet')).toBe(tool.needsWallet);
+    }
+  });
 });
