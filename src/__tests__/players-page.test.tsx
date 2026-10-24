@@ -172,4 +172,47 @@ describe('Players Page Tests', () => {
       expect(screen.getByText('Test Player')).toBeInTheDocument();
     }, { timeout: 10000 });
   });
+
+  const servePlayer = (player: typeof mockPlayer) => {
+    mockFetch.mockImplementation((url) => {
+      if (url.includes('/api/player/')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ success: true, data: player })
+        } as Response);
+      }
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ success: true, data: [] })
+      } as Response);
+    });
+  };
+
+  it('says clearly when a player has retired', async () => {
+    servePlayer({ ...mockPlayer, metadata: { ...mockPlayer.metadata, retirementYears: 0 } });
+
+    render(
+      <TestWrapper>
+        <PlayerResultsPage propPlayerId="12345" />
+      </TestWrapper>
+    );
+
+    expect(await screen.findByText(/Test Player's career is over/, {}, { timeout: 10000 })).toBeInTheDocument();
+    // The notice, the stamp on the card and the tag in the player information
+    expect(screen.getAllByText('Retired')).toHaveLength(3);
+  });
+
+  it('does not mark a player who is still playing as retired', async () => {
+    servePlayer(mockPlayer);
+
+    render(
+      <TestWrapper>
+        <PlayerResultsPage propPlayerId="12345" />
+      </TestWrapper>
+    );
+
+    expect(await screen.findByText('Retirement in 5 years', {}, { timeout: 10000 })).toBeInTheDocument();
+    expect(screen.queryByText('Retired')).not.toBeInTheDocument();
+    expect(screen.queryByText(/career is over/)).not.toBeInTheDocument();
+  });
 });

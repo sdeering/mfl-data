@@ -11,6 +11,7 @@ const pillClass = 'inline-flex items-center whitespace-nowrap leading-tight roun
 const TAG_CLASSES: Record<string, string> = {
   slow: 'bg-[rgba(249,115,22,.16)] text-orange-ink',
   retirement: 'bg-[rgba(249,115,22,.16)] text-orange-ink',
+  retired: 'bg-red-500/18 text-danger-ink',
   fast: 'bg-[rgba(138,230,58,.14)] text-pos-ink',
   lightningFast: 'bg-[rgba(138,230,58,.14)] text-pos-ink',
   positions: 'bg-[rgba(138,230,58,.14)] text-pos-ink',
@@ -72,8 +73,13 @@ export default function PlayerStats({ player, marketValueEstimate, progressionDa
       }
     }
     
-    // Retirement tag
-    if (player.metadata.retirementYears && player.metadata.retirementYears > 0) {
+    // Retirement tag (0 years left means the career is over)
+    if (player.metadata.retirementYears === 0) {
+      tags.push({
+        text: 'Retired',
+        type: 'retired'
+      });
+    } else if (player.metadata.retirementYears && player.metadata.retirementYears > 0) {
       tags.push({
         text: `Retirement in ${player.metadata.retirementYears} year${player.metadata.retirementYears > 1 ? 's' : ''}`,
         type: 'retirement'

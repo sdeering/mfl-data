@@ -8,6 +8,7 @@ import { getPlayerMarketValue, type MarketValueCalculationResult } from '../serv
 import { fetchPlayerExperienceHistory, processProgressionData, getMintSnapshot, MFL_HISTORY_START, type MintSnapshot } from '../services/playerExperienceService';
 import { fetchPlayerMatches } from '../services/playerMatchesService';
 import { calculateAllPositionOVRs } from '../utils/ruleBasedPositionCalculator';
+import { isRetiredPlayer } from '../utils/appSettings';
 import type { MFLPlayer } from '../types/mflApi';
 import type { MarketValueEstimate } from '../utils/marketValueCalculator';
 import PlayerImage from './PlayerImage';
@@ -469,10 +470,30 @@ const PlayerResultsPage: React.FC<PlayerResultsPageProps> = ({ propPlayerId, ini
     );
   }
 
+  // The mint view shows the player as they started, so it is never retired
+  const isRetired = !!player && !isMintView && isRetiredPlayer(player);
+
   return (
     <div className="flex flex-col gap-[22px]">
       {player && displayPlayer ? (
         <>
+          {isRetired && (
+            <div role="status" className="flex items-center gap-3.5 px-4 py-3.5 rounded-2xl border border-red-500/45 bg-red-500/12">
+              <span className="flex-none grid place-items-center w-10 h-10 rounded-xl bg-red-500/20 text-danger-ink" aria-hidden="true">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="3" y="5" width="18" height="16" rx="2" />
+                  <path d="M16 3v4M8 3v4M3 10h18M10 14l4 4M14 14l-4 4" />
+                </svg>
+              </span>
+              <div className="flex flex-col gap-0.5">
+                <p className="m-0 font-display text-lg font-bold text-danger-ink">Retired</p>
+                <p className="m-0 text-sm text-fg-2">
+                  {player.metadata.firstName} {player.metadata.lastName}&apos;s career is over. Retired players stay in their agency but can no longer sign a contract.
+                </p>
+              </div>
+            </div>
+          )}
+
           {/* Mint view notice */}
           {isMintView && (
             <div className="px-4 py-3 rounded-2xl border border-violet-line bg-violet-bg text-sm text-violet-ink-2 flex flex-wrap items-center justify-between gap-3">
@@ -519,7 +540,18 @@ const PlayerResultsPage: React.FC<PlayerResultsPageProps> = ({ propPlayerId, ini
 
             {/* Player Card */}
             <div className="flex flex-col items-center gap-4 @max-[664px]:order-first">
-              <PlayerImage player={displayPlayer} />
+              {isRetired ? (
+                <div className="relative">
+                  <div className="grayscale opacity-75">
+                    <PlayerImage player={displayPlayer} />
+                  </div>
+                  <span className="absolute left-1/2 top-[44%] -translate-x-1/2 -rotate-12 px-4 py-1.5 rounded-lg border-2 border-red-400 bg-red-600/90 font-display text-xl font-extrabold uppercase tracking-[0.12em] text-white shadow-[0_10px_30px_rgba(0,0,0,.5)]">
+                    Retired
+                  </span>
+                </div>
+              ) : (
+                <PlayerImage player={displayPlayer} />
+              )}
               {/* Keyed by view so training changes don't carry between current and mint */}
               <PlayerStatsGrid
                 key={isMintView ? 'mint' : 'current'}
