@@ -2,10 +2,10 @@
 
 import React, { useState, useEffect } from 'react';
 import { useWallet } from '../contexts/WalletContext';
-import { useRouter } from 'next/navigation';
 import { matchesService, MFLMatch } from '../services/matchesService';
 import { clubsService } from '../services/clubsService';
 import { PageHeader, Panel, Select, btnSecondary, labelClass, linkClass } from './ui';
+import WalletGate from './WalletGate';
 
 const chipClass = 'inline-flex items-center h-6 px-2.5 rounded-full border text-[11px] font-bold whitespace-nowrap';
 
@@ -112,7 +112,9 @@ const EmptyState: React.FC<{ title: string; message: string }> = ({ title, messa
 );
 
 const MatchesPage: React.FC = () => {
-  const { isConnected, account } = useWallet();
+  const { isConnected, account, viewedAddress = null } = useWallet();
+  // The connected wallet, or one pasted in to look at read-only
+  const walletAddress = (isConnected ? account : null) ?? viewedAddress;
   const [clubs, setClubs] = useState<any[]>([]);
   const [selectedClub, setSelectedClub] = useState<any>(null);
   const [pastMatches, setPastMatches] = useState<MFLMatch[]>([]);
@@ -122,36 +124,16 @@ const MatchesPage: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingMatches, setIsLoadingMatches] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const router = useRouter();
-
-  // Add a state to track if we've given enough time for wallet initialization
-  const [hasCheckedWallet, setHasCheckedWallet] = useState(false);
-
-  // Check wallet connection with delay to allow initialization
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setHasCheckedWallet(true);
-    }, 1500); // Give 1.5 seconds for wallet to initialize
-    
-    return () => clearTimeout(timer);
-  }, []);
-
-  // Only redirect if we've checked and wallet is still not connected
-  useEffect(() => {
-    if (hasCheckedWallet && !isConnected) {
-      router.push('/');
-    }
-  }, [hasCheckedWallet, isConnected, router]);
 
   const fetchClubs = async () => {
-    if (!account) return;
+    if (!walletAddress) return;
     
-    console.log('fetchClubs called with account:', account);
+    console.log('fetchClubs called with account:', walletAddress);
     setIsLoading(true);
     setError(null);
     
     try {
-      const clubsData = await clubsService.fetchClubsForWallet(account);
+      const clubsData = await clubsService.fetchClubsForWallet(walletAddress);
       console.log('Clubs data received:', clubsData);
       setClubs(clubsData);
       if (clubsData.length > 0) {
@@ -242,9 +224,9 @@ const MatchesPage: React.FC = () => {
   };
 
   useEffect(() => {
-    console.log('MatchesPage useEffect - isConnected:', isConnected, 'account:', account);
-    if (isConnected && account) {
-      console.log('Wallet connected, fetching clubs for:', account);
+    console.log('MatchesPage useEffect - wallet:', walletAddress);
+    if (walletAddress) {
+      console.log('Wallet connected, fetching clubs for:', walletAddress);
       // Fetch clubs in background - don't block UI
       fetchClubs().catch(err => {
         console.error('Background fetch clubs error:', err);
@@ -252,7 +234,7 @@ const MatchesPage: React.FC = () => {
     } else {
       console.log('Wallet not connected or no account address');
     }
-  }, [isConnected, account]);
+  }, [walletAddress]);
 
   useEffect(() => {
     console.log('selectedClub changed:', selectedClub);
@@ -270,33 +252,8 @@ const MatchesPage: React.FC = () => {
     }
   }, [selectedClub]);
 
-  // Show loading state while checking wallet connection
-  if (!hasCheckedWallet) {
-    return (
-      <div className="flex flex-col gap-[22px]">
-        <PageHeader title="MFL Matches" />
-        <Panel className="flex flex-col items-center gap-4 px-6 py-16 text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-accent"></div>
-          <p className="m-0 text-[15px] font-medium text-muted">
-            Loading...
-          </p>
-        </Panel>
-      </div>
-    );
-  }
-
-  // Show not connected message only after we've checked
-  if (!isConnected) {
-    return (
-      <div className="flex flex-col gap-[22px]">
-        <PageHeader title="MFL Matches" />
-        <Panel className="px-6 py-16 text-center">
-          <p className="m-0 text-[15px] font-medium text-muted">
-            Please connect your wallet to view your matches
-          </p>
-        </Panel>
-      </div>
-    );
+  if (!walletAddress) {
+    return <WalletGate title="MFL Matches" description="your clubs' matches" />;
   }
 
   const renderMatch = (match: MFLMatch, result: 'W' | 'L' | 'D' | null, showFormations: boolean) => (

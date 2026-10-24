@@ -32,6 +32,7 @@ import {
 } from '../utils/progressionSquads';
 import { getOverallPointsEvents } from '../utils/preciseOverallGain';
 import PlayerProgressionChart, { PlayerProgressionDayTable, SERIES_COLORS, type ProgressionChartMode } from './PlayerProgressionChart';
+import WalletGate from './WalletGate';
 import {
   KpiTile,
   PageHeader,
@@ -77,8 +78,9 @@ const highlightClass = 'font-semibold bg-[rgba(var(--glass-rgb),.03)]';
 const blank = <span className="text-faint-2">–</span>;
 
 export default function PlayerProgressionPage({ walletAddress }: PlayerProgressionPageProps) {
-  const { account } = useWallet();
-  const wallet = walletAddress ?? account;
+  const { account, viewedAddress = null } = useWallet();
+  // A wallet in the URL, else the connected one, else one pasted in to look at read-only
+  const wallet = walletAddress ?? account ?? viewedAddress;
 
   const [players, setPlayers] = useState<MFLPlayer[]>([]);
   const [ownedClubIds, setOwnedClubIds] = useState<Set<string>>(new Set());
@@ -87,7 +89,6 @@ export default function PlayerProgressionPage({ walletAddress }: PlayerProgressi
   const [histories, setHistories] = useState<PlayerHistories>({});
   const [progress, setProgress] = useState<ProgressionLoadProgress | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
-  const [hasCheckedWallet, setHasCheckedWallet] = useState(false);
   // Squad filter values whose histories are fully loaded, so going back to one is instant
   const loadedSquadsRef = useRef<Set<string>>(new Set());
 
@@ -102,12 +103,6 @@ export default function PlayerProgressionPage({ walletAddress }: PlayerProgressi
   const [sortField, setSortField] = useState<SortField>('total');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
   const [showAllRows, setShowAllRows] = useState(false);
-
-  // Give the wallet a moment to reconnect before asking the visitor to connect
-  useEffect(() => {
-    const timer = setTimeout(() => setHasCheckedWallet(true), 1000);
-    return () => clearTimeout(timer);
-  }, []);
 
   // Load the wallet's players and the clubs it owns. Both come from our own database.
   useEffect(() => {
@@ -311,16 +306,7 @@ export default function PlayerProgressionPage({ walletAddress }: PlayerProgressi
   );
 
   if (!wallet) {
-    return (
-      <div className="flex flex-col gap-5">
-        <PageHeader title="Player Progression" />
-        {hasCheckedWallet && (
-          <Panel className="px-5 py-16 text-center">
-            <p className="m-0 text-sm font-medium text-muted">Connect your wallet to see how your players are progressing.</p>
-          </Panel>
-        )}
-      </div>
-    );
+    return <WalletGate title="Player Progression" description="how your players are progressing" />;
   }
 
   return (

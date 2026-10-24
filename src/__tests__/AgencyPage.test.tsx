@@ -71,11 +71,19 @@ const striker = {
   },
 }
 
+const mockWallet: { isConnected: boolean; account: string | null; viewedAddress: string | null; connectWallet: jest.Mock; viewWallet: jest.Mock } = {
+  isConnected: true,
+  account: '0xTEST',
+  viewedAddress: null,
+  connectWallet: jest.fn(),
+  viewWallet: jest.fn(),
+}
+const mockStartSync = jest.fn()
 jest.mock('../contexts/WalletContext', () => ({
-  useWallet: () => ({ isConnected: true, account: '0xTEST' }),
+  useWallet: () => mockWallet,
 }))
 jest.mock('../contexts/SupabaseSyncContext', () => ({
-  useSupabaseSyncUI: () => ({ startSync: jest.fn(), isSyncing: false, progress: [] }),
+  useSupabaseSyncUI: () => ({ startSync: mockStartSync, isSyncing: false, progress: [] }),
 }))
 jest.mock('next/navigation', () => ({
   useRouter: () => ({ push: jest.fn(), replace: jest.fn(), prefetch: jest.fn() }),
@@ -155,5 +163,34 @@ describe('AgencyPage player table', () => {
     // Retiring later, or not at all, they stay
     expect(screen.getByText('Igor Pavlović')).toBeInTheDocument()
     expect(screen.getByText('Test Striker')).toBeInTheDocument()
+  })
+})
+
+describe('AgencyPage without a connected wallet', () => {
+  const { supabaseDataService } = jest.requireMock('../services/clientDataService')
+
+  afterEach(() => {
+    Object.assign(mockWallet, { isConnected: true, account: '0xTEST', viewedAddress: null })
+  })
+
+  it('offers to connect a wallet or view one, instead of leaving the page', () => {
+    Object.assign(mockWallet, { isConnected: false, account: null, viewedAddress: null })
+    render(<AgencyPage />)
+
+    expect(screen.getByRole('button', { name: 'Connect Wallet' })).toBeInTheDocument()
+    expect(screen.getByLabelText('Wallet address')).toBeInTheDocument()
+  })
+
+  it("shows a pasted wallet's players read-only, without syncing it", async () => {
+    Object.assign(mockWallet, { isConnected: false, account: null, viewedAddress: '0x95dc70d7d39f6f76' })
+    supabaseDataService.getAgencyPlayers.mockClear()
+    mockStartSync.mockClear()
+    render(<AgencyPage />)
+
+    expect(await screen.findByText('Igor Pavlović')).toBeInTheDocument()
+    expect(supabaseDataService.getAgencyPlayers).toHaveBeenCalledWith('0x95dc70d7d39f6f76', { includeRetired: true })
+    expect(screen.getByRole('heading', { name: /^MFL Agency/ })).toHaveTextContent('MFL Agency')
+    expect(screen.getByText(/read-only/)).toBeInTheDocument()
+    expect(mockStartSync).not.toHaveBeenCalled()
   })
 })

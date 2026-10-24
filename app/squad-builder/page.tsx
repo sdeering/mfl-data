@@ -12,6 +12,7 @@ import { MFLPlayer } from '../../src/types/mflApi';
 import { getSquads, saveSquad, updateSquad, deleteSquad, loadSquad, SavedSquad } from '../../src/services/squadService';
 import { useToast, ToastContainer } from '../../src/components/Toast';
 import RetirementIcon from '../../src/components/RetirementIcon';
+import WalletGate from '../../src/components/WalletGate';
 import {
   PageHeader,
   Panel,
@@ -623,7 +624,10 @@ function DroppablePositionSlot({ position, index, player, formation, activePlaye
 
 export default function SquadBuilderPage() {
   const router = useRouter();
-  const { isConnected, account } = useWallet();
+  const { isConnected, account, viewedAddress = null, isReady = true } = useWallet();
+  // The connected wallet, or one pasted in to look at read-only (squads are only saved for your own)
+  const walletAddress = (isConnected ? account : null) ?? viewedAddress;
+  const isViewing = !(isConnected && account) && !!viewedAddress;
   
   // State management
   const [players, setPlayers] = useState<MFLPlayer[]>([]);
@@ -686,7 +690,6 @@ export default function SquadBuilderPage() {
   });
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [hasCheckedWallet, setHasCheckedWallet] = useState(false);
   const [activePlayer, setActivePlayer] = useState<MFLPlayer | null>(null);
   const [savedSquads, setSavedSquads] = useState<SavedSquad[]>([]);
   // Simplified save flow: use inline squad.name and save directly
@@ -1004,22 +1007,10 @@ export default function SquadBuilderPage() {
     })
   );
 
-  // Redirect if not connected (with delay to allow wallet to initialize)
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setHasCheckedWallet(true);
-      if (!isConnected) {
-        router.push('/');
-      }
-    }, 1000); // 1 second delay
-
-    return () => clearTimeout(timer);
-  }, [isConnected, router]);
-
   // Load agency players
   useEffect(() => {
     const loadPlayers = async () => {
-      if (!account) return;
+      if (!walletAddress) return;
       
       setIsLoadingPlayers(true);
       setPlayersError(null);
@@ -1030,7 +1021,7 @@ export default function SquadBuilderPage() {
         setError(null);
         
         console.log('🔍 Loading agency players for squad builder...');
-        const agencyPlayers = await supabaseDataService.getAgencyPlayers(account);
+        const agencyPlayers = await supabaseDataService.getAgencyPlayers(walletAddress);
         
         console.log(`📊 Loaded ${agencyPlayers.length} agency players`);
         setPlayers(agencyPlayers);
@@ -1049,10 +1040,10 @@ export default function SquadBuilderPage() {
       }
     };
 
-    if (account) {
+    if (walletAddress) {
       loadPlayers();
     }
-  }, [account]);
+  }, [walletAddress]);
 
   // Debounce attribute/rating sliders
   useEffect(() => {
@@ -1485,13 +1476,17 @@ export default function SquadBuilderPage() {
   };
 
 
+  if (isReady && !walletAddress) {
+    return <WalletGate title="Squad Builder" description="your players and build squads from them" />;
+  }
+
   // Loading state
-  if (!hasCheckedWallet || isLoading) {
+  if (!isReady || isLoading) {
     return (
       <Panel className="flex flex-col items-center justify-center gap-4 py-16 text-center">
         <div className={`w-8 h-8 ${spinnerClass}`}></div>
         <p className="m-0 text-sm font-medium text-muted">
-          {!hasCheckedWallet ? 'Checking wallet connection...' : 'Loading squad builder...'}
+          {!isReady ? 'Checking wallet connection...' : 'Loading squad builder...'}
         </p>
       </Panel>
     );
@@ -1549,6 +1544,13 @@ export default function SquadBuilderPage() {
       <div className="flex flex-col gap-5">
         <PageHeader
           title="Squad Builder"
+          subtitle={
+            isViewing ? (
+              <>
+                Viewing <span className="font-mono text-sm text-fg-2">{walletAddress}</span> read-only · connect your wallet to save squads
+              </>
+            ) : undefined
+          }
           actions={
             <>
               {tableSortedPlayers.length > 0 && (
@@ -1560,16 +1562,18 @@ export default function SquadBuilderPage() {
                 </button>
               )}
 
-              <button
-                className={btnPill}
-                onClick={() => setShowLoadModal(true)}
-                title="Load Squad"
-              >
-                Load Squad
-              </button>
+              {!isViewing && (
+                <button
+                  className={btnPill}
+                  onClick={() => setShowLoadModal(true)}
+                  title="Load Squad"
+                >
+                  Load Squad
+                </button>
+              )}
 
-              {/* Save Squad (only when there are players) */}
-              {squadSize > 0 && (
+              {/* Save Squad (only when there are players, and only for your own wallet) */}
+              {squadSize > 0 && !isViewing && (
                 <button
                   className={btnPrimary}
                   onClick={handleSaveSquad}
@@ -1646,12 +1650,12 @@ export default function SquadBuilderPage() {
                   <p className="m-0 text-sm text-fg-3">{playersError}</p>
                   <button
                     onClick={() => {
-                      if (account) {
+                      if (walletAddress) {
                         const loadPlayers = async () => {
                           setIsLoadingPlayers(true);
                           setPlayersError(null);
                           try {
-                            const agencyPlayers = await supabaseDataService.getAgencyPlayers(account);
+                            const agencyPlayers = await supabaseDataService.getAgencyPlayers(walletAddress);
                             setPlayers(agencyPlayers);
                             setFilteredPlayers(agencyPlayers);
                             // Silent on initial visit: no popup

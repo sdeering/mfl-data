@@ -14,6 +14,7 @@ import { loadAppSettings, isRetiredPlayer, isRetiringThisSeason } from '../utils
 import { calculateAllPositionOVRs } from '../utils/ruleBasedPositionCalculator';
 import { rankPositionRatings } from '../utils/positionRatingOrder';
 import RetirementIcon from './RetirementIcon';
+import WalletGate from './WalletGate';
 import {
   PageHeader,
   Panel,
@@ -32,7 +33,11 @@ import {
 } from './ui';
 
 const AgencyPage: React.FC = () => {
-  const { isConnected, account } = useWallet();
+  const { isConnected, account, viewedAddress = null } = useWallet();
+  const ownWallet = isConnected ? account : null;
+  // The connected wallet, or one pasted in to look at read-only
+  const walletAddress = ownWallet ?? viewedAddress;
+  const isViewing = !ownWallet && !!viewedAddress;
   const { startSync, isSyncing, progress: syncProgress } = useSupabaseSyncUI();
   const [players, setPlayers] = useState<MFLPlayer[]>([]);
   const [filteredPlayers, setFilteredPlayers] = useState<MFLPlayer[]>([]);
@@ -44,7 +49,6 @@ const AgencyPage: React.FC = () => {
   const [sortField, setSortField] = useState<string>('overall');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
   const [currentPage, setCurrentPage] = useState(1);
-  const [hasCheckedWallet, setHasCheckedWallet] = useState(false);
   const [hasAttemptedLoad, setHasAttemptedLoad] = useState(false);
   const [refreshingPlayers, setRefreshingPlayers] = useState<Set<number>>(new Set());
   const [syncJobId, setSyncJobId] = useState<string | null>(null);
@@ -321,24 +325,12 @@ const AgencyPage: React.FC = () => {
     }
   };
 
-  // Redirect if not connected (with delay to allow wallet to initialize)
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setHasCheckedWallet(true);
-      if (!isConnected) {
-        router.push('/');
-      }
-    }, 1000); // 1 second delay
-
-    return () => clearTimeout(timer);
-  }, [isConnected, router]);
-
   // Removed: market values fetching on agency page
 
   const fetchMFLPlayers = async () => {
-    if (!account) return;
+    if (!walletAddress) return;
     
-    console.log('🔍 fetchMFLPlayers called for account:', account);
+    console.log('🔍 fetchMFLPlayers called for account:', walletAddress);
     setIsLoading(true);
     setError(null);
     setHasAttemptedLoad(true);
@@ -347,7 +339,7 @@ const AgencyPage: React.FC = () => {
       // Use Supabase data service instead of MFL API
       console.log('🔍 Fetching agency players from database...');
       // Retired players are loaded too; the "Include retired players" filter decides whether they show
-      const playerData = await supabaseDataService.getAgencyPlayers(account, { includeRetired: true });
+      const playerData = await supabaseDataService.getAgencyPlayers(walletAddress, { includeRetired: true });
       console.log('📊 Fetched players from database:', playerData.length, 'players');
       
       if (playerData.length === 0) {
@@ -386,20 +378,21 @@ const AgencyPage: React.FC = () => {
 
 
   useEffect(() => {
-    if (isConnected && account) {
+    if (walletAddress) {
       hasAutoSyncedRef.current = false; // Reset auto-sync flag for new account
       fetchMFLPlayers();
     }
-  }, [isConnected, account]);
+  }, [walletAddress]);
 
   // Auto-sync when no players are found (only if global sync is not already running)
   useEffect(() => {
-    if (hasAttemptedLoad && !isLoading && !error && players.length === 0 && account && !isSyncing && !hasAutoSyncedRef.current) {
+    // Only your own wallet syncs; a viewed one shows what is already stored
+    if (hasAttemptedLoad && !isLoading && !error && players.length === 0 && ownWallet && !isSyncing && !hasAutoSyncedRef.current) {
       console.log('No players found, auto-syncing...');
       hasAutoSyncedRef.current = true; // Prevent multiple auto-syncs
       handleSyncPlayers();
     }
-  }, [hasAttemptedLoad, isLoading, error, players.length, account, isSyncing]);
+  }, [hasAttemptedLoad, isLoading, error, players.length, ownWallet, isSyncing]);
 
   // Refetch players when sync completes
   useEffect(() => {
@@ -468,22 +461,8 @@ const AgencyPage: React.FC = () => {
     setDisplayedPlayers(paginatedPlayers);
   }, [filteredPlayers, currentPage, playersPerPage]);
 
-  if (!isConnected) {
-    return (
-      <div className="flex flex-col gap-[22px]">
-        <PageHeader title="My MFL Agency" />
-        <Panel className="flex items-center justify-center gap-3 px-6 py-12 text-muted">
-          {!hasCheckedWallet ? (
-            <>
-              <div className="animate-spin rounded-full h-6 w-6 border-2 border-accent border-t-transparent"></div>
-              <span>Checking wallet connection...</span>
-            </>
-          ) : (
-            <p className="m-0">Please connect your wallet to view your players</p>
-          )}
-        </Panel>
-      </div>
-    );
+  if (!walletAddress) {
+    return <WalletGate title="My MFL Agency" description="every player you own" />;
   }
 
   const statColumns: { field: 'pace' | 'shooting' | 'passing' | 'dribbling' | 'defense' | 'physical'; label: string }[] = [
@@ -524,12 +503,16 @@ const AgencyPage: React.FC = () => {
   return (
     <div className="flex flex-col gap-[22px]">
       <PageHeader
-        title="My MFL Agency"
+        title={isViewing ? 'MFL Agency' : 'My MFL Agency'}
         count={`(${filteredPlayers.length}${filteredPlayers.length !== players.length ? ` of ${players.length}` : ''} players)`}
         subtitle={
-          totalPages > 1
-            ? `Showing ${((currentPage - 1) * playersPerPage) + 1}–${Math.min(currentPage * playersPerPage, filteredPlayers.length)} of ${filteredPlayers.length} players`
-            : undefined
+          isViewing || totalPages > 1 ? (
+            <>
+              {isViewing && <>Viewing <span className="font-mono text-sm text-fg-2">{walletAddress}</span> read-only</>}
+              {isViewing && totalPages > 1 && ' · '}
+              {totalPages > 1 && `Showing ${((currentPage - 1) * playersPerPage) + 1}–${Math.min(currentPage * playersPerPage, filteredPlayers.length)} of ${filteredPlayers.length} players`}
+            </>
+          ) : undefined
         }
       />
 
@@ -549,7 +532,14 @@ const AgencyPage: React.FC = () => {
         </div>
       )}
 
-      {!isLoading && !error && hasAttemptedLoad && players.length === 0 && !isSyncing && (
+      {!isLoading && !error && hasAttemptedLoad && players.length === 0 && isViewing && (
+        <Panel className="flex flex-col items-center gap-2 px-6 py-12 text-center">
+          <h3 className="m-0 font-display text-xl font-bold text-fg">No players stored for this wallet</h3>
+          <p className="m-0 text-muted">They appear here once the wallet&apos;s owner connects it on MFL Data.</p>
+        </Panel>
+      )}
+
+      {!isLoading && !error && hasAttemptedLoad && players.length === 0 && !isViewing && !isSyncing && (
         <Panel className="flex flex-col items-center gap-3 px-6 py-12 text-center">
           <svg className="w-14 h-14 text-faint" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z" />
@@ -562,7 +552,7 @@ const AgencyPage: React.FC = () => {
         </Panel>
       )}
 
-      {!isLoading && !error && hasAttemptedLoad && players.length === 0 && isSyncing && (
+      {!isLoading && !error && hasAttemptedLoad && players.length === 0 && !isViewing && isSyncing && (
         <Panel className="flex flex-col items-center gap-3 px-6 py-12 text-center">
           <div className="animate-spin rounded-full h-14 w-14 border-2 border-accent border-t-transparent"></div>
           <h3 className="m-0 font-display text-xl font-bold text-fg">Syncing Your Players</h3>

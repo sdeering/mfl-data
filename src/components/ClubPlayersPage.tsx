@@ -2,7 +2,6 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { useWallet } from '@/src/contexts/WalletContext';
 import { clubPlayersService, ClubPlayer } from '@/src/services/clubPlayersService';
 import { clubsService } from '@/src/services/clubsService';
 import { OverallRatingTooltip } from './OverallRatingTooltip';
@@ -46,7 +45,6 @@ interface ClubPlayersPageProps {
 
 export default function ClubPlayersPage({ clubId }: ClubPlayersPageProps) {
   const router = useRouter();
-  const { isConnected, account } = useWallet();
   const [players, setPlayers] = useState<ClubPlayer[]>([]);
   const [clubInfo, setClubInfo] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
@@ -82,14 +80,10 @@ export default function ClubPlayersPage({ clubId }: ClubPlayersPageProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [activeTab, setActiveTab] = useState<'players' | 'training'>('players');
 
+  // A club's players are public, so the page works with or without a wallet
   useEffect(() => {
-    if (!isConnected || !account) {
-      router.push('/');
-      return;
-    }
-
     fetchClubPlayers();
-  }, [clubId, isConnected, account]);
+  }, [clubId]);
 
   const fetchClubPlayers = async () => {
     try {
@@ -294,19 +288,6 @@ export default function ClubPlayersPage({ clubId }: ClubPlayersPageProps) {
       </div>
     </th>
   );
-
-  if (!isConnected) {
-    return (
-      <Panel className="flex flex-col items-center gap-2 px-6 py-16 text-center">
-        <h2 className="m-0 font-display text-2xl font-bold text-fg">
-          Wallet Not Connected
-        </h2>
-        <p className="m-0 text-[15px] font-medium text-muted">
-          Please connect your wallet to view club players.
-        </p>
-      </Panel>
-    );
-  }
 
   if (error) {
     return (

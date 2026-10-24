@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import * as fcl from '@onflow/fcl';
+import { normalizeWalletAddress } from '../utils/walletAddress';
 
 interface WalletContextType {
   isConnected: boolean;
@@ -12,7 +13,15 @@ interface WalletContextType {
   disconnectWallet: () => void;
   isLoading: boolean;
   error: string | null;
+  // True once the saved login and any viewed wallet have been checked, so pages don't flash their wallet prompt
+  isReady: boolean;
+  // A wallet pasted in to look around read-only, when none is connected
+  viewedAddress: string | null;
+  viewWallet: (address: string) => boolean;
+  stopViewingWallet: () => void;
 }
+
+const VIEWED_WALLET_KEY = 'mfl-data-viewed-wallet';
 
 const WalletContext = createContext<WalletContextType | undefined>(undefined);
 
@@ -27,6 +36,8 @@ export const WalletProvider: React.FC<WalletProviderProps> = ({ children }) => {
   const [user, setUser] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isReady, setIsReady] = useState(false);
+  const [viewedAddress, setViewedAddress] = useState<string | null>(null);
 
   // Initialize FCL and check connection on mount
   useEffect(() => {
@@ -40,6 +51,12 @@ export const WalletProvider: React.FC<WalletProviderProps> = ({ children }) => {
       }
       originalWarn.apply(console, args);
     };
+
+    try {
+      setViewedAddress(normalizeWalletAddress(window.localStorage.getItem(VIEWED_WALLET_KEY) ?? ''));
+    } catch {
+      // Remembering the viewed wallet is a convenience
+    }
 
     const initializeFCL = async () => {
       try {
@@ -67,6 +84,8 @@ export const WalletProvider: React.FC<WalletProviderProps> = ({ children }) => {
         }
       } catch (error) {
         console.error('Error initializing FCL:', error);
+      } finally {
+        setIsReady(true);
       }
     };
 
@@ -85,6 +104,8 @@ export const WalletProvider: React.FC<WalletProviderProps> = ({ children }) => {
         setUser(user);
         setAccount(user.addr);
         setIsConnected(true);
+        // Their own wallet replaces one they were looking at
+        stopViewingWallet();
         
         // Redirect to agency page after successful connection
         if (typeof window !== 'undefined' && window.location.pathname === '/') {
@@ -154,6 +175,27 @@ export const WalletProvider: React.FC<WalletProviderProps> = ({ children }) => {
     }
   };
 
+  const viewWallet = (address: string): boolean => {
+    const normalized = normalizeWalletAddress(address);
+    if (!normalized) return false;
+    setViewedAddress(normalized);
+    try {
+      window.localStorage.setItem(VIEWED_WALLET_KEY, normalized);
+    } catch {
+      // Remembering the viewed wallet is a convenience
+    }
+    return true;
+  };
+
+  function stopViewingWallet() {
+    setViewedAddress(null);
+    try {
+      window.localStorage.removeItem(VIEWED_WALLET_KEY);
+    } catch {
+      // Nothing was remembered
+    }
+  }
+
   const value: WalletContextType = {
     isConnected,
     account,
@@ -162,6 +204,10 @@ export const WalletProvider: React.FC<WalletProviderProps> = ({ children }) => {
     disconnectWallet,
     isLoading,
     error,
+    isReady,
+    viewedAddress,
+    viewWallet,
+    stopViewingWallet,
   };
 
   return (

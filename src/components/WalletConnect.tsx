@@ -28,7 +28,7 @@ const pillClass =
 const itemClass = 'w-full flex items-center gap-2 h-10 px-3 rounded-[10px] text-left text-sm font-semibold transition-colors cursor-pointer';
 
 const WalletConnect: React.FC<WalletConnectProps> = ({ className = '' }) => {
-  const { isConnected, account, connectWallet, disconnectWallet, isLoading, error } = useWallet();
+  const { isConnected, account, connectWallet, disconnectWallet, isLoading, error, viewedAddress = null, stopViewingWallet } = useWallet();
   const { startSync, stopSync, isSyncing, progress } = useSupabaseSyncUI();
   const [showDropdown, setShowDropdown] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -140,11 +140,32 @@ const WalletConnect: React.FC<WalletConnectProps> = ({ className = '' }) => {
   }
 
   return (
-    <button onClick={handleConnect} disabled={isLoading} className={`${pillClass} ${className}`}>
-      {isLoading ? <Spinner /> : <WalletIcon />}
-      <span className="hidden min-[30rem]:inline">{isLoading ? 'Connecting...' : 'Connect Wallet'}</span>
-      <span className="min-[30rem]:hidden">{isLoading ? '' : 'Connect'}</span>
-    </button>
+    <>
+      {viewedAddress && (
+        <span
+          className="hidden md:flex flex-none items-center gap-1.5 h-10 pl-3.5 pr-1 rounded-full border border-[rgba(var(--glass-rgb),.12)] bg-[rgba(var(--glass-rgb),.05)] text-[13px] font-semibold text-fg-2 whitespace-nowrap"
+          title="Looking at this wallet read-only"
+        >
+          Viewing <span className="font-mono font-medium text-fg">{formatAddress(viewedAddress)}</span>
+          <button
+            type="button"
+            onClick={stopViewingWallet}
+            aria-label="Stop viewing this wallet"
+            title="Stop viewing this wallet"
+            className="grid place-items-center w-8 h-8 rounded-full text-muted cursor-pointer transition-colors hover:text-fg hover:bg-chip"
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.6} aria-hidden="true">
+              <path d="M6 6l12 12M18 6 6 18" />
+            </svg>
+          </button>
+        </span>
+      )}
+      <button onClick={handleConnect} disabled={isLoading} className={`${pillClass} ${className}`}>
+        {isLoading ? <Spinner /> : <WalletIcon />}
+        <span className="hidden min-[30rem]:inline">{isLoading ? 'Connecting...' : 'Connect Wallet'}</span>
+        <span className="min-[30rem]:hidden">{isLoading ? '' : 'Connect'}</span>
+      </button>
+    </>
   );
 };
 

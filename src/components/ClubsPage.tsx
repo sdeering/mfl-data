@@ -5,10 +5,13 @@ import { useRouter } from 'next/navigation';
 import { useWallet } from '../contexts/WalletContext';
 import { clubsService, MFLClubData } from '../services/clubsService';
 import { PageHeader, Panel, SearchField, btnSecondary } from './ui';
+import WalletGate from './WalletGate';
 
 export default function ClubsPage() {
   const router = useRouter();
-  const { isConnected, account } = useWallet();
+  const { isConnected, account, viewedAddress = null } = useWallet();
+  // The connected wallet, or one pasted in to look at read-only
+  const walletAddress = (isConnected ? account : null) ?? viewedAddress;
   const [clubs, setClubs] = useState<MFLClubData[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -16,7 +19,7 @@ export default function ClubsPage() {
   const [hasAttemptedFetch, setHasAttemptedFetch] = useState(false);
 
   useEffect(() => {
-    if (isConnected && account) {
+    if (walletAddress) {
       // Add a small delay to ensure wallet state is fully loaded
       const timer = setTimeout(() => {
         fetchClubs();
@@ -24,10 +27,10 @@ export default function ClubsPage() {
       
       return () => clearTimeout(timer);
     }
-  }, [isConnected, account]);
+  }, [walletAddress]);
 
   const fetchClubs = async () => {
-    if (!account) {
+    if (!walletAddress) {
       return;
     }
 
@@ -36,7 +39,7 @@ export default function ClubsPage() {
     setHasAttemptedFetch(true);
 
     try {
-      const clubsData = await clubsService.fetchClubsForWallet(account);
+      const clubsData = await clubsService.fetchClubsForWallet(walletAddress);
       setClubs(clubsData);
     } catch (err) {
       console.error('Error fetching clubs:', err);
@@ -63,17 +66,8 @@ export default function ClubsPage() {
       return a.club.division - b.club.division;
     });
 
-  if (!isConnected) {
-    return (
-      <div className="flex flex-col gap-[22px]">
-        <PageHeader title="MFL Clubs" />
-        <Panel className="px-6 py-16 text-center">
-          <p className="m-0 text-[15px] font-medium text-muted">
-            Please connect your wallet to view your clubs
-          </p>
-        </Panel>
-      </div>
-    );
+  if (!walletAddress) {
+    return <WalletGate title="MFL Clubs" description="the clubs you own" />;
   }
 
   if (error) {
