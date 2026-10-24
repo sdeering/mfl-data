@@ -2,7 +2,7 @@ import type { MFLPlayer } from '../types/mflApi';
 import type { MFLPosition } from '../types/positionOvr';
 import type { SavedSquad, SquadLineups, SquadPlayers } from '../services/squadService';
 import { calculatePositionOVR } from './ruleBasedPositionCalculator';
-import { isRetiredPlayer } from './appSettings';
+import { isRetiredPlayer, isRetiringThisSeason } from './appSettings';
 
 /*
  * The squad builder's model: a squad is one or more lineups (the same players tried in different formations),
@@ -103,9 +103,12 @@ function placeBestFit(formation: string, players: MFLPlayer[]): (number | null)[
   return xi;
 }
 
-/** The best XI the players can make in a formation, with the next best on the bench (a goalkeeper first). */
-export function autoFillLineup(formation: string, players: MFLPlayer[]): Pick<Lineup, 'xi' | 'bench'> {
-  const available = players.filter(player => !isRetiredPlayer(player));
+/**
+ * The best XI the players can make in a formation, with the next best on the bench (a goalkeeper first).
+ * Retired players are never picked; `skipRetiring` also leaves out those retiring at the end of this season.
+ */
+export function autoFillLineup(formation: string, players: MFLPlayer[], { skipRetiring = false } = {}): Pick<Lineup, 'xi' | 'bench'> {
+  const available = players.filter(player => !isRetiredPlayer(player) && !(skipRetiring && isRetiringThisSeason(player)));
   const xi = placeBestFit(formation, available);
   const rest = available.filter(player => !xi.includes(player.id)).sort((a, b) => b.metadata.overall - a.metadata.overall);
   const keeper = rest.find(isGoalkeeper);
@@ -174,12 +177,6 @@ export function nextLineupName(lineups: Lineup[]): string {
     if (!taken.has(`Lineup ${letter}`)) return `Lineup ${letter}`;
   }
   return `Lineup ${lineups.length + 1}`;
-}
-
-/** The season the agency's contracts run in: MFL gives each a start season, and they last a season at a time. */
-export function currentSeason(players: MFLPlayer[]): number | null {
-  const seasons = players.map(player => player.activeContract?.startSeason).filter((season): season is number => typeof season === 'number');
-  return seasons.length ? Math.max(...seasons) : null;
 }
 
 // Saving

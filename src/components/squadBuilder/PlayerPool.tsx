@@ -33,6 +33,7 @@ interface PlayerPoolProps {
   onFilters: (filters: PoolFilters) => void;
   page: number;
   onPage: (page: number) => void;
+  season: number | null;
   whereIs: (player: MFLPlayer) => PoolUse | null;
   onPlace: (player: MFLPlayer) => void;
   /** Dropping a lineup's player back on the pool takes them out of it */
@@ -55,6 +56,7 @@ export default function PlayerPool({
   onFilters,
   page,
   onPage,
+  season,
   whereIs,
   onPlace,
   onDropBack,
@@ -103,7 +105,7 @@ export default function PlayerPool({
       <div className="flex flex-col gap-2 max-h-[26rem] min-[64rem]:max-h-[1060px] overflow-y-auto pr-0.5">
         {players.length === 0 && <p className="m-0 py-8 text-center text-sm font-medium text-muted">No players match.</p>}
         {shown.map(player => (
-          <PoolCard key={player.id} player={player} use={whereIs(player)} onPlace={() => onPlace(player)} drag={drag} />
+          <PoolCard key={player.id} player={player} season={season} use={whereIs(player)} onPlace={() => onPlace(player)} drag={drag} />
         ))}
       </div>
 
@@ -212,6 +214,19 @@ const FiltersPanel: React.FC<{ filters: PoolFilters; onFilters: (filters: PoolFi
 
       <div className="flex items-center gap-2">
         <input
+          id="hide-retiring"
+          type="checkbox"
+          checked={filters.hideRetiring}
+          onChange={e => set({ hideRetiring: e.target.checked })}
+          className="w-4 h-4 cursor-pointer accent-accent"
+        />
+        <label htmlFor="hide-retiring" className="text-sm font-medium text-fg-3 select-none cursor-pointer">
+          Hide players retiring at the end of this season
+        </label>
+      </div>
+
+      <div className="flex items-center gap-2">
+        <input
           id="hide-selected"
           type="checkbox"
           checked={filters.hideSelected}
@@ -235,7 +250,13 @@ const FiltersPanel: React.FC<{ filters: PoolFilters; onFilters: (filters: PoolFi
   );
 };
 
-const PoolCard: React.FC<{ player: MFLPlayer; use: PoolUse | null; onPlace: () => void; drag: DragHandlers }> = ({ player, use, onPlace, drag }) => {
+const PoolCard: React.FC<{ player: MFLPlayer; season: number | null; use: PoolUse | null; onPlace: () => void; drag: DragHandlers }> = ({
+  player,
+  season,
+  use,
+  onPlace,
+  drag,
+}) => {
   const m = player.metadata;
   const inLineup = use?.label === 'XI' || use?.label === 'Bench';
   return (
@@ -265,7 +286,7 @@ const PoolCard: React.FC<{ player: MFLPlayer; use: PoolUse | null; onPlace: () =
         <div className="flex-1 min-w-0 flex flex-col gap-[3px]">
           <div className="flex items-center gap-1.5 min-w-0">
             <span className="text-[15px] font-bold text-fg truncate">{fullName(player)}</span>
-            <RetirementIcon retirementYears={m.retirementYears} className="w-3 h-3" />
+            <RetirementIcon retirementYears={m.retirementYears} currentSeason={season} className="w-3 h-3" />
           </div>
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs font-semibold text-muted">
             {m.positions.slice(0, 3).map(position => {

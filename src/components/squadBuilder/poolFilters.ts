@@ -1,6 +1,7 @@
 import type { MFLPlayer } from '../../types/mflApi';
 import type { MFLPosition } from '../../types/positionOvr';
 import { positionFit } from '../../utils/squadLineups';
+import { isRetiringThisSeason } from '../../utils/appSettings';
 import { STAT_KEYS, fullName } from './shared';
 
 export type StatKey = (typeof STAT_KEYS)[number];
@@ -36,6 +37,8 @@ export interface PoolFilters {
   stats: Record<StatKey, Range>;
   /** Leave out players in the lineup or in another saved squad */
   hideSelected: boolean;
+  /** Leave out players retiring at the end of this season, here and when auto-filling */
+  hideRetiring: boolean;
 }
 
 const FULL: Range = [0, 100];
@@ -46,6 +49,7 @@ export const DEFAULT_POOL_FILTERS: PoolFilters = {
   positionRating: FULL,
   stats: { pace: FULL, shooting: FULL, passing: FULL, dribbling: FULL, defense: FULL, physical: FULL },
   hideSelected: false,
+  hideRetiring: false,
 };
 
 export const isFiltering = (filters: PoolFilters) => JSON.stringify(filters) !== JSON.stringify(DEFAULT_POOL_FILTERS);
@@ -68,6 +72,7 @@ export function filterPool(players: MFLPlayer[], search: string, filters: PoolFi
         within(m.overall, filters.overall) &&
         STAT_KEYS.every(key => within(m[key] ?? 0, filters.stats[key])) &&
         (!filters.hideSelected || !isSelected(player)) &&
+        (!filters.hideRetiring || !isRetiringThisSeason(player)) &&
         // Last, as it works out ratings
         (filters.positionRating === FULL || within(bestPositionRating(player), filters.positionRating))
       );

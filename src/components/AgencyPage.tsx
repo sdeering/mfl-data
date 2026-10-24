@@ -11,6 +11,7 @@ import { OverallRatingTooltip } from './OverallRatingTooltip';
 import * as XLSX from 'xlsx';
 import { PlayerFilters, FilterState, applyFilters } from './PlayerFilters';
 import { loadAppSettings, isRetiredPlayer, isRetiringThisSeason } from '../utils/appSettings';
+import { currentSeason } from '../utils/playerSeasons';
 import { calculateAllPositionOVRs } from '../utils/ruleBasedPositionCalculator';
 import { rankPositionRatings } from '../utils/positionRatingOrder';
 import RetirementIcon from './RetirementIcon';
@@ -40,6 +41,8 @@ const AgencyPage: React.FC = () => {
   const isViewing = !ownWallet && !!viewedAddress;
   const { startSync, isSyncing, progress: syncProgress } = useSupabaseSyncUI();
   const [players, setPlayers] = useState<MFLPlayer[]>([]);
+  // For the retirement icons to say which season a player retires at the end of
+  const season = currentSeason(players);
   const [filteredPlayers, setFilteredPlayers] = useState<MFLPlayer[]>([]);
   const [displayedPlayers, setDisplayedPlayers] = useState<MFLPlayer[]>([]);
   // Removed market values state (no longer shown on agency table)
@@ -728,7 +731,7 @@ const AgencyPage: React.FC = () => {
                                 >
                                   {formatPlayerName(player)}
                                 </button>
-                                <RetirementIcon retirementYears={player.metadata.retirementYears} />
+                                <RetirementIcon retirementYears={player.metadata.retirementYears} currentSeason={season} />
                               </div>
                               <div className="font-mono text-xs text-muted-3">
                                 ID {player.id}

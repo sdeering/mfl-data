@@ -6,7 +6,6 @@ import {
   autoFillLineup,
   bestFreeSlot,
   changeFormation,
-  currentSeason,
   emptyBench,
   emptyXi,
   fromSavedSquad,
@@ -14,6 +13,7 @@ import {
   savedSquadPlayerIds,
   toSavedSquad,
 } from '../utils/squadLineups'
+import { currentSeason } from '../utils/playerSeasons'
 
 // Every attribute the same, so a player rates their overall at their primary position, less MFL's familiarity penalty elsewhere
 const player = (id: number, positions: string[], overall: number, extra: Partial<MFLPlayer['metadata']> = {}): MFLPlayer => {
@@ -64,6 +64,14 @@ describe('autoFillLineup', () => {
     // 4-3-3: GK, LB, CB, CB, RB, CM, CDM, CM, LW, ST, RW
     expect(xi).toEqual(ids([keeperA, lb, cbA, cbB, rb, cmA, cdm, cmB, lw, stA, rw]))
     expect(bench).toEqual([...ids([keeperB, cbC, stB]), null, null, null, null])
+  })
+
+  it('can leave out players retiring at the end of this season', () => {
+    const retiring = player(31, ['ST'], 99, { retirementYears: 1 })
+    expect(autoFillLineup('4-3-3', [...squad, retiring]).xi).toContain(31)
+    const { xi, bench } = autoFillLineup('4-3-3', [...squad, retiring], { skipRetiring: true })
+    expect([...xi, ...bench]).not.toContain(31)
+    expect(xi[9]).toBe(stA.id)
   })
 
   it('leaves out retired players', () => {

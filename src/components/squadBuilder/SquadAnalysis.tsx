@@ -35,10 +35,11 @@ interface SquadAnalysisProps {
   players: MFLPlayer[];
   group: SquadGroup | null;
   onGroup: (group: SquadGroup | null) => void;
+  season: number | null;
 }
 
 /** Averages, balance, ages and position coverage of a lineup, above its statistics table. */
-export default function SquadAnalysis({ players, group, onGroup }: SquadAnalysisProps) {
+export default function SquadAnalysis({ players, group, onGroup, season }: SquadAnalysisProps) {
   const [showCoverage, setShowCoverage] = useState(false);
   const overalls = players.map(player => player.metadata.overall).sort((a, b) => b - a);
   const outfield = players.filter(player => !player.metadata.positions.includes('GK'));
@@ -160,13 +161,13 @@ export default function SquadAnalysis({ players, group, onGroup }: SquadAnalysis
         </Panel>
       </div>
 
-      {showCoverage && <CoverageModal players={players} onClose={() => setShowCoverage(false)} />}
+      {showCoverage && <CoverageModal players={players} season={season} onClose={() => setShowCoverage(false)} />}
     </div>
   );
 }
 
 /** For every position, the players who rate within a few points of their overall there, best first. */
-function CoverageModal({ players, onClose }: { players: MFLPlayer[]; onClose: () => void }) {
+function CoverageModal({ players, season, onClose }: { players: MFLPlayer[]; season: number | null; onClose: () => void }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60">
       <div
@@ -200,7 +201,7 @@ function CoverageModal({ players, onClose }: { players: MFLPlayer[]; onClose: ()
                       <div key={player.id} className="flex items-center justify-between gap-2 text-[13px]">
                         <span className="flex items-center gap-1 min-w-0 font-medium text-fg-2">
                           <span className="truncate">{fullName(player)}</span>
-                          <RetirementIcon retirementYears={player.metadata.retirementYears} className="w-3 h-3" />
+                          <RetirementIcon retirementYears={player.metadata.retirementYears} currentSeason={season} className="w-3 h-3" />
                         </span>
                         <TierText value={rating} />
                       </div>

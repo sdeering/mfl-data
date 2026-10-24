@@ -49,10 +49,11 @@ interface SquadStatsTableProps {
   playersById: Map<number, MFLPlayer>;
   /** Only the players who can play in this group, picked in Squad Balance */
   group: SquadGroup | null;
+  season: number | null;
   onExport: () => void;
 }
 
-export default function SquadStatsTable({ lineup, playersById, group, onExport }: SquadStatsTableProps) {
+export default function SquadStatsTable({ lineup, playersById, group, season, onExport }: SquadStatsTableProps) {
   const allRows = lineupRows(lineup, playersById);
   const rows = group ? allRows.filter(({ player }) => playerGroups(player).includes(group)) : allRows;
   return (
@@ -110,7 +111,7 @@ export default function SquadStatsTable({ lineup, playersById, group, onExport }
                       <Link href={`/players/${player.id}`} className="text-sm font-bold text-fg hover:text-accent-ink">
                         {fullName(player)}
                       </Link>
-                      <RetirementIcon retirementYears={m.retirementYears} className="w-3 h-3" />
+                      <RetirementIcon retirementYears={m.retirementYears} currentSeason={season} className="w-3 h-3" />
                     </span>
                   </td>
                   <td className={tdClass}>

@@ -88,7 +88,7 @@ const renderBuilder = async () => {
 const pitchSlot = (position: string) => screen.getAllByRole('button', { name: new RegExp(`^(${position}: |Pick a player for ${position}$)`) })
 
 describe('Squad Builder', () => {
-  it('starts with the best XI in each of two formations, and the season', async () => {
+  it('starts with the best XI in each of two formations', async () => {
     await renderBuilder()
 
     expect(screen.getByRole('button', { name: /^Lineup A/ })).toHaveAttribute('aria-pressed', 'true')
@@ -96,7 +96,8 @@ describe('Squad Builder', () => {
     expect(screen.getByRole('button', { name: 'GK: Keeper One, 80' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'ST: Striker One, 75' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Sub 1: Keeper Two' })).toBeInTheDocument()
-    expect(screen.getByText('S27')).toBeInTheDocument()
+    // The season only shows in the retirement icons' labels
+    expect(screen.queryByText('S27')).not.toBeInTheDocument()
   })
 
   it('lists the best players for a picked position first, and puts the one chosen there', async () => {
@@ -143,10 +144,10 @@ describe('Squad Builder', () => {
     expect(screen.getByRole('button', { name: 'GK: Keeper One, 80' })).toBeInTheDocument()
   })
 
-  it('shows the lineup in a statistics table', async () => {
+  it('shows the lineup in a statistics table, without having to open it', async () => {
     await renderBuilder()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Show Squad Statistics' }))
+    expect(screen.queryByRole('button', { name: /Squad Statistics/ })).not.toBeInTheDocument()
     const table = screen.getByRole('table')
     // 11 starters and 3 substitutes, under the header
     expect(within(table).getAllByRole('row')).toHaveLength(15)
@@ -231,6 +232,23 @@ describe('Squad Builder', () => {
     expect(within(pool).getAllByRole('slider').length).toBeGreaterThan(0)
   })
 
+  it('can hide players retiring at the end of this season, and then leaves them out of auto-fill', async () => {
+    supabaseDataService.getAgencyPlayers.mockResolvedValue(
+      agency.map(p => (p.id === 13 ? { ...p, metadata: { ...p.metadata, retirementYears: 1 } } : p))
+    )
+    await renderBuilder()
+    expect(screen.getByRole('button', { name: 'ST: Striker One, 75' })).toBeInTheDocument()
+
+    const pool = screen.getByRole('region', { name: 'Your players' })
+    fireEvent.click(within(pool).getByRole('button', { name: 'Show Filters' }))
+    fireEvent.click(within(pool).getByLabelText('Hide players retiring at the end of this season'))
+    await waitFor(() => expect(within(pool).queryByText('Striker One')).not.toBeInTheDocument())
+
+    fireEvent.click(screen.getByRole('button', { name: 'Auto-fill best XI' }))
+    expect(screen.getByRole('button', { name: 'ST: Striker Two, 74' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /: Striker One/ })).not.toBeInTheDocument()
+  })
+
   it('pages the player list, staying on the page after placing a player from it', async () => {
     const many = Array.from({ length: 45 }, (_, i) => player(100 + i, 'Squad', `Player ${String(i + 1).padStart(2, '0')}`, ['CM'], 90 - Math.floor(i / 2)))
     supabaseDataService.getAgencyPlayers.mockResolvedValue(many)
@@ -253,7 +271,6 @@ describe('Squad Builder', () => {
 
   it("shows the lineup's balance, ages and position coverage with its statistics", async () => {
     await renderBuilder()
-    fireEvent.click(screen.getByRole('button', { name: 'Show Squad Statistics' }))
 
     expect(screen.getByText('AVG (TOP11)')).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Age Analysis' })).toBeInTheDocument()

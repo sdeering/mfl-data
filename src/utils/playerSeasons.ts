@@ -1,3 +1,4 @@
+import type { MFLPlayer } from '../types/mflApi';
 import type { PlayerMatchStats } from '../types/playerMatches';
 
 // Every league starts a new competition each season, all on about the same day; a club that moves
@@ -70,4 +71,10 @@ export function groupMatchesBySeason(matches: PlayerMatchStats[], count: number,
 export function coversSeasons(matches: PlayerMatchStats[], count: number): boolean {
   // Seeing a league match from the season before means every match of the oldest wanted one is in
   return getSeasonStarts(matches).length > count;
+}
+
+/** The season the agency's contracts run in: MFL gives each a start season, and they last a season at a time. */
+export function currentSeason(players: MFLPlayer[]): number | null {
+  const seasons = players.map(player => player.activeContract?.startSeason).filter((season): season is number => typeof season === 'number');
+  return seasons.length ? Math.max(...seasons) : null;
 }

@@ -16,7 +16,6 @@ import {
   autoFillLineup,
   bestFreeSlot,
   changeFormation,
-  currentSeason,
   defaultLineups,
   emptyBench,
   emptyXi,
@@ -28,6 +27,7 @@ import {
   toSavedSquad,
   XI_SIZE,
 } from '../utils/squadLineups';
+import { currentSeason } from '../utils/playerSeasons';
 import { useToast, ToastContainer } from './Toast';
 import WalletGate from './WalletGate';
 import { PageHeader, Panel, Select, btnDanger, btnPill, btnPrimary } from './ui';
@@ -111,7 +111,6 @@ export default function SquadBuilderPage() {
   const [showFilters, setShowFilters] = useState(false);
   const [statsGroup, setStatsGroup] = useState<SquadGroup | null>(null);
   const [pickQuery, setPickQuery] = useState('');
-  const [showStats, setShowStats] = useState(false);
 
   const [savedSquads, setSavedSquads] = useState<SavedSquad[]>([]);
   const [isLoadingSquads, setIsLoadingSquads] = useState(false);
@@ -422,13 +421,6 @@ export default function SquadBuilderPage() {
     <div className="flex flex-col gap-[18px]">
       <PageHeader
         title="Squad Builder"
-        badge={
-          season !== null && (
-            <span title={`Season ${season}`} className="inline-flex items-center px-3 py-[5px] rounded-full border border-chip-line bg-chip font-display text-sm font-extrabold text-fg">
-              S{season}
-            </span>
-          )
-        }
         subtitle={
           isViewing ? (
             <>
@@ -442,9 +434,6 @@ export default function SquadBuilderPage() {
         }
         actions={
           <>
-            <button type="button" className={btnPill} onClick={() => setShowStats(shown => !shown)}>
-              {showStats ? 'Hide Squad Statistics' : 'Show Squad Statistics'}
-            </button>
             {ownWallet && (
               <button type="button" className={btnPill} onClick={() => setShowLoadModal(true)}>
                 Load Squad
@@ -487,6 +476,7 @@ export default function SquadBuilderPage() {
           // Placing a player leaves the list on its page, unless hiding them empties the last one
           page={Math.min(poolPage, Math.max(0, Math.ceil(poolPlayers.length / POOL_PAGE_SIZE) - 1))}
           onPage={setPoolPage}
+          season={season}
           whereIs={whereIs}
           onPlace={place}
           onDropBack={playerId => {
@@ -561,7 +551,7 @@ export default function SquadBuilderPage() {
               <button
                 type="button"
                 onClick={() => {
-                  updateLineup(current => ({ ...current, ...autoFillLineup(current.formation, players) }));
+                  updateLineup(current => ({ ...current, ...autoFillLineup(current.formation, players, { skipRetiring: filters.hideRetiring }) }));
                   setSelected(null);
                 }}
                 className="inline-flex items-center justify-center h-10 px-4 rounded-full border border-pos-line bg-btn-pos text-pos-ink text-[13px] font-bold whitespace-nowrap cursor-pointer transition-colors hover:border-pos-ink"
@@ -603,12 +593,10 @@ export default function SquadBuilderPage() {
         />
       </div>
 
-      {showStats && (
-        <div className="flex flex-col gap-3">
-          <SquadAnalysis players={lineupRows(lineup, playersById).map(row => row.player)} group={statsGroup} onGroup={setStatsGroup} />
-          <SquadStatsTable lineup={lineup} playersById={playersById} group={statsGroup} onExport={handleExport} />
-        </div>
-      )}
+      <div className="flex flex-col gap-3">
+        <SquadAnalysis players={lineupRows(lineup, playersById).map(row => row.player)} group={statsGroup} onGroup={setStatsGroup} season={season} />
+        <SquadStatsTable lineup={lineup} playersById={playersById} group={statsGroup} season={season} onExport={handleExport} />
+      </div>
 
       {showSaveModal && (
         <SaveSquadModal name={pendingName} onName={setPendingName} onSave={confirmSaveName} onCancel={() => setShowSaveModal(false)} isSaving={isSaving} />
