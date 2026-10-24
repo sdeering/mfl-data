@@ -21,7 +21,7 @@ export function LineupPitch({ lineup, playersById, selected, onSelect, onRemove,
   return (
     <div className="w-full max-w-[700px] mx-auto">
       <div
-        className="relative w-full aspect-[5/6] rounded-3xl overflow-hidden shadow-[0_24px_60px_rgba(0,0,0,.35)]"
+        className="@container relative w-full aspect-[5/6] rounded-3xl overflow-hidden shadow-[0_24px_60px_rgba(0,0,0,.35)]"
         style={{ background: 'repeating-linear-gradient(180deg,#11482c 0 8.333%,#145233 8.333% 16.666%)' }}
       >
         <div className={`${pitchLine} inset-[4%] rounded`} />
@@ -47,7 +47,8 @@ export function LineupPitch({ lineup, playersById, selected, onSelect, onRemove,
               onDragOver={drag.over(key)}
               onDragLeave={drag.leave(key)}
               onDrop={drag.drop(slot)}
-              className="absolute z-[2] -translate-x-1/2 -translate-y-1/2 w-[72px] sm:w-24 flex flex-col items-center gap-[5px]"
+              // 15% bigger once the pitch is wide enough to have room for it
+              className="absolute z-[2] -translate-x-1/2 -translate-y-1/2 @min-[600px]:scale-[1.15] w-[72px] sm:w-24 flex flex-col items-center gap-[5px]"
               style={{ left: `${x}%`, top: `${y}%` }}
             >
               {player ? (
@@ -134,7 +135,8 @@ const FilledPosition: React.FC<{
           <CloseIcon size={9} strokeWidth={3.2} />
         </button>
       </div>
-      <div className="flex items-center gap-[5px] max-w-full py-[3px] px-2 sm:pr-1 rounded-full bg-[rgba(8,12,10,.82)] backdrop-blur-md">
+      {/* Wider than its spot on the pitch when the name needs it, so "Silvestre CDM" fits */}
+      <div className="flex items-center gap-[5px] max-w-full sm:w-max sm:max-w-[8.5rem] py-[3px] px-2 sm:pr-1 rounded-full bg-[rgba(8,12,10,.82)] backdrop-blur-md">
         <span className="text-[11px] sm:text-xs font-bold text-white truncate">{shortName(player)}</span>
         {/* On a phone the name needs the room; the ring's colour still shows the fit */}
         <span

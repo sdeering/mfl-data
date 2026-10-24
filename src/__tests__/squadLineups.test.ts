@@ -66,14 +66,6 @@ describe('autoFillLineup', () => {
     expect(bench).toEqual([...ids([keeperB, cbC, stB]), null, null, null, null])
   })
 
-  it('can leave out players retiring at the end of this season', () => {
-    const retiring = player(31, ['ST'], 99, { retirementYears: 1 })
-    expect(autoFillLineup('4-3-3', [...squad, retiring]).xi).toContain(31)
-    const { xi, bench } = autoFillLineup('4-3-3', [...squad, retiring], { skipRetiring: true })
-    expect([...xi, ...bench]).not.toContain(31)
-    expect(xi[9]).toBe(stA.id)
-  })
-
   it('leaves out retired players', () => {
     const retired = player(30, ['ST'], 99, { retirementYears: 0 })
     const { xi, bench } = autoFillLineup('4-3-3', [...squad, retired])

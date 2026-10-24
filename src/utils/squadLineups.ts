@@ -2,7 +2,7 @@ import type { MFLPlayer } from '../types/mflApi';
 import type { MFLPosition } from '../types/positionOvr';
 import type { SavedSquad, SquadLineups, SquadPlayers } from '../services/squadService';
 import { calculatePositionOVR } from './ruleBasedPositionCalculator';
-import { isRetiredPlayer, isRetiringThisSeason } from './appSettings';
+import { isRetiredPlayer } from './appSettings';
 
 /*
  * The squad builder's model: a squad is one or more lineups (the same players tried in different formations),
@@ -103,12 +103,9 @@ function placeBestFit(formation: string, players: MFLPlayer[]): (number | null)[
   return xi;
 }
 
-/**
- * The best XI the players can make in a formation, with the next best on the bench (a goalkeeper first).
- * Retired players are never picked; `skipRetiring` also leaves out those retiring at the end of this season.
- */
-export function autoFillLineup(formation: string, players: MFLPlayer[], { skipRetiring = false } = {}): Pick<Lineup, 'xi' | 'bench'> {
-  const available = players.filter(player => !isRetiredPlayer(player) && !(skipRetiring && isRetiringThisSeason(player)));
+/** The best XI the players can make in a formation, with the next best on the bench (a goalkeeper first). Never a retired player. */
+export function autoFillLineup(formation: string, players: MFLPlayer[]): Pick<Lineup, 'xi' | 'bench'> {
+  const available = players.filter(player => !isRetiredPlayer(player));
   const xi = placeBestFit(formation, available);
   const rest = available.filter(player => !xi.includes(player.id)).sort((a, b) => b.metadata.overall - a.metadata.overall);
   const keeper = rest.find(isGoalkeeper);

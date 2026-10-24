@@ -551,9 +551,16 @@ export default function SquadBuilderPage() {
               <button
                 type="button"
                 onClick={() => {
-                  updateLineup(current => ({ ...current, ...autoFillLineup(current.formation, players, { skipRetiring: filters.hideRetiring }) }));
+                  // From the players the list shows. Hiding selected players leaves this lineup's own in, as they are what it rebuilds.
+                  const shown = filterPool(players, search, filters, player => otherSquads.has(player.id));
+                  if (shown.length === 0) {
+                    info('No Players', 'No players match the search and filters.', 2500);
+                    return;
+                  }
+                  updateLineup(current => ({ ...current, ...autoFillLineup(current.formation, shown) }));
                   setSelected(null);
                 }}
+                title="Fills the lineup from the players the list shows"
                 className="inline-flex items-center justify-center h-10 px-4 rounded-full border border-pos-line bg-btn-pos text-pos-ink text-[13px] font-bold whitespace-nowrap cursor-pointer transition-colors hover:border-pos-ink"
               >
                 Auto-fill best XI

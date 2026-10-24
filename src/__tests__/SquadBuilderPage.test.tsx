@@ -249,6 +249,19 @@ describe('Squad Builder', () => {
     expect(screen.queryByRole('button', { name: /: Striker One/ })).not.toBeInTheDocument()
   })
 
+  it('auto-fills from only the players the filters leave', async () => {
+    await renderBuilder()
+    const pool = screen.getByRole('region', { name: 'Your players' })
+    fireEvent.click(within(pool).getByRole('button', { name: 'Show Filters' }))
+    // Legendary (85+) leaves just Centre One
+    fireEvent.click(within(pool).getByRole('button', { name: 'Legendary' }))
+
+    fireEvent.click(screen.getByRole('button', { name: 'Auto-fill best XI' }))
+    expect(screen.getByRole('button', { name: 'CB: Centre One, 85' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /^GK: / })).not.toBeInTheDocument()
+    expect(screen.queryAllByRole('button', { name: /^Sub \d: / })).toHaveLength(0)
+  })
+
   it('pages the player list, staying on the page after placing a player from it', async () => {
     const many = Array.from({ length: 45 }, (_, i) => player(100 + i, 'Squad', `Player ${String(i + 1).padStart(2, '0')}`, ['CM'], 90 - Math.floor(i / 2)))
     supabaseDataService.getAgencyPlayers.mockResolvedValue(many)
