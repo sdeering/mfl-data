@@ -20,12 +20,16 @@ import {
   changeFormation,
   defaultLineups,
   emptyBench,
+  emptyReserves,
   emptyXi,
+  fitSlots,
   fromSavedSquad,
   lineupPlayerIds,
   nextLineupName,
   removePlayer,
+  RESERVES_SIZE,
   savedSquadPlayerIds,
+  SQUAD_SIZE,
   toSavedSquad,
   XI_SIZE,
 } from '../utils/squadLineups';
@@ -78,7 +82,7 @@ function saveDraft(wallet: string, draft: Draft) {
 
 /** Compares lineups with what was last saved under a name, so auto-save only sends real changes. */
 const savedKey = (name: string, lineups: Lineup[]) =>
-  JSON.stringify([name, lineups.map(({ name: lineupName, formation, xi, bench }) => [lineupName, formation, xi, bench])]);
+  JSON.stringify([name, lineups.map(({ name: lineupName, formation, xi, bench, reserves }) => [lineupName, formation, xi, bench, reserves])]);
 
 const fileSafe = (text: string) => text.trim().replace(/[^a-z0-9_-]+/gi, '_') || 'squad';
 
@@ -137,10 +141,16 @@ export default function SquadBuilderPage() {
         if (cancelled) return;
         const owned = new Set(agency.map(player => player.id));
         const draft = loadDraft(walletAddress);
-        const keep = (ids: (number | null)[], size: number) =>
-          [...ids, ...Array(size).fill(null)].slice(0, size).map(id => (typeof id === 'number' && owned.has(id) ? id : null));
+        // Drafts left before lineups had reserves have none
+        const keep = (ids: unknown, size: number) => fitSlots(ids, size).map(id => (id !== null && owned.has(id) ? id : null));
         const restored = draft
-          ? draft.lineups.map((lineup, index) => ({ ...lineup, id: lineup.id ?? index + 1, xi: keep(lineup.xi, XI_SIZE), bench: keep(lineup.bench, BENCH_SIZE) }))
+          ? draft.lineups.map((lineup, index) => ({
+              ...lineup,
+              id: lineup.id ?? index + 1,
+              xi: keep(lineup.xi, XI_SIZE),
+              bench: keep(lineup.bench, BENCH_SIZE),
+              reserves: keep(lineup.reserves, RESERVES_SIZE),
+            }))
           : defaultLineups(agency);
         setPlayers(agency);
         setSnapshots([]);
@@ -290,7 +300,7 @@ export default function SquadBuilderPage() {
     if (lineupPlayerIds(lineup).includes(player.id)) return;
     const slot = bestFreeSlot(lineup, player);
     if (slot) assign(player.id, slot);
-    else info('Lineup full', 'The XI and bench are full. Remove a player to make room.', 2500);
+    else info('Squad full', `The squad has its ${SQUAD_SIZE} players. Remove one to make room.`, 2500);
   };
 
   const drag: DragHandlers = {
@@ -326,12 +336,16 @@ export default function SquadBuilderPage() {
   const whereIs = (player: MFLPlayer): PoolUse | null => {
     if (lineup.xi.includes(player.id)) return { label: 'XI' };
     if (lineup.bench.includes(player.id)) return { label: 'Bench' };
+    if (lineup.reserves.includes(player.id)) return { label: 'Reserves', title: 'Out of the matchday squad' };
     const squads = otherSquads.get(player.id);
     return squads ? { label: 'Other squad', title: `In ${squads.join(', ')}` } : null;
   };
 
   const addLineup = () => {
-    setLineups(all => [...all, { ...lineup, id: Date.now(), name: nextLineupName(all), xi: [...lineup.xi], bench: [...lineup.bench] }]);
+    setLineups(all => [
+      ...all,
+      { ...lineup, id: Date.now(), name: nextLineupName(all), xi: [...lineup.xi], bench: [...lineup.bench], reserves: [...lineup.reserves] },
+    ]);
     setActive(lineups.length);
     setSelected(null);
   };
@@ -343,7 +357,7 @@ export default function SquadBuilderPage() {
   };
 
   const clearSquad = () => {
-    setLineups(all => all.map(l => ({ ...l, xi: emptyXi(), bench: emptyBench() })));
+    setLineups(all => all.map(l => ({ ...l, xi: emptyXi(), bench: emptyBench(), reserves: emptyReserves() })));
     setSquadName('');
     setSnapshots([]);
     setSelected(null);
@@ -381,7 +395,7 @@ export default function SquadBuilderPage() {
     setSquadName(squad.squad_name);
     lastSaved.current = savedKey(squad.squad_name, loaded);
     setShowLoadModal(false);
-    if (dropped > 0) warning('Bench Full', `${dropped} of the squad's players didn't fit on the bench and were left out.`, 4000);
+    if (dropped > 0) warning('Squad Full', `${dropped} of the squad's players didn't fit in its ${SQUAD_SIZE} and were left out.`, 4000);
   };
 
   const handleDelete = async (squad: SavedSquad) => {
@@ -578,7 +592,7 @@ export default function SquadBuilderPage() {
               <button
                 type="button"
                 onClick={() => {
-                  updateLineup(current => ({ ...current, xi: emptyXi(), bench: emptyBench() }));
+                  updateLineup(current => ({ ...current, xi: emptyXi(), bench: emptyBench(), reserves: emptyReserves() }));
                   setSelected(null);
                 }}
                 className={btnPill}

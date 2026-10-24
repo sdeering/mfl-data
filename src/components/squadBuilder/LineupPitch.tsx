@@ -1,6 +1,6 @@
 import React from 'react';
 import type { MFLPlayer } from '../../types/mflApi';
-import { BENCH_SIZE, FORMATIONS, Lineup, SlotRef, positionFit } from '../../utils/squadLineups';
+import { FORMATIONS, Lineup, SQUAD_SIZE, SlotRef, lineupPlayerIds, positionFit } from '../../utils/squadLineups';
 import { getTierColors } from '../../utils/tierColors';
 import { Panel } from '../ui';
 import { CloseIcon, DragHandlers, FIT_COLORS, PlayerAvatar, shortName, slotKey } from './shared';
@@ -159,23 +159,56 @@ interface LineupBenchProps {
   drag: DragHandlers;
 }
 
-/** The seven substitutes, under the pitch. */
-export function LineupBench({ lineup, playersById, selected, onSelect, onRemove, drag }: LineupBenchProps) {
+/** Under the pitch: the seven substitutes, and the reserves who make the squad up to 23 but sit out the matchday squad. */
+export function LineupBench(props: LineupBenchProps) {
+  const { lineup } = props;
   return (
     <Panel className="flex flex-col gap-3 px-4 py-3.5">
+      <Seats {...props} type="bench" title="Bench" seat="Sub" />
+      <div className="h-px bg-divider" />
+      <Seats
+        {...props}
+        type="reserves"
+        title="Reserves"
+        note={`Out of the matchday squad · squad ${lineupPlayerIds(lineup).length} / ${SQUAD_SIZE}`}
+        seat="Reserve"
+      />
+    </Panel>
+  );
+}
+
+const Seats: React.FC<LineupBenchProps & { type: 'bench' | 'reserves'; title: string; note?: string; seat: string }> = ({
+  lineup,
+  playersById,
+  selected,
+  onSelect,
+  onRemove,
+  drag,
+  type,
+  title,
+  note,
+  seat,
+}) => {
+  const ids = lineup[type];
+  return (
+    <section className="flex flex-col gap-3" aria-label={title}>
       <div className="flex items-baseline justify-between gap-2.5">
-        <h3 className="m-0 font-display text-lg font-bold text-fg">Bench</h3>
-        <span className="text-xs font-medium text-muted">
-          {lineup.bench.filter(id => id !== null).length} / {BENCH_SIZE}
+        <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-0.5 min-w-0">
+          <h3 className="m-0 font-display text-lg font-bold text-fg">{title}</h3>
+          {note && <span className="text-xs font-medium text-muted">{note}</span>}
+        </div>
+        <span className="flex-none text-xs font-medium text-muted">
+          {ids.filter(id => id !== null).length} / {ids.length}
         </span>
       </div>
       <div className="grid grid-cols-[repeat(auto-fill,minmax(86px,1fr))] gap-2">
-        {lineup.bench.map((playerId, index) => {
-          const slot: SlotRef = { type: 'bench', index };
+        {ids.map((playerId, index) => {
+          const slot: SlotRef = { type, index };
           const key = slotKey(slot);
           const player = playerId === null ? undefined : playersById.get(playerId);
-          const isSelected = selected?.type === 'bench' && selected.index === index;
+          const isSelected = selected?.type === type && selected.index === index;
           const isOver = drag.overKey === key;
+          const label = `${seat} ${index + 1}`;
           return (
             <div
               key={key}
@@ -191,7 +224,7 @@ export function LineupBench({ lineup, playersById, selected, onSelect, onRemove,
               onDragOver={drag.over(key)}
               onDragLeave={drag.leave(key)}
               onDrop={drag.drop(slot)}
-              aria-label={player ? `Sub ${index + 1}: ${player.metadata.firstName} ${player.metadata.lastName}` : `Pick a player for sub ${index + 1}`}
+              aria-label={player ? `${label}: ${player.metadata.firstName} ${player.metadata.lastName}` : `Pick a player for ${label.toLowerCase()}`}
               className={`relative flex flex-col items-center gap-1.5 min-h-24 px-1.5 py-2.5 box-border rounded-[14px] border cursor-pointer ${player ? 'border-solid' : 'border-dashed'} ${
                 isSelected ? 'border-accent bg-accent/8' : isOver ? 'border-fg bg-accent/8' : 'border-line bg-inset'
               }`}
@@ -224,13 +257,13 @@ export function LineupBench({ lineup, playersById, selected, onSelect, onRemove,
                   <span className="w-[46px] h-[46px] rounded-full border-2 border-dashed border-line-2 grid place-items-center text-lg font-bold text-muted" aria-hidden="true">
                     +
                   </span>
-                  <span className="text-xs font-semibold text-muted">Sub {index + 1}</span>
+                  <span className="text-xs font-semibold text-muted">{label}</span>
                 </>
               )}
             </div>
           );
         })}
       </div>
-    </Panel>
+    </section>
   );
-}
+};

@@ -9,11 +9,12 @@ import { Panel, tableClass, tdClass, thClass, theadRowClass, rowClass } from '..
 import { RatingText, STAT_KEYS, STAT_LABELS, fullName } from './shared';
 import { SquadGroup, playerGroups } from './SquadAnalysis';
 
-/** The lineup's players in order, each with their role: a position in the XI, or SUB. */
+/** The lineup's players in order, each with their role: a position in the XI, SUB, or RES for the reserves. */
 export function lineupRows(lineup: Lineup, playersById: Map<number, MFLPlayer>): { role: string; player: MFLPlayer }[] {
   const slots = FORMATIONS[lineup.formation];
   const rows = lineup.xi.map((id, index) => ({ role: slots[index][0] as string, id }));
   lineup.bench.forEach(id => rows.push({ role: 'SUB', id }));
+  lineup.reserves.forEach(id => rows.push({ role: 'RES', id }));
   return rows.flatMap(({ role, id }) => {
     const player = id === null ? undefined : playersById.get(id);
     return player ? [{ role, player }] : [];
@@ -35,7 +36,7 @@ export function lineupCsv(lineup: Lineup, playersById: Map<number, MFLPlayer>): 
     const m = player.metadata;
     return [
       lineup.name, formationLabel(lineup.formation), role, player.id, m.firstName, m.lastName, fullName(player), m.overall,
-      role === 'SUB' ? '' : positionFit(player, role as MFLPosition).rating, m.age, m.positions.join(' '),
+      role === 'SUB' || role === 'RES' ? '' : positionFit(player, role as MFLPosition).rating, m.age, m.positions.join(' '),
       m.preferredFoot, (m.nationalities || []).join(' '), m.height, m.pace, m.shooting, m.passing, m.dribbling, m.defense, m.physical, m.goalkeeping,
       ...ALL_POSITIONS.map(position => positionFit(player, position).rating),
     ];

@@ -3,21 +3,24 @@ import * as Slider from '@radix-ui/react-slider';
 import type { MFLPlayer } from '../../types/mflApi';
 import type { MFLPosition } from '../../types/positionOvr';
 import { positionFit } from '../../utils/squadLineups';
+import { rankPositionRatings } from '../../utils/positionRatingOrder';
 import { getTierColors } from '../../utils/tierColors';
 import RetirementIcon from '../RetirementIcon';
 import { Panel, btnSecondary, fieldClass } from '../ui';
 import { CARD_TYPES, DEFAULT_POOL_FILTERS, POSITION_GROUPS, PoolFilters, Range, StatKey, isFiltering } from './poolFilters';
 import { DragHandlers, PlayerAvatar, RatingText, STAT_KEYS, STAT_LABELS, fullName } from './shared';
+import PlayerMenu from './PlayerMenu';
 
 /** Where a player already is: in the current lineup, or in another saved squad (named in the tooltip). */
 export interface PoolUse {
-  label: 'XI' | 'Bench' | 'Other squad';
+  label: 'XI' | 'Bench' | 'Reserves' | 'Other squad';
   title?: string;
 }
 
 const USE_BADGE: Record<PoolUse['label'], string> = {
   XI: 'bg-accent/16 text-accent-ink',
   Bench: 'bg-yellow-400/16 text-warn-ink',
+  Reserves: 'bg-violet-500/15 text-violet-ink',
   'Other squad': 'bg-orange-500/15 text-orange-ink',
 };
 
@@ -258,7 +261,7 @@ const PoolCard: React.FC<{ player: MFLPlayer; season: number | null; use: PoolUs
   drag,
 }) => {
   const m = player.metadata;
-  const inLineup = use?.label === 'XI' || use?.label === 'Bench';
+  const inLineup = !!use && use.label !== 'Other squad';
   return (
     <div
       role="button"
@@ -287,16 +290,16 @@ const PoolCard: React.FC<{ player: MFLPlayer; season: number | null; use: PoolUs
           <div className="flex items-center gap-1.5 min-w-0">
             <span className="text-[15px] font-bold text-fg truncate">{fullName(player)}</span>
             <RetirementIcon retirementYears={m.retirementYears} currentSeason={season} className="w-3 h-3" />
+            <PlayerMenu player={player} className="ml-auto" />
           </div>
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs font-semibold text-muted">
-            {m.positions.slice(0, 3).map(position => {
-              const { rating } = positionFit(player, position as MFLPosition);
-              return (
-                <span key={position}>
-                  {position} <b style={{ color: getTierColors(rating).text }}>{rating}</b>
-                </span>
-              );
-            })}
+            {/* Best first, with how far a position beats their primary one, e.g. "CB 64 (+2)" */}
+            {rankPositionRatings(m.positions.slice(0, 3) as MFLPosition[], position => positionFit(player, position).rating).map(({ position, rating, diff }) => (
+              <span key={position} title={diff > 0 ? `+${diff} vs primary position` : undefined}>
+                {position} <b style={{ color: getTierColors(rating).text }}>{rating}</b>
+                {diff > 0 && <span className="text-green-600 dark:text-green-400"> (+{diff})</span>}
+              </span>
+            ))}
             {use && (
               <span
                 title={use.title}

@@ -132,7 +132,7 @@ describe('Squad Builder', () => {
 
     fireEvent.change(screen.getByLabelText('Formation'), { target: { value: '4-4-2' } })
     expect(screen.getByRole('button', { name: /^Lineup A\s*4-4-2/ })).toBeInTheDocument()
-    expect(screen.queryAllByRole('button', { name: /^Pick a player for (?!sub)/ })).toHaveLength(0)
+    expect(screen.queryAllByRole('button', { name: /^Pick a player for (?!sub|reserve)/ })).toHaveLength(0)
     expect(screen.getByRole('button', { name: 'GK: Keeper One, 80' })).toBeInTheDocument()
   })
 
@@ -301,11 +301,73 @@ describe('Squad Builder', () => {
     expect(within(pool).getByText('Squad Player 21')).toBeInTheDocument()
     expect(within(pool).getByText('Showing 21-40 of 45')).toBeInTheDocument()
 
-    // The lineup's XI and bench take the best 18, so free a place first
+    // The squad takes the best 23, so free a place first
     fireEvent.click(screen.getByRole('button', { name: 'Remove Squad Player 01' }))
     fireEvent.click(within(pool).getByText('Squad Player 25'))
     expect(screen.getAllByRole('button', { name: /: Squad Player 25/ }).length).toBeGreaterThan(0)
     expect(within(pages).getByRole('button', { name: '2' })).toHaveAttribute('aria-current', 'page')
+  })
+
+  it('makes a squad of 23, the five after the bench as reserves out of the matchday squad', async () => {
+    const many = Array.from({ length: 30 }, (_, i) => player(100 + i, 'Squad', `Player ${String(i + 1).padStart(2, '0')}`, ['CM'], 90 - i))
+    supabaseDataService.getAgencyPlayers.mockResolvedValue(many)
+    await renderBuilder()
+
+    const reserves = screen.getByRole('region', { name: 'Reserves' })
+    expect(within(reserves).getByText(/squad 23 \/ 23/)).toBeInTheDocument()
+    expect(within(reserves).getByRole('button', { name: 'Reserve 1: Squad Player 19' })).toBeInTheDocument()
+    expect(within(reserves).getByRole('button', { name: 'Reserve 5: Squad Player 23' })).toBeInTheDocument()
+    // Players 19 and 20 are the reserves on the list's first page
+    expect(within(screen.getByRole('region', { name: 'Your players' })).getAllByText('Reserves')).toHaveLength(2)
+    // 11 starters, 7 substitutes and 5 reserves, under the header
+    expect(within(screen.getByRole('table')).getAllByRole('row')).toHaveLength(24)
+
+    // A reserve can be swapped onto the bench
+    fireEvent.click(within(reserves).getByRole('button', { name: 'Remove Squad Player 23' }))
+    fireEvent.click(within(reserves).getByRole('button', { name: 'Pick a player for reserve 5' }))
+    expect(screen.getByRole('heading', { name: 'Select reserve' })).toBeInTheDocument()
+    fireEvent.click(within(screen.getByRole('list')).getByText('Squad Player 30'))
+    expect(within(reserves).getByRole('button', { name: 'Reserve 5: Squad Player 30' })).toBeInTheDocument()
+  })
+
+  it("opens a player's menu without placing them: their page, their ID to copy and mfl.com", async () => {
+    const writeText = jest.fn().mockResolvedValue(undefined)
+    Object.assign(navigator, { clipboard: { writeText } })
+    await renderBuilder()
+    fireEvent.click(screen.getByRole('button', { name: 'Remove Centre One' }))
+    const pool = screen.getByRole('region', { name: 'Your players' })
+
+    fireEvent.click(within(pool).getByRole('button', { name: 'Options for Centre One' }))
+    const menu = screen.getByRole('menu', { name: 'Options for Centre One' })
+    expect(within(menu).getByRole('menuitem', { name: /Open player page/ })).toHaveAttribute('href', '/players/3')
+    expect(within(menu).getByRole('menuitem', { name: /Open on mfl.com/ })).toHaveAttribute('href', 'https://app.playmfl.com/players/3')
+    expect(within(menu).getByRole('menuitem', { name: /Open on mfl.com/ })).toHaveAttribute('target', '_blank')
+
+    fireEvent.click(within(menu).getByRole('menuitem', { name: /Copy player ID/ }))
+    expect(writeText).toHaveBeenCalledWith('3')
+    expect(await within(menu).findByText('Copied')).toBeInTheDocument()
+    // Still out of the lineup
+    expect(screen.queryByRole('button', { name: 'CB: Centre One, 85' })).not.toBeInTheDocument()
+
+    fireEvent.keyDown(menu, { key: 'Escape' })
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument()
+  })
+
+  it("shows how much better a player rates at a position than their primary one", async () => {
+    // A centre back who passes and dribbles well enough to rate higher as a holding midfielder
+    const ballPlayer = player(20, 'Ball', 'Player', ['CB', 'CDM'], 74)
+    Object.assign(ballPlayer.metadata, { pace: 70, shooting: 40, passing: 90, dribbling: 90, defense: 70, physical: 70 })
+    supabaseDataService.getAgencyPlayers.mockResolvedValue([...agency, ballPlayer])
+    const { positionFit } = jest.requireActual('../utils/squadLineups')
+    const cb = positionFit(ballPlayer, 'CB').rating
+    const cdm = positionFit(ballPlayer, 'CDM').rating
+    expect(cdm).toBeGreaterThan(cb)
+    await renderBuilder()
+
+    const pool = screen.getByRole('region', { name: 'Your players' })
+    const card = within(pool).getByText('Ball Player').closest('[role="button"]') as HTMLElement
+    expect(within(card).getByTitle(`+${cdm - cb} vs primary position`)).toHaveTextContent(`CDM ${cdm} (+${cdm - cb})`)
+    expect(within(card).getByText(`${cb}`).parentElement).toHaveTextContent(`CB ${cb}`)
   })
 
   it("shows the lineup's balance, ages and position coverage with its statistics", async () => {

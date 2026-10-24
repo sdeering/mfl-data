@@ -33,7 +33,7 @@ export default function LineupPanel(props: LineupPanelProps) {
 
 function Picker({ lineup, players, selected, onClose, onPick, query, onQuery }: LineupPanelProps & { selected: SlotRef }) {
   const position = selected.type === 'xi' ? FORMATIONS[lineup.formation][selected.index][0] : null;
-  const current = selected.type === 'xi' ? lineup.xi[selected.index] : lineup.bench[selected.index];
+  const current = lineup[selected.type][selected.index];
 
   const candidates = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -47,7 +47,9 @@ function Picker({ lineup, players, selected, onClose, onPick, query, onQuery }: 
     <>
       <div className="flex items-start justify-between gap-2.5">
         <div className="flex flex-col gap-0.5">
-          <h3 className="m-0 font-display text-xl font-bold text-fg">{position ? `Select ${position}` : 'Select bench player'}</h3>
+          <h3 className="m-0 font-display text-xl font-bold text-fg">
+            {position ? `Select ${position}` : selected.type === 'bench' ? 'Select bench player' : 'Select reserve'}
+          </h3>
           <span className="text-[13px] font-medium text-muted">{position ? 'Best matches for this position first' : 'Highest overall first'}</span>
         </div>
         <button
@@ -71,7 +73,15 @@ function Picker({ lineup, players, selected, onClose, onPick, query, onQuery }: 
       <div className="flex flex-col gap-1.5 max-h-[60vh] min-[64rem]:max-h-[900px] overflow-y-auto" role="list">
         {candidates.map(({ player, fit }) => {
           const isCurrent = current === player.id;
-          const where = isCurrent ? 'Selected' : lineup.xi.includes(player.id) ? 'Starting XI' : lineup.bench.includes(player.id) ? 'Bench' : null;
+          const where = isCurrent
+            ? 'Selected'
+            : lineup.xi.includes(player.id)
+              ? 'Starting XI'
+              : lineup.bench.includes(player.id)
+                ? 'Bench'
+                : lineup.reserves.includes(player.id)
+                  ? 'Reserves'
+                  : null;
           const tier = getTierColors(fit.rating);
           return (
             <button

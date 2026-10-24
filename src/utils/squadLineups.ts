@@ -6,11 +6,14 @@ import { isRetiredPlayer } from './appSettings';
 
 /*
  * The squad builder's model: a squad is one or more lineups (the same players tried in different formations),
- * each a starting XI and a bench, holding player IDs. Everything here is pure so the page can stay about layout.
+ * each a starting XI, a bench and reserves, holding player IDs. Everything here is pure so the page can stay about layout.
  */
 
 export const XI_SIZE = 11;
 export const BENCH_SIZE = 7;
+/** An MFL squad holds 23 players: the matchday 18, and the reserves left out of it. */
+export const SQUAD_SIZE = 23;
+export const RESERVES_SIZE = SQUAD_SIZE - XI_SIZE - BENCH_SIZE;
 
 export type Slot = [position: MFLPosition, x: number, y: number];
 
@@ -70,11 +73,15 @@ export interface Lineup {
   formation: string;
   xi: (number | null)[];
   bench: (number | null)[];
+  /** The rest of the squad, out of the matchday squad */
+  reserves: (number | null)[];
 }
 
-/** A place in the current lineup: one of the formation's positions, or a seat on the bench. */
+const SLOT_TYPES = ['xi', 'bench', 'reserves'] as const;
+
+/** A place in the current lineup: one of the formation's positions, a seat on the bench, or among the reserves. */
 export interface SlotRef {
-  type: 'xi' | 'bench';
+  type: (typeof SLOT_TYPES)[number];
   index: number;
 }
 
@@ -104,7 +111,8 @@ export function positionFit(player: MFLPlayer, position: MFLPosition): PositionF
 
 export const emptyXi = () => Array<number | null>(XI_SIZE).fill(null);
 export const emptyBench = () => Array<number | null>(BENCH_SIZE).fill(null);
-export const lineupPlayerIds = (lineup: Lineup) => [...lineup.xi, ...lineup.bench].filter((id): id is number => id !== null);
+export const emptyReserves = () => Array<number | null>(RESERVES_SIZE).fill(null);
+export const lineupPlayerIds = (lineup: Lineup) => [...lineup.xi, ...lineup.bench, ...lineup.reserves].filter((id): id is number => id !== null);
 
 const isGoalkeeper = (player: MFLPlayer) => player.metadata.positions[0] === 'GK';
 
@@ -142,28 +150,33 @@ function fillPositions(
   return filled;
 }
 
-/** The best of the players not in the XI, a goalkeeper first. */
-function benchFrom(players: MFLPlayer[], xi: (number | null)[]): (number | null)[] {
+/** The best of the players not in the XI on the bench, a goalkeeper first, and the next best as reserves. */
+function restFrom(players: MFLPlayer[], xi: (number | null)[]): Pick<Lineup, 'bench' | 'reserves'> {
   const rest = players.filter(player => !xi.includes(player.id)).sort((a, b) => b.metadata.overall - a.metadata.overall);
   const keeper = rest.find(isGoalkeeper);
-  const bench = (keeper ? [keeper, ...rest.filter(player => player !== keeper)] : rest).slice(0, BENCH_SIZE).map(player => player.id);
-  return [...bench, ...emptyBench()].slice(0, BENCH_SIZE);
+  const ids = (keeper ? [keeper, ...rest.filter(player => player !== keeper)] : rest).map(player => player.id);
+  return {
+    bench: [...ids.slice(0, BENCH_SIZE), ...emptyBench()].slice(0, BENCH_SIZE),
+    reserves: [...ids.slice(BENCH_SIZE, BENCH_SIZE + RESERVES_SIZE), ...emptyReserves()].slice(0, RESERVES_SIZE),
+  };
 }
 
-/** The best XI the players can make in a formation, with the next best on the bench (a goalkeeper first). Never a retired player. */
-export function autoFillLineup(formation: string, players: MFLPlayer[]): Pick<Lineup, 'xi' | 'bench'> {
+type Filled = Pick<Lineup, 'xi' | 'bench' | 'reserves'>;
+
+/** The best XI the players can make in a formation, with the next best on the bench (a goalkeeper first) and as reserves. Never a retired player. */
+export function autoFillLineup(formation: string, players: MFLPlayer[]): Filled {
   const available = players.filter(player => !isRetiredPlayer(player));
   const xi = fillPositions(formation, available);
-  return { xi, bench: benchFrom(available, xi) };
+  return { xi, ...restFrom(available, xi) };
 }
 
 /**
  * Auto-fill for a squad that already has players. They fill the formation first, each where they play
  * naturally or at an alternative position. Only positions none of them can play are filled from `others`,
  * again by players who can play there. Any position still empty takes a squad player out of position,
- * then anyone. The bench is the squad players left over.
+ * then anyone. The bench and reserves are the squad players left over.
  */
-export function autoFillFromSquad(formation: string, squad: MFLPlayer[], others: MFLPlayer[]): Pick<Lineup, 'xi' | 'bench'> {
+export function autoFillFromSquad(formation: string, squad: MFLPlayer[], others: MFLPlayer[]): Filled {
   const squadPlayers = squad.filter(player => !isRetiredPlayer(player));
   const inSquad = new Set(squadPlayers.map(player => player.id));
   const newcomers = others.filter(player => !isRetiredPlayer(player) && !inSquad.has(player.id));
@@ -173,7 +186,7 @@ export function autoFillFromSquad(formation: string, squad: MFLPlayer[], others:
   xi = fillPositions(formation, newcomers, xi, playsThere);
   xi = fillPositions(formation, squadPlayers, xi);
   xi = fillPositions(formation, newcomers, xi);
-  return { xi, bench: benchFrom(squadPlayers, xi) };
+  return { xi, ...restFrom(squadPlayers, xi) };
 }
 
 /** A squad to start from: the best XI in two formations. */
@@ -184,7 +197,7 @@ export function defaultLineups(players: MFLPlayer[]): Lineup[] {
   ];
 }
 
-/** Where a click puts a player: the empty position they suit best, otherwise the first free seat on the bench. */
+/** Where a click puts a player: the empty position they suit best, otherwise the first free seat on the bench, then among the reserves. */
 export function bestFreeSlot(lineup: Lineup, player: MFLPlayer): SlotRef | null {
   let best: SlotRef | null = null;
   let bestRating = -1;
@@ -198,7 +211,9 @@ export function bestFreeSlot(lineup: Lineup, player: MFLPlayer): SlotRef | null 
   });
   if (best) return best;
   const seat = lineup.bench.indexOf(null);
-  return seat >= 0 ? { type: 'bench', index: seat } : null;
+  if (seat >= 0) return { type: 'bench', index: seat };
+  const reserve = lineup.reserves.indexOf(null);
+  return reserve >= 0 ? { type: 'reserves', index: reserve } : null;
 }
 
 /**
@@ -206,21 +221,21 @@ export function bestFreeSlot(lineup: Lineup, player: MFLPlayer): SlotRef | null 
  * one coming from outside replaces them.
  */
 export function assignPlayer(lineup: Lineup, playerId: number, target: SlotRef): Lineup {
-  const xi = [...lineup.xi];
-  const bench = [...lineup.bench];
-  const targetList = target.type === 'xi' ? xi : bench;
-  const from = xi.includes(playerId) ? { list: xi, index: xi.indexOf(playerId) } : bench.includes(playerId) ? { list: bench, index: bench.indexOf(playerId) } : null;
+  const lists = { xi: [...lineup.xi], bench: [...lineup.bench], reserves: [...lineup.reserves] };
+  const fromType = SLOT_TYPES.find(type => lists[type].includes(playerId));
+  const from = fromType ? { list: lists[fromType], index: lists[fromType].indexOf(playerId) } : null;
+  const targetList = lists[target.type];
   if (from && from.list === targetList && from.index === target.index) return lineup;
 
   const occupant = targetList[target.index];
   if (from) from.list[from.index] = occupant;
   targetList[target.index] = playerId;
-  return { ...lineup, xi, bench };
+  return { ...lineup, ...lists };
 }
 
 export function removePlayer(lineup: Lineup, playerId: number): Lineup {
   const clear = (ids: (number | null)[]) => ids.map(id => (id === playerId ? null : id));
-  return { ...lineup, xi: clear(lineup.xi), bench: clear(lineup.bench) };
+  return { ...lineup, xi: clear(lineup.xi), bench: clear(lineup.bench), reserves: clear(lineup.reserves) };
 }
 
 /** Switches formation, keeping the same starters and moving each to the new position they suit best. */
@@ -254,23 +269,33 @@ export function toSavedSquad(lineups: Lineup[], playersById: Map<number, MFLPlay
   return {
     formationId: lineups[0]?.formation ?? DEFAULT_FORMATION,
     players: {
-      lineups: lineups.map(({ name, formation, xi, bench }) => ({ name, formation, xi, bench })),
+      lineups: lineups.map(({ name, formation, xi, bench, reserves }) => ({ name, formation, xi, bench, reserves })),
       players,
     },
   };
 }
 
+/** IDs padded or cut to a slot list's size, anything that isn't an ID left empty. */
+export const fitSlots = (ids: unknown, size: number): (number | null)[] =>
+  [...(Array.isArray(ids) ? ids : []), ...Array(size).fill(null)].slice(0, size).map(id => (typeof id === 'number' ? id : null));
+
 /**
  * Lineups from a saved squad. Squads saved before lineups existed were one formation, keyed by position
- * ("CB1", "ST2") with any extra players as "EXTRA1"...; those become a single lineup, the extras on the bench.
- * `dropped` counts the players that did not fit on it.
+ * ("CB1", "ST2") with any extra players as "EXTRA1"...; those become a single lineup, the extras on the bench
+ * and then among the reserves. `dropped` counts the players that did not fit. Lineups saved before reserves have none.
  */
 export function fromSavedSquad(saved: Pick<SavedSquad, 'formation_id' | 'players'>): { lineups: Lineup[]; players: MFLPlayer[]; dropped: number } {
   if (isLineupsData(saved.players)) {
-    const fit = (ids: unknown, size: number) => [...(Array.isArray(ids) ? ids : []), ...Array(size).fill(null)].slice(0, size).map(id => (typeof id === 'number' ? id : null));
     const lineups = saved.players.lineups
       .filter(lineup => FORMATIONS[lineup.formation])
-      .map((lineup, index) => ({ id: index + 1, name: lineup.name, formation: lineup.formation, xi: fit(lineup.xi, XI_SIZE), bench: fit(lineup.bench, BENCH_SIZE) }));
+      .map((lineup, index) => ({
+        id: index + 1,
+        name: lineup.name,
+        formation: lineup.formation,
+        xi: fitSlots(lineup.xi, XI_SIZE),
+        bench: fitSlots(lineup.bench, BENCH_SIZE),
+        reserves: fitSlots(lineup.reserves, RESERVES_SIZE),
+      }));
     return { lineups, players: Object.values(saved.players.players ?? {}), dropped: 0 };
   }
 
@@ -303,9 +328,18 @@ export function fromSavedSquad(saved: Pick<SavedSquad, 'formation_id' | 'players
   }
   benchQueue.push(...extras);
   return {
-    lineups: [{ id: 1, name: 'Lineup A', formation, xi, bench: [...benchQueue, ...emptyBench()].slice(0, BENCH_SIZE) }],
+    lineups: [
+      {
+        id: 1,
+        name: 'Lineup A',
+        formation,
+        xi,
+        bench: fitSlots(benchQueue, BENCH_SIZE),
+        reserves: fitSlots(benchQueue.slice(BENCH_SIZE), RESERVES_SIZE),
+      },
+    ],
     players: entries.map(([, entry]) => entry.player),
-    dropped: Math.max(0, benchQueue.length - BENCH_SIZE),
+    dropped: Math.max(0, benchQueue.length - BENCH_SIZE - RESERVES_SIZE),
   };
 }
 

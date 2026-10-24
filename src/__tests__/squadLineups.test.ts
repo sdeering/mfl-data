@@ -8,6 +8,7 @@ import {
   bestFreeSlot,
   changeFormation,
   emptyBench,
+  emptyReserves,
   emptyXi,
   formationLabel,
   FORMATION_NAMES,
@@ -63,10 +64,18 @@ describe('positionFit', () => {
 
 describe('autoFillLineup', () => {
   it('puts the best player still free in each position, and the next best on the bench with a keeper first', () => {
-    const { xi, bench } = autoFillLineup('4-3-3_defend', squad)
+    const { xi, bench, reserves } = autoFillLineup('4-3-3_defend', squad)
     // 4-3-3 (def): GK, LB, CB, CB, RB, CM, CDM, CM, LW, ST, RW
     expect(xi).toEqual(ids([keeperA, lb, cbA, cbB, rb, cmA, cdm, cmB, lw, stA, rw]))
     expect(bench).toEqual([...ids([keeperB, cbC, stB]), null, null, null, null])
+    expect(reserves).toEqual(emptyReserves())
+  })
+
+  it('makes a squad of 23, the five after the bench as reserves', () => {
+    const more = Array.from({ length: 12 }, (_, i) => player(60 + i, ['CM'], 60 - i))
+    const { bench, reserves } = autoFillLineup('4-3-3', [...squad, ...more])
+    expect(bench).toEqual(ids([keeperB, cbC, stB, ...more.slice(0, 4)]))
+    expect(reserves).toEqual(more.slice(4, 9).map(p => p.id))
   })
 
   it('leaves out retired players', () => {
@@ -82,7 +91,7 @@ describe('autoFillFromSquad', () => {
   const outsiders = [keeperA, keeperB, cbC, lw, rw, cmB, player(50, ['ST'], 99)]
 
   it("puts the squad's players where they can play, and only brings in players for positions none of them can", () => {
-    const { xi, bench } = autoFillFromSquad('4-3-3_defend', lineupSquad, outsiders)
+    const { xi, bench, reserves } = autoFillFromSquad('4-3-3_defend', lineupSquad, outsiders)
     // 4-3-3 (def): GK, LB, CB, CB, RB, CM, CDM, CM, LW, ST, RW
     expect(xi.slice(0, 5)).toEqual([keeperA.id, lb.id, cbA.id, cbB.id, rb.id])
     expect(xi[6]).toBe(cdm.id)
@@ -95,6 +104,7 @@ describe('autoFillFromSquad', () => {
     expect(xi[7]).toBe(cmB.id)
     // The bench is squad players only
     expect(bench).toEqual([stB.id, null, null, null, null, null, null])
+    expect(reserves).toEqual(emptyReserves())
   })
 
   it('puts every squad player in the XI, out of position if need be, when there is no one else', () => {
@@ -136,11 +146,22 @@ describe('placing players', () => {
     expect([...placed.xi, ...placed.bench]).not.toContain(stA.id)
   })
 
-  it('clicks a player into the empty position they suit best, then onto the bench', () => {
+  it('clicks a player into the empty position they suit best, then onto the bench, then among the reserves', () => {
     const gaps: Lineup = { ...lineup, xi: lineup.xi.map((id, i) => (i === 2 || i === 9 ? null : id)) }
     expect(bestFreeSlot(gaps, stB)).toEqual({ type: 'xi', index: 9 })
     expect(bestFreeSlot(gaps, cbC)).toEqual({ type: 'xi', index: 2 })
     expect(bestFreeSlot(lineup, player(41, ['ST'], 90))).toEqual({ type: 'bench', index: 3 })
+
+    const benchFull: Lineup = { ...lineup, bench: [2, 5, 14, 51, 52, 53, 54] }
+    expect(bestFreeSlot(benchFull, player(41, ['ST'], 90))).toEqual({ type: 'reserves', index: 0 })
+    expect(bestFreeSlot({ ...benchFull, reserves: [55, 56, 57, 58, 59] }, player(41, ['ST'], 90))).toBeNull()
+  })
+
+  it('moves players between the bench and the reserves, swapping places', () => {
+    const withReserve = assignPlayer(lineup, 41, { type: 'reserves', index: 0 })
+    const swapped = assignPlayer(withReserve, 41, { type: 'bench', index: 0 })
+    expect(swapped.bench[0]).toBe(41)
+    expect(swapped.reserves[0]).toBe(keeperB.id)
   })
 
   it('keeps the same starters when the formation changes, each in the position they suit best', () => {
@@ -156,20 +177,26 @@ describe('placing players', () => {
 describe('saving squads', () => {
   it('saves every lineup by player ID, with the players as they are now', () => {
     const lineups: Lineup[] = [
-      { id: 1, name: 'Lineup A', formation: '4-4-2', xi: [1, ...Array(10).fill(null)], bench: [2, ...Array(6).fill(null)] },
-      { id: 2, name: 'Lineup B', formation: '3-5-2', xi: emptyXi(), bench: emptyBench() },
+      { id: 1, name: 'Lineup A', formation: '4-4-2', xi: [1, ...Array(10).fill(null)], bench: [2, ...Array(6).fill(null)], reserves: [3, null, null, null, null] },
+      { id: 2, name: 'Lineup B', formation: '3-5-2', xi: emptyXi(), bench: emptyBench(), reserves: emptyReserves() },
     ]
     const saved = toSavedSquad(lineups, byId)
     expect(saved.formationId).toBe('4-4-2')
-    expect(saved.players.lineups).toEqual([
-      { name: 'Lineup A', formation: '4-4-2', xi: lineups[0].xi, bench: lineups[0].bench },
-      { name: 'Lineup B', formation: '3-5-2', xi: lineups[1].xi, bench: lineups[1].bench },
-    ])
-    expect(Object.keys(saved.players.players)).toEqual(['1', '2'])
+    expect(saved.players.lineups).toEqual(lineups.map(({ name, formation, xi, bench, reserves }) => ({ name, formation, xi, bench, reserves })))
+    expect(Object.keys(saved.players.players)).toEqual(['1', '2', '3'])
 
     const loaded = fromSavedSquad({ formation_id: saved.formationId, players: saved.players })
-    expect(loaded.lineups.map(({ name, formation, xi, bench }) => ({ name, formation, xi, bench }))).toEqual(saved.players.lineups)
-    expect(loaded.players.map(p => p.id)).toEqual([1, 2])
+    expect(loaded.lineups).toEqual(lineups)
+    expect(loaded.players.map(p => p.id)).toEqual([1, 2, 3])
+  })
+
+  it('gives lineups saved before reserves existed empty ones', () => {
+    const { lineups } = fromSavedSquad({
+      formation_id: '4-4-2',
+      players: { lineups: [{ name: 'Lineup A', formation: '4-4-2', xi: [1], bench: [2] }], players: {} },
+    })
+    expect(lineups[0].reserves).toEqual(emptyReserves())
+    expect(lineups[0].bench).toEqual([2, null, null, null, null, null, null])
   })
 
   it('turns a squad saved before lineups into one lineup, with its extra players on the bench', () => {
@@ -196,15 +223,17 @@ describe('saving squads', () => {
     expect(lineup.xi[9]).toBe(stA.id)
     expect(lineup.xi[1]).toBe(cdm.id)
     expect(lineup.bench).toEqual([keeperB.id, stB.id, null, null, null, null, null])
+    expect(lineup.reserves).toEqual(emptyReserves())
     expect(players).toHaveLength(7)
     expect(dropped).toBe(0)
     expect(savedSquadPlayerIds(legacy)).toEqual(new Set([1, 4, 3, 13, 8, 14, 2]))
   })
 
-  it('counts the extra players of an old squad that do not fit on the bench', () => {
-    const extras = Object.fromEntries(squad.slice(0, 9).map((p, i) => [`EXTRA${i + 1}`, { player: p, position: `EXTRA${i + 1}` }]))
+  it('puts the extra players of an old squad on the bench, then among the reserves, and counts any that do not fit', () => {
+    const extras = Object.fromEntries(squad.map((p, i) => [`EXTRA${i + 1}`, { player: p, position: `EXTRA${i + 1}` }]))
     const { lineups, dropped } = fromSavedSquad({ formation_id: '4-3-3', players: extras })
     expect(lineups[0].bench).toEqual(squad.slice(0, 7).map(p => p.id))
+    expect(lineups[0].reserves).toEqual(squad.slice(7, 12).map(p => p.id))
     expect(dropped).toBe(2)
   })
 })
