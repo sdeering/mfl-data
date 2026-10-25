@@ -55,7 +55,7 @@ describe('Compare Page Tests', () => {
     
     await waitFor(() => {
       expect(screen.getByText('Compare Players')).toBeInTheDocument();
-      expect(screen.getByText('Enter player IDs to compare their stats and ratings')).toBeInTheDocument();
+      expect(screen.getByText('Enter player IDs to compare their stats and ratings, up to 4 players side by side')).toBeInTheDocument();
     });
   });
 

@@ -52,8 +52,9 @@ jest.mock('../../src/contexts/LoadingContext', () => ({
 // Mock Next.js navigation
 const mockPush = jest.fn();
 const mockReplace = jest.fn();
+let mockSearchParams = new URLSearchParams();
 jest.mock('next/navigation', () => ({
-  useSearchParams: () => new URLSearchParams(),
+  useSearchParams: () => mockSearchParams,
   useRouter: () => ({
     push: mockPush,
     replace: mockReplace
@@ -180,7 +181,7 @@ describe('ComparePage', () => {
     render(<ComparePage />);
     
     expect(screen.getByText('Compare Players')).toBeInTheDocument();
-    expect(screen.getByText('Enter player IDs to compare their stats and ratings')).toBeInTheDocument();
+    expect(screen.getByText('Enter player IDs to compare their stats and ratings, up to 4 players side by side')).toBeInTheDocument();
     expect(screen.getByLabelText('Player 1 ID')).toBeInTheDocument();
     expect(screen.getByLabelText('Player 2 ID')).toBeInTheDocument();
   });
@@ -620,6 +621,52 @@ describe('ComparePage', () => {
       expect(screen.queryByLabelText('Player 3 ID')).not.toBeInTheDocument();
       expect(screen.getByText('+ Add Player')).toBeInTheDocument();
       expect(playerOrder()).toEqual(['John Doe', 'Jane Smith']);
+    });
+
+    it('compares up to four players, offering another column once every one is filled', async () => {
+      const { mflApi } = require('../../src/services/mflApi');
+      const extra = (id: number, firstName: string) => ({ ...mockPlayer2, id, metadata: { ...mockPlayer2.metadata, firstName, lastName: 'Extra' } });
+      await loadTwoPlayers();
+      expect(screen.getByText('2 of 4 players')).toBeInTheDocument();
+
+      for (const [n, player] of [[3, extra(11111, 'Sam')], [4, extra(22222, 'Alex')]] as const) {
+        mflApi.getPlayer.mockResolvedValueOnce(player);
+        fireEvent.click(screen.getByText('+ Add Player'));
+        // Not again until the new column has a player
+        expect(screen.queryByText('+ Add Player')).not.toBeInTheDocument();
+        const input = screen.getByLabelText(`Player ${n} ID`);
+        fireEvent.change(input, { target: { value: String(player.id) } });
+        fireEvent.keyDown(input, { key: 'Enter', code: 'Enter' });
+        await waitFor(() => {
+          expect(screen.getAllByTestId('player-image')).toHaveLength(n);
+        });
+      }
+
+      expect(playerOrder()).toEqual(['John Doe', 'Jane Smith', 'Sam Extra', 'Alex Extra']);
+      expect(screen.queryByText('+ Add Player')).not.toBeInTheDocument();
+      expect(mockReplace).toHaveBeenLastCalledWith('?player1Id=12345&player2Id=67890&player3Id=11111&player4Id=22222', { scroll: false });
+    });
+
+    it('opens all four players from a shared link', async () => {
+      const { mflApi } = require('../../src/services/mflApi');
+      const byId: Record<string, any> = {
+        '12345': mockPlayer1,
+        '67890': mockPlayer2,
+        '11111': { ...mockPlayer2, id: 11111, metadata: { ...mockPlayer2.metadata, firstName: 'Sam', lastName: 'Jones' } },
+        '22222': { ...mockPlayer2, id: 22222, metadata: { ...mockPlayer2.metadata, firstName: 'Alex', lastName: 'Lee' } },
+      };
+      mflApi.getPlayer.mockImplementation(async (id: string) => byId[id]);
+      mockSearchParams = new URLSearchParams('player1Id=12345&player2Id=67890&player3Id=11111&player4Id=22222');
+      try {
+        render(<ComparePage />);
+        await waitFor(() => {
+          expect(screen.getAllByTestId('player-image')).toHaveLength(4);
+        });
+        expect(playerOrder()).toEqual(['John Doe', 'Jane Smith', 'Sam Jones', 'Alex Lee']);
+        expect(screen.getByLabelText('Player 4 ID')).toHaveValue('22222');
+      } finally {
+        mockSearchParams = new URLSearchParams();
+      }
     });
 
     it('does not offer remove or switch controls for empty player 1 and 2 columns', () => {

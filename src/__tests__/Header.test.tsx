@@ -3,9 +3,11 @@ import { render, screen, fireEvent, within } from '@testing-library/react'
 import '@testing-library/jest-dom'
 import Header from '../components/Header'
 
+const mockPush = jest.fn()
+let mockPathname = '/squad-builder'
 jest.mock('next/navigation', () => ({
-  useRouter: () => ({ push: jest.fn() }),
-  usePathname: () => '/squad-builder',
+  useRouter: () => ({ push: mockPush }),
+  usePathname: () => mockPathname,
 }))
 jest.mock('../components/WalletConnect', () => () => null)
 
@@ -30,6 +32,33 @@ describe('Header', () => {
     const nav = screen.getByRole('navigation', { name: 'Main' })
     expect(within(nav).getByRole('button', { name: 'Tools' })).toHaveClass('bg-accent')
     expect(within(nav).getByRole('button', { name: 'Agency' })).not.toHaveClass('bg-accent')
+  })
+
+  it('opens a player as soon as their ID or link is pasted into the search', () => {
+    render(<Header />)
+    const search = screen.getByLabelText('Player ID')
+
+    fireEvent.paste(search, { clipboardData: { getData: () => ' 350355 ' } })
+    expect(mockPush).toHaveBeenLastCalledWith('/players/350355')
+
+    fireEvent.paste(search, { clipboardData: { getData: () => 'https://app.playmfl.com/players/20686' } })
+    expect(mockPush).toHaveBeenLastCalledWith('/players/20686')
+
+    mockPush.mockClear()
+    fireEvent.paste(search, { clipboardData: { getData: () => 'Lewis Cox' } })
+    expect(mockPush).not.toHaveBeenCalled()
+  })
+
+  it('picks out comparing on a player page', () => {
+    mockPathname = '/players/20686'
+    try {
+      render(<Header />)
+      const compare = screen.getByRole('link', { name: 'Compare vs Player' })
+      expect(compare).toHaveAttribute('href', '/compare?playerId=20686')
+      expect(compare).toHaveClass('text-accent-ink')
+    } finally {
+      mockPathname = '/squad-builder'
+    }
   })
 
   it('links to Settings, where the theme is switched', () => {

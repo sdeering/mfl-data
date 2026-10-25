@@ -114,12 +114,25 @@ export const Header: React.FC = () => {
     setIsMenuOpen(false);
   }, [pathname]);
 
-  const handleSearch = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!query) return;
-    router.push(`/players/${query}`);
+  const goToPlayer = (id: string) => {
+    router.push(`/players/${id}`);
     setQuery('');
     setSearchOpen(false);
+  };
+
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (query) goToPlayer(query);
+  };
+
+  // A pasted ID, or a link to a player here or on mfl.com, opens the player without pressing Enter
+  const handlePaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
+    const text = e.clipboardData.getData('text').trim();
+    const id = text.match(/^#?(\d+)$/)?.[1] ?? text.match(/\/players\/(\d+)/)?.[1];
+    if (!id) return;
+    e.preventDefault();
+    e.currentTarget.blur();
+    goToPlayer(id);
   };
 
   const openSearch = () => {
@@ -152,6 +165,7 @@ export const Header: React.FC = () => {
         ref={searchInputRef}
         value={query}
         onChange={e => setQuery(e.target.value.replace(/\D/g, ''))}
+        onPaste={handlePaste}
         onBlur={() => !query && setSearchOpen(false)}
         inputMode="numeric"
         placeholder="Enter Player ID…"
@@ -262,12 +276,18 @@ export const Header: React.FC = () => {
         )}
       </div>
 
+      {/* Picked out in the accent, as comparing is the main thing to do next on a player's page */}
       {playerId && (
         <Link
           href={`/compare?playerId=${playerId}`}
-          className="hidden md:flex flex-none items-center h-10 px-3.5 rounded-full border border-[rgba(var(--glass-rgb),.12)] text-fg-2 text-[13px] font-semibold whitespace-nowrap hover:text-fg"
+          title="Compare this player with others"
+          aria-label="Compare vs Player"
+          className="hidden sm:flex flex-none items-center justify-center gap-2 h-10 min-w-10 md:px-4 rounded-full border border-accent/60 bg-accent/15 text-accent-ink text-[13px] font-bold whitespace-nowrap shadow-[0_0_0_3px_rgba(198,244,50,.08)] transition-colors hover:bg-accent hover:text-accent-fg"
         >
-          Compare vs Player
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M7 4 3 8l4 4M3 8h13M17 20l4-4-4-4M21 16H8" />
+          </svg>
+          <span className="hidden md:inline">Compare vs Player</span>
         </Link>
       )}
 
