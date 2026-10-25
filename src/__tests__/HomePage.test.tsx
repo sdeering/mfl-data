@@ -117,6 +117,30 @@ describe('HomePage', () => {
     expect(mockPush).not.toHaveBeenCalled();
   });
 
+  it('opens a player from a pasted link to them', async () => {
+    renderWithProviders(<HomePage />);
+
+    const input = screen.getByPlaceholderText('Search for a player by ID…');
+    fireEvent.paste(input, { clipboardData: { getData: () => 'https://app.playmfl.com/players/20686' } });
+
+    expect(input).toHaveValue('20686');
+    await waitFor(() => {
+      expect(mockPush).toHaveBeenCalledWith('/players/20686');
+    }, { timeout: 1000 });
+  });
+
+  it('has an X to empty the search', () => {
+    renderWithProviders(<HomePage />);
+
+    const input = screen.getByPlaceholderText('Search for a player by ID…');
+    expect(screen.queryByRole('button', { name: 'Clear player ID' })).not.toBeInTheDocument();
+    fireEvent.change(input, { target: { value: '12345' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Clear player ID' }));
+
+    expect(input).toHaveValue('');
+    expect(input).toHaveFocus();
+  });
+
   it('shows loading spinner in input when searching', async () => {
     renderWithProviders(<HomePage />);
     

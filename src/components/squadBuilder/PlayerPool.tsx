@@ -6,7 +6,7 @@ import { positionFit } from '../../utils/squadLineups';
 import { rankPositionRatings } from '../../utils/positionRatingOrder';
 import { getTierColors } from '../../utils/tierColors';
 import RetirementIcon from '../RetirementIcon';
-import { Panel, btnSecondary, fieldClass } from '../ui';
+import { Panel, SearchField, btnSecondary } from '../ui';
 import { CARD_TYPES, DEFAULT_POOL_FILTERS, POSITION_GROUPS, PoolFilters, Range, StatKey, isFiltering } from './poolFilters';
 import { DragHandlers, PlayerAvatar, RatingText, STAT_KEYS, STAT_LABELS, fullName } from './shared';
 import PlayerMenu from './PlayerMenu';
@@ -81,13 +81,13 @@ export default function PlayerPool({
       }}
     >
       <div className="flex gap-2">
-        <input
-          type="text"
+        <SearchField
           value={search}
           onChange={e => onSearch(e.target.value)}
+          onClear={() => onSearch('')}
           placeholder="Search players…"
           aria-label="Search players"
-          className={`${fieldClass} flex-1 min-w-0`}
+          wrapperClassName="flex-1 min-w-0"
         />
         <button type="button" onClick={onToggleFilters} className={`${btnSecondary} px-3.5`} aria-expanded={showFilters}>
           {showFilters ? 'Hide Filters' : 'Show Filters'}

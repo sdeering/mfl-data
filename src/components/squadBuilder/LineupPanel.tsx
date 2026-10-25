@@ -2,7 +2,7 @@ import React, { useMemo } from 'react';
 import type { MFLPlayer } from '../../types/mflApi';
 import { FORMATIONS, Lineup, PositionFit, SlotRef, XI_SIZE, formationLabel, positionFit } from '../../utils/squadLineups';
 import { getTierColors } from '../../utils/tierColors';
-import { Panel, fieldClass } from '../ui';
+import { Panel, SearchField } from '../ui';
 import { CAPTAIN_BADGE, CloseIcon, FIT_COLORS, FIT_LABELS, FIT_SHORT_LABELS, PlayerAvatar, fullName } from './shared';
 
 interface LineupPanelProps {
@@ -93,13 +93,13 @@ function Picker({ lineup, players, playersById, selected, onToggleCaptain, onClo
           </button>
         </div>
       )}
-      <input
-        type="text"
+      <SearchField
         value={query}
         onChange={e => onQuery(e.target.value)}
+        onClear={() => onQuery('')}
         placeholder="Filter by name…"
         aria-label="Filter by name"
-        className={`${fieldClass} h-[38px] px-3`}
+        wrapperClassName="w-full"
       />
       <div className="flex flex-col gap-1.5 max-h-[60vh] min-[64rem]:max-h-[900px] overflow-y-auto" role="list">
         {candidates.map(({ player, fit }) => {

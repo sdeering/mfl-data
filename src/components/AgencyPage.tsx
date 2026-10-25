@@ -622,6 +622,7 @@ const AgencyPage: React.FC = () => {
                 placeholder="Search filter players..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
+                onClear={() => setSearchTerm('')}
               />
 
               <div className="flex items-center gap-4 justify-end">

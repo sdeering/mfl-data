@@ -4,6 +4,8 @@ import React, { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
 import WalletConnect from './WalletConnect';
+import { ClearButton } from './ui';
+import { playerIdFromText } from '../utils/playerId';
 
 interface NavLink {
   label: string;
@@ -136,8 +138,7 @@ export const Header: React.FC = () => {
 
   // A pasted ID, or a link to a player here or on mfl.com, opens the player without pressing Enter
   const handlePaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
-    const text = e.clipboardData.getData('text').trim();
-    const id = text.match(/^#?(\d+)$/)?.[1] ?? text.match(/\/players\/(\d+)/)?.[1];
+    const id = playerIdFromText(e.clipboardData.getData('text'));
     if (!id) return;
     e.preventDefault();
     e.currentTarget.blur();
@@ -181,19 +182,7 @@ export const Header: React.FC = () => {
         aria-label="Player ID"
         className="flex-1 min-w-0 bg-transparent border-0 outline-none text-strong text-[13px] font-medium"
       />
-      {query && (
-        <button
-          type="button"
-          onClick={clearSearch}
-          title="Clear"
-          aria-label="Clear player ID"
-          className="flex-none grid place-items-center w-7 h-7 rounded-full text-muted cursor-pointer transition-colors hover:bg-chip hover:text-fg"
-        >
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.6} strokeLinecap="round" aria-hidden="true">
-            <path d="M6 6l12 12M18 6 6 18" />
-          </svg>
-        </button>
-      )}
+      {query && <ClearButton onClear={clearSearch} label="Clear player ID" />}
     </form>
   );
 

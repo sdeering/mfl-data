@@ -94,6 +94,7 @@ export default function ClubsPage() {
             placeholder="Search clubs..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
+            onClear={() => setSearchTerm('')}
           />
         }
       />

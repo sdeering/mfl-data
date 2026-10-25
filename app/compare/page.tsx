@@ -21,7 +21,8 @@ import { useLoading } from '../../src/contexts/LoadingContext';
 import { useWallet } from '../../src/contexts/WalletContext';
 import { supabaseDataService } from '../../src/services/clientDataService';
 import { rankSimilarPlayers } from '../../src/utils/playerSimilarity';
-import { PageHeader, Panel, TierText, btnPrimary } from '../../src/components/ui';
+import { ClearButton, PageHeader, Panel, TierText, btnPrimary } from '../../src/components/ui';
+import { playerIdFromText } from '../../src/utils/playerId';
 
 interface CompareSlot {
   key: number; // Stable identity so a slot keeps its data and in-flight requests when it is moved
@@ -282,18 +283,24 @@ function ComparePageContent() {
     }
   };
 
+  // A pasted ID, or a link to a player here or on mfl.com, searches straight away. Other text pastes as usual, to filter the agency players.
   const handlePaste = (e: React.ClipboardEvent, slot: CompareSlot) => {
-    // Prevent the default paste behavior to avoid duplicate values
+    const playerId = playerIdFromText(e.clipboardData.getData('text'));
+    if (!playerId) return;
+    // In place of what was there, rather than added to it
     e.preventDefault();
 
-    // Only a numeric player ID triggers a search
-    const pastedText = e.clipboardData.getData('text').trim();
-    if (!/^\d+$/.test(pastedText)) return;
-
-    const nextSlots = slots.map(s => s.key === slot.key ? { ...s, playerId: pastedText } : s);
+    const nextSlots = slots.map(s => s.key === slot.key ? { ...s, playerId } : s);
     setSlots(nextSlots);
-    fetchPlayer(slot.key, pastedText);
+    setSuggestionsSlotKey(null);
+    fetchPlayer(slot.key, playerId);
     updateURL(nextSlots);
+  };
+
+  // Empties the field for another ID. The player stays until another is searched, or removed.
+  const handleClearInput = (slot: CompareSlot, index: number) => {
+    updateSlot(slot.key, { playerId: '' });
+    document.getElementById(`player${index + 1}`)?.focus();
   };
 
   // Load players from URL on component mount only
@@ -376,6 +383,7 @@ function ComparePageContent() {
                           autoComplete="off"
                           className="flex-1 min-w-0 bg-transparent border-0 outline-none font-mono text-[15px] font-medium text-strong"
                         />
+                        {slot.playerId && <ClearButton label={`Clear player ${index + 1} ID`} onClear={() => handleClearInput(slot, index)} />}
                         <button
                           onClick={() => handleSearch(slot)}
                           disabled={slot.isLoading || !slot.playerId.trim()}

@@ -461,6 +461,26 @@ describe('ComparePage', () => {
     expect(player2Input).toHaveValue('67890');
   });
 
+  it('searches a pasted link to a player, and has an X to empty the field for another', async () => {
+    const { mflApi } = require('../../src/services/mflApi');
+    mflApi.getPlayer.mockResolvedValue(mockPlayer1);
+
+    render(<ComparePage />);
+
+    const player1Input = screen.getByLabelText('Player 1 ID');
+    expect(screen.queryByRole('button', { name: 'Clear player 1 ID' })).not.toBeInTheDocument();
+    fireEvent.paste(player1Input, { clipboardData: { getData: () => 'https://app.playmfl.com/players/12345' } });
+
+    await waitFor(() => {
+      expect(mflApi.getPlayer).toHaveBeenCalledWith('12345');
+    });
+    expect(player1Input).toHaveValue('12345');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Clear player 1 ID' }));
+    expect(player1Input).toHaveValue('');
+    expect(player1Input).toHaveFocus();
+  });
+
   it('disables search button when input is empty', () => {
     render(<ComparePage />);
     

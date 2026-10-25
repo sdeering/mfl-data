@@ -1,11 +1,13 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useLoading } from '@/src/contexts/LoadingContext';
 import { useWallet } from '@/src/contexts/WalletContext';
 import LoadingSpinner from '@/src/components/LoadingSpinner';
+import { ClearButton } from '@/src/components/ui';
+import { playerIdFromText } from '@/src/utils/playerId';
 
 const LIME = '#c6f432';
 const SKY = '#6eb4ff';
@@ -59,6 +61,7 @@ const ToolCaption: React.FC<{ title: string; description: string; locked?: boole
 export const HomePage: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearching, setIsSearching] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
   const { setIsLoading } = useLoading();
   const { isConnected, connectWallet } = useWallet();
@@ -83,24 +86,21 @@ export const HomePage: React.FC = () => {
     setSearchQuery(value);
   };
 
+  // A pasted ID, or a link to a player here or on mfl.com, opens the player without pressing Search
   const handlePaste = async (e: React.ClipboardEvent<HTMLInputElement>) => {
-    const pastedValue = e.clipboardData.getData('text');
-    const playerIdPattern = /^\d{4,6}$/;
+    const id = playerIdFromText(e.clipboardData.getData('text'));
+    if (!id) return;
+    e.preventDefault();
+    setSearchQuery(id);
 
-    if (playerIdPattern.test(pastedValue.trim())) {
-      // Set the pasted value in the input
-      setSearchQuery(pastedValue.trim());
+    // Show loading state
+    setIsSearching(true);
+    setIsLoading(true);
 
-      // Show loading state
-      setIsSearching(true);
-      setIsLoading(true);
+    // Small delay to show loading state and keep the number visible
+    await new Promise(resolve => setTimeout(resolve, 500));
 
-      // Small delay to show loading state and keep the number visible
-      await new Promise(resolve => setTimeout(resolve, 500));
-
-      // Navigate to player page
-      router.push(`/players/${encodeURIComponent(pastedValue.trim())}`);
-    }
+    router.push(`/players/${id}`);
   };
 
   return (
@@ -124,6 +124,7 @@ export const HomePage: React.FC = () => {
           </svg>
           <input
             type="text"
+            ref={inputRef}
             value={searchQuery}
             onChange={handleInputChange}
             onPaste={handlePaste}
@@ -132,6 +133,15 @@ export const HomePage: React.FC = () => {
             className="flex-1 min-w-0 h-12 bg-transparent border-0 outline-none text-strong text-[17px] font-medium"
             disabled={isSearching}
           />
+          {searchQuery && !isSearching && (
+            <ClearButton
+              label="Clear player ID"
+              onClear={() => {
+                setSearchQuery('');
+                inputRef.current?.focus();
+              }}
+            />
+          )}
           <button
             type="submit"
             disabled={!searchQuery.trim() || isSearching}

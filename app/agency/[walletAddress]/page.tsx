@@ -450,6 +450,7 @@ export default function DynamicAgencyPage() {
               placeholder="Search filter players..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
+              onClear={() => setSearchTerm('')}
             />
           </div>
 

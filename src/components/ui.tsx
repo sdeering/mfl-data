@@ -137,23 +137,52 @@ export const KpiTile: React.FC<{ label: React.ReactNode; value: React.ReactNode;
 );
 
 /** Search box with a magnifier, as at the top of the player tables. */
-export const SearchField: React.FC<React.InputHTMLAttributes<HTMLInputElement> & { wrapperClassName?: string }> = ({
-  wrapperClassName = 'w-[300px] max-w-full',
-  className = '',
-  ...input
-}) => (
-  <div className={`flex items-center gap-2 h-10 px-3.5 rounded-xl border border-line-3 bg-field ${wrapperClassName}`}>
-    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="flex-none text-muted" aria-hidden="true">
-      <circle cx="11" cy="11" r="7" />
-      <path d="m20 20-3.5-3.5" />
+/** The X at the end of a search field that empties it. */
+export const ClearButton: React.FC<{ onClear: () => void; label?: string }> = ({ onClear, label = 'Clear search' }) => (
+  <button
+    type="button"
+    onClick={onClear}
+    title="Clear"
+    aria-label={label}
+    className="flex-none grid place-items-center w-7 h-7 rounded-full text-muted cursor-pointer transition-colors hover:bg-chip hover:text-fg"
+  >
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.6} strokeLinecap="round" aria-hidden="true">
+      <path d="M6 6l12 12M18 6 6 18" />
     </svg>
-    <input
-      type="text"
-      className={`flex-1 min-w-0 bg-transparent border-0 outline-none text-strong text-sm font-medium ${className}`}
-      {...input}
-    />
-  </div>
+  </button>
 );
+
+/** With `onClear`, an X empties the field whenever there is something in it. */
+export const SearchField: React.FC<
+  React.InputHTMLAttributes<HTMLInputElement> & { wrapperClassName?: string; onClear?: () => void; clearLabel?: string }
+> = ({ wrapperClassName = 'w-[300px] max-w-full', className = '', onClear, clearLabel, ...input }) => {
+  const inputRef = React.useRef<HTMLInputElement>(null);
+  return (
+    <div
+      className={`flex items-center gap-2 h-10 pl-3.5 ${onClear ? 'pr-1.5' : 'pr-3.5'} rounded-xl border border-line-3 bg-field focus-within:border-line-hover ${wrapperClassName}`}
+    >
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="flex-none text-muted" aria-hidden="true">
+        <circle cx="11" cy="11" r="7" />
+        <path d="m20 20-3.5-3.5" />
+      </svg>
+      <input
+        ref={inputRef}
+        type="text"
+        className={`flex-1 min-w-0 bg-transparent border-0 outline-none text-strong text-sm font-medium ${className}`}
+        {...input}
+      />
+      {onClear && input.value ? (
+        <ClearButton
+          label={clearLabel}
+          onClear={() => {
+            onClear();
+            inputRef.current?.focus();
+          }}
+        />
+      ) : null}
+    </div>
+  );
+};
 
 /**
  * Native select styled as in the design, with its own chevron. `compact` trims it for a row of many filters;
