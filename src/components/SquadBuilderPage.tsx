@@ -4,7 +4,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useWallet } from '../contexts/WalletContext';
 import { supabaseDataService } from '../services/clientDataService';
-import { getSquads, saveSquad, updateSquad, deleteSquad, SavedSquad } from '../services/squadService';
+import { getSquads, saveSquad, updateSquad, deleteSquad, renameSquad, reorderSquads, SavedSquad } from '../services/squadService';
 import type { MFLPlayer } from '../types/mflApi';
 import {
   BENCH_SIZE,
@@ -428,6 +428,42 @@ export default function SquadBuilderPage() {
     }
   };
 
+  const handleRename = async (squad: SavedSquad, name: string): Promise<boolean> => {
+    const newName = name.trim();
+    if (!ownWallet || !newName) return false;
+    if (newName === squad.squad_name) return true;
+    try {
+      await renameSquad(squad, ownWallet, newName);
+      setSavedSquads(await getSquads(ownWallet));
+      // The squad on screen carries on saving under its new name, with any changes not yet saved still to save
+      if (squad.squad_name === squadName) {
+        if (lastSaved.current === savedKey(squadName, lineups)) lastSaved.current = savedKey(newName, lineups);
+        setSquadName(newName);
+      }
+      success('Squad Renamed', `"${squad.squad_name}" is now "${newName}".`, 2000);
+      return true;
+    } catch (err) {
+      showError('Rename Failed', err instanceof Error ? err.message : 'Failed to rename the squad. Please try again.', 2500);
+      return false;
+    }
+  };
+
+  const handleReorder = async (ordered: SavedSquad[]) => {
+    if (!ownWallet) return;
+    setSavedSquads(ordered);
+    try {
+      await reorderSquads(ownWallet, ordered.map(squad => squad.id));
+    } catch (err) {
+      showError('Reorder Failed', err instanceof Error ? err.message : 'Failed to save the order. Please try again.', 2500);
+      // Back to the order as it is saved
+      try {
+        setSavedSquads(await getSquads(ownWallet));
+      } catch {
+        // The failure is already shown
+      }
+    }
+  };
+
   const handleExport = () => {
     const blob = new Blob([lineupCsv(lineup, playersById)], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
@@ -661,6 +697,8 @@ export default function SquadBuilderPage() {
           deletingId={deletingId}
           onLoad={handleLoad}
           onDelete={handleDelete}
+          onRename={handleRename}
+          onReorder={handleReorder}
           onClose={() => setShowLoadModal(false)}
         />
       )}

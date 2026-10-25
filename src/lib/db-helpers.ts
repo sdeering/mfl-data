@@ -15,10 +15,16 @@ export interface WhereClause {
   [column: string]: any | { in: any[] } | { gte: any } | { neq: any }
 }
 
+/** One column to sort by. A list sorts by each in turn. */
+export interface OrderBy {
+  column: string
+  ascending?: boolean
+}
+
 export interface SelectOptions {
   columns?: string[]
   where?: WhereClause
-  orderBy?: { column: string; ascending?: boolean }
+  orderBy?: OrderBy | OrderBy[]
   limit?: number
 }
 
@@ -144,10 +150,10 @@ function buildWhereClause(where: WhereClause): { sql: string; args: InValue[] } 
   }
 }
 
-function buildOrderClause(orderBy?: { column: string; ascending?: boolean }): string {
-  if (!orderBy) return ''
-  const dir = orderBy.ascending === false ? 'DESC' : 'ASC'
-  return `ORDER BY ${orderBy.column} ${dir}`
+function buildOrderClause(orderBy?: OrderBy | OrderBy[]): string {
+  const terms = orderBy ? [orderBy].flat() : []
+  if (terms.length === 0) return ''
+  return `ORDER BY ${terms.map(term => `${term.column} ${term.ascending === false ? 'DESC' : 'ASC'}`).join(', ')}`
 }
 
 function buildLimitClause(limit?: number): string {

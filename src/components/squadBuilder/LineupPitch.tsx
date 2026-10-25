@@ -134,7 +134,13 @@ const FilledPosition: React.FC<{
         >
           {fit.rating}
         </span>
-        <PitchPlayerMenu player={player} onRemove={onRemove} className="absolute -right-1.5 -top-1.5 w-5 h-5 rounded-full shadow-[0_2px_6px_rgba(0,0,0,.4)]" />
+        <PitchPlayerMenu
+          player={player}
+          isCaptain={isCaptain}
+          onToggleCaptain={onToggleCaptain}
+          onRemove={onRemove}
+          className="absolute -right-1.5 -top-1.5 w-5 h-5 rounded-full shadow-[0_2px_6px_rgba(0,0,0,.4)]"
+        />
         {/* Picking a player offers them the armband, in the corner where it shows once they have it */}
         {isSelected ? (
           <button

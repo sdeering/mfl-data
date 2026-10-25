@@ -164,3 +164,24 @@ export async function loadSquad(squadId: string): Promise<SavedSquad> {
     throw error;
   }
 }
+
+// Rename a squad, keeping its lineups as they were saved
+export async function renameSquad(squad: SavedSquad, walletAddress: string, squadName: string): Promise<SavedSquad> {
+  return updateSquad(squad.id, walletAddress, squadName, squad.formation_id, squad.players);
+}
+
+// Put a wallet's squads in the order given, first to last
+export async function reorderSquads(walletAddress: string, squadIds: string[]): Promise<void> {
+  const response = await fetch('/api/squads/order', {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ walletAddress, squadIds }),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.error || `Failed to order squads: ${response.statusText}`);
+  }
+}

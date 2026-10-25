@@ -205,6 +205,8 @@ CREATE TABLE IF NOT EXISTS squads (
   squad_name TEXT NOT NULL,
   formation_id TEXT NOT NULL,
   players TEXT NOT NULL,
+  -- Where the owner has dragged it in their list, empty until they do (which lists it first)
+  sort_order INTEGER,
   created_at TEXT DEFAULT (datetime('now')),
   updated_at TEXT DEFAULT (datetime('now')),
   UNIQUE(wallet_address, squad_name)
@@ -291,6 +293,16 @@ export async function initializeSchema(): Promise<void> {
     }
   } catch {
     // Table doesn't exist yet — nothing to migrate
+  }
+
+  // Squads saved before they could be put in order have no sort_order column yet
+  try {
+    const info = await db.execute('PRAGMA table_info(squads)')
+    if (info.rows.length > 0 && !info.rows.some((r: any) => r.name === 'sort_order')) {
+      await db.execute('ALTER TABLE squads ADD COLUMN sort_order INTEGER')
+    }
+  } catch {
+    // Table doesn't exist yet — it is created with the column below
   }
 
   // Execute each CREATE TABLE statement individually (libSQL doesn't support multi-statement in one call).

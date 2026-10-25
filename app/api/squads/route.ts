@@ -16,7 +16,9 @@ export async function GET(request: NextRequest) {
 
     const { data: squads, error } = await selectAll('squads', {
       where: { wallet_address: walletAddress },
-      orderBy: { column: 'updated_at', ascending: false }
+      // In the owner's order, with squads not yet put in order (most recently saved first) ahead of the rest.
+      // SQLite sorts the empty sort_order of those first.
+      orderBy: [{ column: 'sort_order' }, { column: 'updated_at', ascending: false }]
     });
 
     if (error) {

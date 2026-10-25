@@ -1,13 +1,13 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { MFLPlayer } from '../../types/mflApi';
-import { CloseIcon, fullName } from './shared';
+import { CAPTAIN_BADGE, CloseIcon, fullName } from './shared';
 
 const itemBase =
   'flex items-center justify-between gap-3 h-10 px-3 rounded-[10px] text-sm font-semibold text-left cursor-pointer outline-none transition-colors hover:bg-chip focus-visible:bg-chip';
 const itemClass = `${itemBase} text-fg-2 hover:text-fg focus-visible:text-fg`;
-// Roughly the menu's height with three items, to open it upwards when there's no room below
-const MENU_HEIGHT = 150;
+// Roughly the height of a menu of five items, to open it upwards when there's no room below
+const MENU_HEIGHT = 240;
 
 const Dots = ({ across = false }: { across?: boolean }) => (
   <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
@@ -181,12 +181,27 @@ export default function PlayerMenu({ player, className = '' }: { player: MFLPlay
   );
 }
 
-/** A starter's options, from the pitch: their page and comparing them, each in a new tab, and taking them out of the lineup. */
-export function PitchPlayerMenu({ player, onRemove, className = '' }: { player: MFLPlayer; onRemove: () => void; className?: string }) {
+/**
+ * A starter's options, from the pitch: the captain's armband, their page and comparing them, each in a new tab,
+ * copying their ID, and taking them out of the lineup.
+ */
+export function PitchPlayerMenu({
+  player,
+  isCaptain,
+  onToggleCaptain,
+  onRemove,
+  className = '',
+}: {
+  player: MFLPlayer;
+  isCaptain: boolean;
+  onToggleCaptain: () => void;
+  onRemove: () => void;
+  className?: string;
+}) {
   return (
     <OptionsMenu
       player={player}
-      title="Player page, compare and remove"
+      title="Captain, player page, compare, ID and remove"
       across
       buttonClass={isOpen =>
         `${className} grid place-items-center cursor-pointer transition-colors ${isOpen ? 'bg-accent text-accent-fg' : 'bg-[#0b1406] text-white hover:bg-accent hover:text-accent-fg'}`
@@ -194,12 +209,27 @@ export function PitchPlayerMenu({ player, onRemove, className = '' }: { player: 
     >
       {close => (
         <>
+          <button
+            role="menuitem"
+            type="button"
+            onClick={() => {
+              close();
+              onToggleCaptain();
+            }}
+            className={itemClass}
+          >
+            {isCaptain ? 'Remove captain' : 'Make captain'}
+            <span aria-hidden="true" className={`w-5 h-5 rounded-full grid place-items-center text-[10px] font-extrabold ${CAPTAIN_BADGE}`}>
+              C
+            </span>
+          </button>
           <LinkItem href={`/players/${player.id}`} close={close}>
             Open player page
           </LinkItem>
           <LinkItem href={`/compare?playerId=${player.id}`} close={close}>
             Compare vs player
           </LinkItem>
+          <CopyIdItem player={player} close={close} />
           <button
             role="menuitem"
             type="button"

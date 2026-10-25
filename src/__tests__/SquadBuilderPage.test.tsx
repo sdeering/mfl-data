@@ -67,6 +67,8 @@ jest.mock('../services/squadService', () => ({
   saveSquad: jest.fn(),
   updateSquad: jest.fn(),
   deleteSquad: jest.fn(),
+  renameSquad: jest.fn(),
+  reorderSquads: jest.fn(),
 }))
 
 const { supabaseDataService } = jest.requireMock('../services/clientDataService')
@@ -243,6 +245,50 @@ describe('Squad Builder', () => {
     expect(screen.getByText('Old squad')).toBeInTheDocument()
   })
 
+  it('puts saved squads in order and renames them, the one on screen too', async () => {
+    const [keeper, , centre] = agency
+    const saved = (id: string, name: string) => ({
+      id,
+      wallet_address: '0xTEST',
+      squad_name: name,
+      formation_id: '4-4-2',
+      players: { GK: { player: keeper, position: 'GK' }, CB1: { player: centre, position: 'CB1' } },
+      created_at: '2026-01-01',
+      updated_at: '2026-01-01',
+    })
+    const japan = saved('a', 'Japan')
+    const brazil = saved('b', 'Brazil')
+    squadService.getSquads.mockResolvedValue([japan, brazil])
+    squadService.reorderSquads.mockResolvedValue(undefined)
+    squadService.renameSquad.mockResolvedValue({})
+    await renderBuilder()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Load Squad' }))
+    const list = await screen.findByRole('list', { name: 'Saved squads' })
+    const names = () => within(screen.getByRole('list', { name: 'Saved squads' })).getAllByRole('heading').map(h => h.textContent)
+    expect(names()).toEqual(['Japan', 'Brazil'])
+
+    fireEvent.keyDown(within(list).getByRole('button', { name: 'Move Japan' }), { key: 'ArrowDown' })
+    expect(names()).toEqual(['Brazil', 'Japan'])
+    expect(squadService.reorderSquads).toHaveBeenCalledWith('0xTEST', ['b', 'a'])
+
+    // Renaming the squad that's loaded renames it on screen too, with nothing new to save
+    fireEvent.click(within(list).getAllByRole('button', { name: 'Load' })[1])
+    fireEvent.click(screen.getByRole('button', { name: 'Load Squad' }))
+    squadService.getSquads.mockResolvedValue([brazil, { ...japan, squad_name: 'Japan B' }])
+    fireEvent.click(screen.getByRole('button', { name: 'Rename Japan' }))
+    fireEvent.change(screen.getByLabelText('New name for Japan'), { target: { value: ' Japan B ' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+
+    await waitFor(() => expect(names()).toEqual(['Brazil', 'Japan B']))
+    expect(squadService.renameSquad).toHaveBeenCalledWith(japan, '0xTEST', 'Japan B')
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }))
+    expect(screen.getByText('Japan B')).toBeInTheDocument()
+    await new Promise(resolve => setTimeout(resolve, 900))
+    expect(squadService.updateSquad).not.toHaveBeenCalled()
+    expect(squadService.saveSquad).not.toHaveBeenCalled()
+  })
+
   it("lets a viewed wallet's squads be built but not saved", async () => {
     Object.assign(mockWallet, { isConnected: false, account: null, viewedAddress: '0x95dc70d7d39f6f76' })
     await renderBuilder()
@@ -403,17 +449,31 @@ describe('Squad Builder', () => {
     expect(screen.queryByRole('menu')).not.toBeInTheDocument()
   })
 
-  it("opens a starter's menu on the pitch: their page, comparing them, and taking them out", async () => {
+  it("opens a starter's menu on the pitch: the armband, their page, comparing them, their ID and taking them out", async () => {
+    const writeText = jest.fn().mockResolvedValue(undefined)
+    Object.assign(navigator, { clipboard: { writeText } })
     await renderBuilder()
     const pitch = screen.getByRole('region', { name: 'Pitch' })
+    const openMenu = () => {
+      fireEvent.click(within(pitch).getByRole('button', { name: 'Options for Keeper One' }))
+      return screen.getByRole('menu', { name: 'Options for Keeper One' })
+    }
 
-    fireEvent.click(within(pitch).getByRole('button', { name: 'Options for Keeper One' }))
-    const menu = screen.getByRole('menu', { name: 'Options for Keeper One' })
+    fireEvent.click(within(openMenu()).getByRole('menuitem', { name: /Make captain/ }))
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'GK: Keeper One, 80, captain' })).toBeInTheDocument()
+    fireEvent.click(within(openMenu()).getByRole('menuitem', { name: /Remove captain/ }))
+    expect(screen.getByRole('button', { name: 'GK: Keeper One, 80' })).toBeInTheDocument()
+
+    const menu = openMenu()
     // Opening it doesn't pick the position
     expect(screen.queryByRole('heading', { name: 'Select GK' })).not.toBeInTheDocument()
     expect(within(menu).getByRole('menuitem', { name: /Open player page/ })).toHaveAttribute('href', '/players/1')
     expect(within(menu).getByRole('menuitem', { name: /Compare vs player/ })).toHaveAttribute('href', '/compare?playerId=1')
     expect(within(menu).getByRole('menuitem', { name: /Compare vs player/ })).toHaveAttribute('target', '_blank')
+    fireEvent.click(within(menu).getByRole('menuitem', { name: /Copy player ID/ }))
+    expect(writeText).toHaveBeenCalledWith('1')
+    expect(await within(menu).findByText('Copied')).toBeInTheDocument()
 
     fireEvent.click(within(menu).getByRole('menuitem', { name: /Remove from lineup/ }))
     expect(screen.queryByRole('menu')).not.toBeInTheDocument()
