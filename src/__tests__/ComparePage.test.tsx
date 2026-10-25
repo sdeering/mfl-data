@@ -614,12 +614,12 @@ describe('ComparePage', () => {
 
       fireEvent.click(screen.getByText('+ Add Player'));
       expect(screen.getByLabelText('Player 3 ID')).toBeInTheDocument();
-      expect(screen.queryByText('+ Add Player')).not.toBeInTheDocument();
+      expect(screen.getByText('+ Add Player')).toBeDisabled();
 
       fireEvent.click(screen.getByLabelText('Remove Player 3'));
 
       expect(screen.queryByLabelText('Player 3 ID')).not.toBeInTheDocument();
-      expect(screen.getByText('+ Add Player')).toBeInTheDocument();
+      expect(screen.getByText('+ Add Player')).toBeEnabled();
       expect(playerOrder()).toEqual(['John Doe', 'Jane Smith']);
     });
 
@@ -632,8 +632,10 @@ describe('ComparePage', () => {
       for (const [n, player] of [[3, extra(11111, 'Sam')], [4, extra(22222, 'Alex')]] as const) {
         mflApi.getPlayer.mockResolvedValueOnce(player);
         fireEvent.click(screen.getByText('+ Add Player'));
-        // Not again until the new column has a player
-        expect(screen.queryByText('+ Add Player')).not.toBeInTheDocument();
+        // Not again until the new column has a player, and not at all past four
+        const add = screen.queryByText('+ Add Player');
+        if (n < 4) expect(add).toBeDisabled();
+        else expect(add).not.toBeInTheDocument();
         const input = screen.getByLabelText(`Player ${n} ID`);
         fireEvent.change(input, { target: { value: String(player.id) } });
         fireEvent.keyDown(input, { key: 'Enter', code: 'Enter' });
@@ -644,6 +646,7 @@ describe('ComparePage', () => {
 
       expect(playerOrder()).toEqual(['John Doe', 'Jane Smith', 'Sam Extra', 'Alex Extra']);
       expect(screen.queryByText('+ Add Player')).not.toBeInTheDocument();
+      expect(screen.getByText('4 of 4 players')).toBeInTheDocument();
       expect(mockReplace).toHaveBeenLastCalledWith('?player1Id=12345&player2Id=67890&player3Id=11111&player4Id=22222', { scroll: false });
     });
 

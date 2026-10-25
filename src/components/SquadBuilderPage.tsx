@@ -615,7 +615,15 @@ export default function SquadBuilderPage() {
             </div>
           </div>
 
-          <LineupPitch lineup={lineup} playersById={playersById} selected={selected} onSelect={select} onRemove={remove} drag={drag} />
+          <LineupPitch
+            lineup={lineup}
+            playersById={playersById}
+            selected={selected}
+            onSelect={select}
+            onRemove={remove}
+            onToggleCaptain={toggleCaptainOf}
+            drag={drag}
+          />
           <LineupBench lineup={lineup} playersById={playersById} selected={selected} onSelect={select} onRemove={remove} drag={drag} />
         </div>
 

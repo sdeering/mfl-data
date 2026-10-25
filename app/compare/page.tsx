@@ -209,8 +209,10 @@ function ComparePageContent() {
     updateURL(slots);
   };
 
+  // Another column once every one has a player
+  const allFilled = slots.every(slot => slot.player);
   const handleAddPlayer = () => {
-    if (slots.length < MAX_SLOTS) setSlots([...slots, newSlot()]);
+    if (allFilled && slots.length < MAX_SLOTS) setSlots([...slots, newSlot()]);
   };
 
   // Remove a player. The slot is emptied where it is, so the other players never move.
@@ -315,7 +317,28 @@ function ComparePageContent() {
 
   return (
     <div className="flex flex-col gap-[22px]">
-      <PageHeader title="Compare Players" subtitle={`Enter player IDs to compare their stats and ratings, up to ${MAX_SLOTS} players side by side`} />
+      <PageHeader
+        title="Compare Players"
+        subtitle={`Enter player IDs to compare their stats and ratings, up to ${MAX_SLOTS} players side by side`}
+        actions={
+          // Up here, as below the columns it would sit under every player's matches and sales
+          <div className="flex items-center gap-3">
+            <span className="text-xs font-semibold text-muted">
+              {slots.length} of {MAX_SLOTS} players
+            </span>
+            {slots.length < MAX_SLOTS && (
+              <button
+                onClick={handleAddPlayer}
+                disabled={!allFilled}
+                title={allFilled ? 'Compare another player' : 'Pick a player for every column first'}
+                className={`${btnPrimary} h-11 px-5 text-sm`}
+              >
+                + Add Player
+              </button>
+            )}
+          </div>
+        }
+      />
 
       {/* The container is its own element, as container queries only reach what is inside it */}
       <div className="@container">
@@ -508,21 +531,6 @@ function ComparePageContent() {
           })}
         </div>
       </div>
-
-      {/* Add Player Button - Shows once every column has a player and there is room for another */}
-      {slots.every(slot => slot.player) && slots.length < MAX_SLOTS && (
-        <div className="flex flex-col items-center gap-1.5">
-          <button
-            onClick={handleAddPlayer}
-            className={`${btnPrimary} h-11 px-5 text-sm`}
-          >
-            + Add Player
-          </button>
-          <span className="text-xs font-semibold text-muted">
-            {slots.length} of {MAX_SLOTS} players
-          </span>
-        </div>
-      )}
     </div>
   );
 }

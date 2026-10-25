@@ -1,29 +1,49 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { MFLPlayer } from '../../types/mflApi';
-import { fullName } from './shared';
+import { CloseIcon, fullName } from './shared';
 
-const itemClass =
-  'flex items-center justify-between gap-3 h-10 px-3 rounded-[10px] text-sm font-semibold text-fg-2 text-left cursor-pointer outline-none transition-colors hover:bg-chip hover:text-fg focus-visible:bg-chip focus-visible:text-fg';
-// Roughly the menu's height, to open it upwards when there's no room below
+const itemBase =
+  'flex items-center justify-between gap-3 h-10 px-3 rounded-[10px] text-sm font-semibold text-left cursor-pointer outline-none transition-colors hover:bg-chip focus-visible:bg-chip';
+const itemClass = `${itemBase} text-fg-2 hover:text-fg focus-visible:text-fg`;
+// Roughly the menu's height with three items, to open it upwards when there's no room below
 const MENU_HEIGHT = 150;
 
+const Dots = ({ across = false }: { across?: boolean }) => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+    {[5, 12, 19].map(at => (
+      <circle key={at} cx={across ? at : 12} cy={across ? 12 : at} r="2" />
+    ))}
+  </svg>
+);
+
 /**
- * A player's links behind a small button: their page here and on mfl.com, each in a new tab, and copying
- * their ID. The menu is laid over the page, so the scrolling list it opens from never cuts it off.
+ * A small button opening a menu of things to do with a player. The menu is laid over the page, so the scrolling
+ * list or pitch it opens from never cuts it off.
  */
-export default function PlayerMenu({ player, className = '' }: { player: MFLPlayer; className?: string }) {
+function OptionsMenu({
+  player,
+  title,
+  buttonClass,
+  across,
+  children,
+}: {
+  player: MFLPlayer;
+  title: string;
+  /** The button's look and place, open or not */
+  buttonClass: (isOpen: boolean) => string;
+  /** Dots across (⋯) rather than down (⋮) */
+  across?: boolean;
+  /** The items, given a way to close the menu */
+  children: (close: () => void) => React.ReactNode;
+}) {
   const [place, setPlace] = useState<React.CSSProperties | null>(null);
-  const [copy, setCopy] = useState<'idle' | 'copied' | 'failed'>('idle');
   const buttonRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
-  const copyTimer = useRef<number | undefined>(undefined);
   const isOpen = place !== null;
 
   const close = (refocus = false) => {
-    window.clearTimeout(copyTimer.current);
     setPlace(null);
-    setCopy('idle');
     if (refocus) buttonRef.current?.focus();
   };
 
@@ -42,7 +62,7 @@ export default function PlayerMenu({ player, className = '' }: { player: MFLPlay
       const target = event.target as Node;
       if (!menuRef.current?.contains(target) && !buttonRef.current?.contains(target)) shut();
     };
-    // It stays where it opened, so it closes rather than float away from the card when the page or list scrolls
+    // It stays where it opened, so it closes rather than float away from the player when the page or list scrolls
     document.addEventListener('pointerdown', onPointerDown);
     window.addEventListener('scroll', shut, true);
     window.addEventListener('resize', shut);
@@ -53,19 +73,6 @@ export default function PlayerMenu({ player, className = '' }: { player: MFLPlay
     };
   }, [isOpen]);
 
-  useEffect(() => () => window.clearTimeout(copyTimer.current), []);
-
-  const copyId = async () => {
-    try {
-      await navigator.clipboard.writeText(String(player.id));
-      setCopy('copied');
-      window.clearTimeout(copyTimer.current);
-      copyTimer.current = window.setTimeout(() => close(), 900);
-    } catch {
-      setCopy('failed');
-    }
-  };
-
   const name = fullName(player);
   return (
     <>
@@ -73,7 +80,7 @@ export default function PlayerMenu({ player, className = '' }: { player: MFLPlay
         ref={buttonRef}
         type="button"
         onClick={e => {
-          // The card underneath places the player on a click or Enter
+          // The card or position underneath acts on a click or Enter of its own
           e.stopPropagation();
           if (isOpen) close();
           else open();
@@ -82,14 +89,10 @@ export default function PlayerMenu({ player, className = '' }: { player: MFLPlay
         aria-label={`Options for ${name}`}
         aria-haspopup="menu"
         aria-expanded={isOpen}
-        title="Player page, ID and mfl.com"
-        className={`${className} flex-none w-6 h-6 -my-1 rounded-full grid place-items-center cursor-pointer transition-colors hover:bg-chip hover:text-fg ${isOpen ? 'bg-chip text-fg' : 'text-muted'}`}
+        title={title}
+        className={buttonClass(isOpen)}
       >
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-          <circle cx="12" cy="5" r="2" />
-          <circle cx="12" cy="12" r="2" />
-          <circle cx="12" cy="19" r="2" />
-        </svg>
+        <Dots across={across} />
       </button>
       {isOpen &&
         createPortal(
@@ -98,7 +101,7 @@ export default function PlayerMenu({ player, className = '' }: { player: MFLPlay
             role="menu"
             aria-label={`Options for ${name}`}
             style={place}
-            // Events from here still reach the card through React, which would place the player
+            // Events from here still reach the card through React, which would act on them
             onClick={e => e.stopPropagation()}
             onKeyDown={e => {
               e.stopPropagation();
@@ -114,28 +117,103 @@ export default function PlayerMenu({ player, className = '' }: { player: MFLPlay
             }}
             className="fixed z-50 w-[220px] p-1.5 rounded-2xl border border-line-2 bg-panel shadow-[0_20px_50px_rgba(0,0,0,.45)] flex flex-col gap-0.5"
           >
-            <a role="menuitem" href={`/players/${player.id}`} target="_blank" rel="noopener noreferrer" onClick={() => close()} className={itemClass}>
-              Open player page
-              <span aria-hidden="true">↗</span>
-            </a>
-            <button role="menuitem" type="button" onClick={copyId} className={itemClass}>
-              {copy === 'copied' ? 'Copied' : copy === 'failed' ? "Couldn't copy" : 'Copy player ID'}
-              <span className={`font-mono text-xs ${copy === 'copied' ? 'text-accent-ink' : 'text-muted'}`}>{player.id}</span>
-            </button>
-            <a
-              role="menuitem"
-              href={`https://app.playmfl.com/players/${player.id}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              onClick={() => close()}
-              className={itemClass}
-            >
-              Open on mfl.com
-              <span aria-hidden="true">↗</span>
-            </a>
+            {children(() => close())}
           </div>,
           document.body,
         )}
     </>
+  );
+}
+
+const LinkItem = ({ href, close, children }: { href: string; close: () => void; children: React.ReactNode }) => (
+  <a role="menuitem" href={href} target="_blank" rel="noopener noreferrer" onClick={close} className={itemClass}>
+    {children}
+    <span aria-hidden="true">↗</span>
+  </a>
+);
+
+function CopyIdItem({ player, close }: { player: MFLPlayer; close: () => void }) {
+  const [copy, setCopy] = useState<'idle' | 'copied' | 'failed'>('idle');
+  const timer = useRef<number | undefined>(undefined);
+  useEffect(() => () => window.clearTimeout(timer.current), []);
+
+  const copyId = async () => {
+    try {
+      await navigator.clipboard.writeText(String(player.id));
+      setCopy('copied');
+      window.clearTimeout(timer.current);
+      timer.current = window.setTimeout(close, 900);
+    } catch {
+      setCopy('failed');
+    }
+  };
+
+  return (
+    <button role="menuitem" type="button" onClick={copyId} className={itemClass}>
+      {copy === 'copied' ? 'Copied' : copy === 'failed' ? "Couldn't copy" : 'Copy player ID'}
+      <span className={`font-mono text-xs ${copy === 'copied' ? 'text-accent-ink' : 'text-muted'}`}>{player.id}</span>
+    </button>
+  );
+}
+
+/** A player's links, from the list: their page here and on mfl.com, each in a new tab, and copying their ID. */
+export default function PlayerMenu({ player, className = '' }: { player: MFLPlayer; className?: string }) {
+  return (
+    <OptionsMenu
+      player={player}
+      title="Player page, ID and mfl.com"
+      buttonClass={isOpen =>
+        `${className} flex-none w-6 h-6 -my-1 rounded-full grid place-items-center cursor-pointer transition-colors hover:bg-chip hover:text-fg ${isOpen ? 'bg-chip text-fg' : 'text-muted'}`
+      }
+    >
+      {close => (
+        <>
+          <LinkItem href={`/players/${player.id}`} close={close}>
+            Open player page
+          </LinkItem>
+          <CopyIdItem player={player} close={close} />
+          <LinkItem href={`https://app.playmfl.com/players/${player.id}`} close={close}>
+            Open on mfl.com
+          </LinkItem>
+        </>
+      )}
+    </OptionsMenu>
+  );
+}
+
+/** A starter's options, from the pitch: their page and comparing them, each in a new tab, and taking them out of the lineup. */
+export function PitchPlayerMenu({ player, onRemove, className = '' }: { player: MFLPlayer; onRemove: () => void; className?: string }) {
+  return (
+    <OptionsMenu
+      player={player}
+      title="Player page, compare and remove"
+      across
+      buttonClass={isOpen =>
+        `${className} grid place-items-center cursor-pointer transition-colors ${isOpen ? 'bg-accent text-accent-fg' : 'bg-[#0b1406] text-white hover:bg-accent hover:text-accent-fg'}`
+      }
+    >
+      {close => (
+        <>
+          <LinkItem href={`/players/${player.id}`} close={close}>
+            Open player page
+          </LinkItem>
+          <LinkItem href={`/compare?playerId=${player.id}`} close={close}>
+            Compare vs player
+          </LinkItem>
+          <button
+            role="menuitem"
+            type="button"
+            onClick={() => {
+              close();
+              onRemove();
+            }}
+            className={`${itemBase} text-danger-ink`}
+          >
+            Remove from lineup
+            <CloseIcon size={10} strokeWidth={3} />
+          </button>
+        </>
+      )}
+    </OptionsMenu>
   );
 }

@@ -33,9 +33,12 @@ export default function LineupPanel(props: LineupPanelProps) {
   );
 }
 
-function Picker({ lineup, players, selected, onClose, onPick, query, onQuery }: LineupPanelProps & { selected: SlotRef }) {
+function Picker({ lineup, players, playersById, selected, onToggleCaptain, onClose, onPick, query, onQuery }: LineupPanelProps & { selected: SlotRef }) {
   const position = selected.type === 'xi' ? FORMATIONS[lineup.formation][selected.index][0] : null;
   const current = lineup[selected.type][selected.index];
+  // Only a starter can be captain
+  const starter = position && current !== null ? playersById.get(current) : undefined;
+  const isCaptain = !!starter && starter.id === lineup.captain;
 
   const candidates = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -64,6 +67,32 @@ function Picker({ lineup, players, selected, onClose, onPick, query, onQuery }: 
           <CloseIcon size={12} strokeWidth={2.6} />
         </button>
       </div>
+      {starter && (
+        <div className="flex items-center gap-2.5 px-2.5 py-2 rounded-[14px] border border-line bg-inset">
+          <PlayerAvatar player={starter} className="w-9 h-9 bg-chip" initialsClassName="text-xs text-fg-3" />
+          <span className="flex-1 min-w-0 flex flex-col gap-0.5">
+            <span className="text-sm font-bold text-fg truncate">{fullName(starter)}</span>
+            <span className="text-[11px] font-semibold text-muted">{isCaptain ? 'Captain of this lineup' : `Playing ${position} now`}</span>
+          </span>
+          <button
+            type="button"
+            onClick={() => onToggleCaptain(starter.id)}
+            aria-pressed={isCaptain}
+            title={isCaptain ? 'Press again to take the armband off' : `Make ${fullName(starter)} captain`}
+            className={`flex-none flex items-center gap-1.5 h-8 pl-1.5 pr-3 rounded-[10px] text-xs font-bold cursor-pointer transition-colors ${
+              isCaptain ? CAPTAIN_BADGE : 'border border-accent/60 bg-accent/15 text-accent-ink hover:bg-accent hover:text-accent-fg'
+            }`}
+          >
+            <span
+              aria-hidden="true"
+              className={`w-5 h-5 rounded-full grid place-items-center text-[10px] font-extrabold ${isCaptain ? 'bg-accent-fg text-accent' : CAPTAIN_BADGE}`}
+            >
+              C
+            </span>
+            {isCaptain ? 'Captain' : 'Make captain'}
+          </button>
+        </div>
+      )}
       <input
         type="text"
         value={query}
@@ -161,7 +190,7 @@ function Summary({ lineup, playersById, onSelect, onToggleCaptain }: LineupPanel
                 Captain: <span className="text-fg-2">{fullName(captain)}</span>
               </>
             ) : (
-              'Press C by a player to make them captain'
+              'No captain yet. Click a player to pick one'
             )}
           </span>
         </div>

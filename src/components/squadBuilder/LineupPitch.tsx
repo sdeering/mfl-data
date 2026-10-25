@@ -3,7 +3,8 @@ import type { MFLPlayer } from '../../types/mflApi';
 import { FORMATIONS, Lineup, SQUAD_SIZE, SlotRef, lineupPlayerIds, positionFit } from '../../utils/squadLineups';
 import { getTierColors } from '../../utils/tierColors';
 import { Panel } from '../ui';
-import { CAPTAIN_BADGE, CloseIcon, DragHandlers, FIT_COLORS, PlayerAvatar, shortName, slotKey } from './shared';
+import { PitchPlayerMenu } from './PlayerMenu';
+import { CAPTAIN_BADGE, CloseIcon, DragHandlers, FIT_COLORS, PlayerAvatar, fullName, shortName, slotKey } from './shared';
 
 interface LineupPitchProps {
   lineup: Lineup;
@@ -11,15 +12,17 @@ interface LineupPitchProps {
   selected: SlotRef | null;
   onSelect: (slot: SlotRef) => void;
   onRemove: (playerId: number) => void;
+  /** Gives a starter the captain's armband, or takes it back */
+  onToggleCaptain: (playerId: number) => void;
   drag: DragHandlers;
 }
 
 const pitchLine = 'absolute border-2 border-white/55';
 
 /** The lineup's starting XI on a pitch, each position taking a dropped player or a click to pick one. */
-export function LineupPitch({ lineup, playersById, selected, onSelect, onRemove, drag }: LineupPitchProps) {
+export function LineupPitch({ lineup, playersById, selected, onSelect, onRemove, onToggleCaptain, drag }: LineupPitchProps) {
   return (
-    <div className="w-full max-w-[700px] mx-auto">
+    <section aria-label="Pitch" className="w-full max-w-[700px] mx-auto">
       <div
         className="@container relative w-full aspect-[5/6] rounded-3xl overflow-hidden shadow-[0_24px_60px_rgba(0,0,0,.35)]"
         style={{ background: 'repeating-linear-gradient(180deg,#11482c 0 8.333%,#145233 8.333% 16.666%)' }}
@@ -56,9 +59,11 @@ export function LineupPitch({ lineup, playersById, selected, onSelect, onRemove,
                   player={player}
                   position={position}
                   isCaptain={player.id === lineup.captain}
+                  isSelected={isSelected}
                   outline={isSelected ? '#c6f432' : isOver ? '#ffffff' : 'transparent'}
                   onSelect={() => onSelect(slot)}
                   onRemove={() => onRemove(player.id)}
+                  onToggleCaptain={() => onToggleCaptain(player.id)}
                   drag={drag}
                 />
               ) : (
@@ -83,7 +88,7 @@ export function LineupPitch({ lineup, playersById, selected, onSelect, onRemove,
           );
         })}
       </div>
-    </div>
+    </section>
   );
 }
 
@@ -91,13 +96,16 @@ const FilledPosition: React.FC<{
   player: MFLPlayer;
   position: Parameters<typeof positionFit>[1];
   isCaptain: boolean;
+  isSelected: boolean;
   outline: string;
   onSelect: () => void;
   onRemove: () => void;
+  onToggleCaptain: () => void;
   drag: DragHandlers;
-}> = ({ player, position, isCaptain, outline, onSelect, onRemove, drag }) => {
+}> = ({ player, position, isCaptain, isSelected, outline, onSelect, onRemove, onToggleCaptain, drag }) => {
   const fit = positionFit(player, position);
   const tier = getTierColors(fit.rating);
+  const captainSpot = 'absolute -right-1.5 -bottom-1 w-5 h-5 rounded-full grid place-items-center text-[10px] font-extrabold ring-2 ring-[#0b1406] shadow-[0_2px_6px_rgba(0,0,0,.4)]';
   return (
     <>
       <div
@@ -108,6 +116,8 @@ const FilledPosition: React.FC<{
         onDragEnd={drag.end}
         onClick={onSelect}
         onKeyDown={e => {
+          // Keys pressed on the buttons inside are theirs
+          if (e.target !== e.currentTarget) return;
           if (e.key === 'Enter' || e.key === ' ') {
             e.preventDefault();
             onSelect();
@@ -124,26 +134,28 @@ const FilledPosition: React.FC<{
         >
           {fit.rating}
         </span>
-        <button
-          type="button"
-          onClick={e => {
-            e.stopPropagation();
-            onRemove();
-          }}
-          title="Remove"
-          aria-label={`Remove ${player.metadata.firstName} ${player.metadata.lastName}`}
-          className="absolute -right-1.5 -top-1.5 w-5 h-5 rounded-full bg-[#0b1406] text-white grid place-items-center cursor-pointer shadow-[0_2px_6px_rgba(0,0,0,.4)]"
-        >
-          <CloseIcon size={9} strokeWidth={3.2} />
-        </button>
-        {isCaptain && (
-          <span
-            title="Captain"
-            aria-hidden="true"
-            className={`absolute -right-1.5 -bottom-1 w-5 h-5 rounded-full grid place-items-center text-[10px] font-extrabold ring-2 ring-[#0b1406] shadow-[0_2px_6px_rgba(0,0,0,.4)] ${CAPTAIN_BADGE}`}
+        <PitchPlayerMenu player={player} onRemove={onRemove} className="absolute -right-1.5 -top-1.5 w-5 h-5 rounded-full shadow-[0_2px_6px_rgba(0,0,0,.4)]" />
+        {/* Picking a player offers them the armband, in the corner where it shows once they have it */}
+        {isSelected ? (
+          <button
+            type="button"
+            onClick={e => {
+              e.stopPropagation();
+              onToggleCaptain();
+            }}
+            aria-pressed={isCaptain}
+            aria-label={`Make ${fullName(player)} captain`}
+            title={isCaptain ? 'Captain. Press again to take the armband off' : 'Make captain'}
+            className={`${captainSpot} cursor-pointer ${isCaptain ? CAPTAIN_BADGE : 'bg-white text-[#0b1406] hover:bg-accent'}`}
           >
             C
-          </span>
+          </button>
+        ) : (
+          isCaptain && (
+            <span title="Captain" aria-hidden="true" className={`${captainSpot} ${CAPTAIN_BADGE}`}>
+              C
+            </span>
+          )
         )}
       </div>
       {/* Wider than its spot on the pitch when the name needs it, so "Silvestre CDM" fits */}

@@ -86,6 +86,10 @@ const renderBuilder = async () => {
   return screen.findByRole('button', { name: /^Lineup A/ })
 }
 const pitchSlot = (position: string) => screen.getAllByRole('button', { name: new RegExp(`^(${position}: |Pick a player for ${position}$)`) })
+const removeFromPitch = (name: string) => {
+  fireEvent.click(within(screen.getByRole('region', { name: 'Pitch' })).getByRole('button', { name: `Options for ${name}` }))
+  fireEvent.click(screen.getByRole('menuitem', { name: /Remove from lineup/ }))
+}
 
 describe('Squad Builder', () => {
   it('starts with the best XI in each of two formations', async () => {
@@ -119,7 +123,7 @@ describe('Squad Builder', () => {
   it('places a clicked player in the empty position they suit best', async () => {
     await renderBuilder()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Remove Centre One' }))
+    removeFromPitch('Centre One')
     expect(pitchSlot('CB').map(slot => slot.getAttribute('aria-label'))).toContain('Pick a player for CB')
 
     const pool = screen.getByRole('region', { name: 'Your players' })
@@ -156,7 +160,7 @@ describe('Squad Builder', () => {
 
   it('makes a starter captain, shows the armband, and saves it', async () => {
     await renderBuilder()
-    expect(screen.getByText('Press C by a player to make them captain')).toBeInTheDocument()
+    expect(screen.getByText('No captain yet. Click a player to pick one')).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: 'Captain: Striker One' }))
     expect(screen.getByRole('button', { name: 'Captain: Striker One' })).toHaveAttribute('aria-pressed', 'true')
@@ -172,7 +176,7 @@ describe('Squad Builder', () => {
     // Going to the bench takes it off
     fireEvent.click(screen.getByRole('button', { name: 'GK: Keeper One, 80, captain' }))
     fireEvent.click(within(screen.getByRole('list')).getByText('Keeper Two'))
-    expect(screen.getByText('Press C by a player to make them captain')).toBeInTheDocument()
+    expect(screen.getByText('No captain yet. Click a player to pick one')).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: 'Captain: Striker One' }))
     fireEvent.click(screen.getByRole('button', { name: 'Save Squad' }))
@@ -180,6 +184,24 @@ describe('Squad Builder', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
     await waitFor(() => expect(squadService.saveSquad).toHaveBeenCalled())
     expect(squadService.saveSquad.mock.calls[0][3].lineups[0].captain).toBe(13) // Striker One
+  })
+
+  it('makes the player clicked on the pitch captain', async () => {
+    await renderBuilder()
+
+    fireEvent.click(screen.getByRole('button', { name: 'ST: Striker One, 75' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Make captain' }))
+    expect(screen.getByRole('button', { name: 'Captain' })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('button', { name: 'ST: Striker One, 75, captain' })).toBeInTheDocument()
+
+    // The C on their picture takes the armband off again
+    fireEvent.click(screen.getByRole('button', { name: 'Make Striker One captain' }))
+    expect(screen.getByRole('button', { name: 'Make captain' })).toHaveAttribute('aria-pressed', 'false')
+    expect(screen.getByRole('button', { name: 'ST: Striker One, 75' })).toBeInTheDocument()
+
+    // A substitute isn't offered it
+    fireEvent.click(screen.getByRole('button', { name: /^Sub 1: / }))
+    expect(screen.queryByRole('button', { name: 'Make captain' })).not.toBeInTheDocument()
   })
 
   it('names and saves a new squad with all its lineups', async () => {
@@ -234,7 +256,7 @@ describe('Squad Builder', () => {
   it('carries on from the squad left last time', async () => {
     const { unmount } = render(<SquadBuilderPage />)
     await screen.findByRole('button', { name: /^Lineup A/ })
-    fireEvent.click(screen.getByRole('button', { name: 'Remove Keeper One' }))
+    removeFromPitch('Keeper One')
     unmount()
 
     await renderBuilder()
@@ -330,7 +352,7 @@ describe('Squad Builder', () => {
     expect(within(pool).getByText('Showing 21-40 of 45')).toBeInTheDocument()
 
     // The squad takes the best 23, so free a place first
-    fireEvent.click(screen.getByRole('button', { name: 'Remove Squad Player 01' }))
+    removeFromPitch('Squad Player 01')
     fireEvent.click(within(pool).getByText('Squad Player 25'))
     expect(screen.getAllByRole('button', { name: /: Squad Player 25/ }).length).toBeGreaterThan(0)
     expect(within(pages).getByRole('button', { name: '2' })).toHaveAttribute('aria-current', 'page')
@@ -362,7 +384,7 @@ describe('Squad Builder', () => {
     const writeText = jest.fn().mockResolvedValue(undefined)
     Object.assign(navigator, { clipboard: { writeText } })
     await renderBuilder()
-    fireEvent.click(screen.getByRole('button', { name: 'Remove Centre One' }))
+    removeFromPitch('Centre One')
     const pool = screen.getByRole('region', { name: 'Your players' })
 
     fireEvent.click(within(pool).getByRole('button', { name: 'Options for Centre One' }))
@@ -379,6 +401,23 @@ describe('Squad Builder', () => {
 
     fireEvent.keyDown(menu, { key: 'Escape' })
     expect(screen.queryByRole('menu')).not.toBeInTheDocument()
+  })
+
+  it("opens a starter's menu on the pitch: their page, comparing them, and taking them out", async () => {
+    await renderBuilder()
+    const pitch = screen.getByRole('region', { name: 'Pitch' })
+
+    fireEvent.click(within(pitch).getByRole('button', { name: 'Options for Keeper One' }))
+    const menu = screen.getByRole('menu', { name: 'Options for Keeper One' })
+    // Opening it doesn't pick the position
+    expect(screen.queryByRole('heading', { name: 'Select GK' })).not.toBeInTheDocument()
+    expect(within(menu).getByRole('menuitem', { name: /Open player page/ })).toHaveAttribute('href', '/players/1')
+    expect(within(menu).getByRole('menuitem', { name: /Compare vs player/ })).toHaveAttribute('href', '/compare?playerId=1')
+    expect(within(menu).getByRole('menuitem', { name: /Compare vs player/ })).toHaveAttribute('target', '_blank')
+
+    fireEvent.click(within(menu).getByRole('menuitem', { name: /Remove from lineup/ }))
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Pick a player for GK' })).toBeInTheDocument()
   })
 
   it("shows how much better a player rates at a position than their primary one", async () => {
