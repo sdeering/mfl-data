@@ -232,6 +232,14 @@ CREATE TABLE IF NOT EXISTS scout_presets (
   UNIQUE(wallet_address, name)
 );
 
+-- Uses counted per key in fixed windows, for rate limits every server instance shares
+CREATE TABLE IF NOT EXISTS rate_limits (
+  key TEXT NOT NULL,
+  window_start INTEGER NOT NULL,
+  count INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (key, window_start)
+);
+
 -- Schema version tracking
 CREATE TABLE IF NOT EXISTS schema_version (
   version INTEGER PRIMARY KEY,

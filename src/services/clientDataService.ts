@@ -50,14 +50,28 @@ class ClientDataService {
     })
   }
 
-  // Retired players follow the "hide retired players" setting unless the caller filters them itself
-  async getAgencyPlayers(walletAddress: string, options: { includeRetired?: boolean } = {}): Promise<MFLPlayer[]> {
+  // Retired players follow the "hide retired players" setting unless the caller filters them itself.
+  // loadFromMfl is for a wallet pasted in to view, which may not be stored yet: the server loads it from MFL
+  // first, within its rate limits, and an error says how long to wait when they're used up.
+  async getAgencyPlayers(walletAddress: string, options: { includeRetired?: boolean; loadFromMfl?: boolean } = {}): Promise<MFLPlayer[]> {
     const cacheKey = `agency_players_${walletAddress}`
     const AGENCY_PLAYERS_CACHE_TTL = 24 * 60 * 60 * 1000 // 24 hours
+    // An empty agency read before the wallet was loaded shouldn't stop it being loaded now
+    if (options.loadFromMfl && !this.queryCache.get(cacheKey)?.data?.length) this.clearCache(cacheKey)
     const players = await this.getCachedData<MFLPlayer[]>(cacheKey, async () => {
-      const res = await fetch(`/api/data/agency-players?walletAddress=${encodeURIComponent(walletAddress)}`)
-      if (!res.ok) throw new Error('Failed to fetch agency players')
-      return res.json()
+      if (!options.loadFromMfl) {
+        const res = await fetch(`/api/data/agency-players?walletAddress=${encodeURIComponent(walletAddress)}`)
+        if (!res.ok) throw new Error('Failed to fetch agency players')
+        return res.json()
+      }
+      const res = await fetch('/api/data/agency-players', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ walletAddress }),
+      })
+      const data = await res.json().catch(() => null)
+      if (!res.ok) throw new Error(data?.error || "Couldn't load this wallet's players")
+      return data
     }, AGENCY_PLAYERS_CACHE_TTL)
     // Applied after the cache so that changing the setting takes effect without a refetch
     return options.includeRetired ? players : applyRetiredPlayersSetting(players)

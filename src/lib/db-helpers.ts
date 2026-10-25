@@ -53,6 +53,7 @@ const JSON_COLUMNS: Record<string, string[]> = {
   sync_status: [],
   squads: ['players'],
   api_usage_daily: [],
+  rate_limits: [],
   schema_version: [],
 }
 

@@ -341,8 +341,9 @@ const AgencyPage: React.FC = () => {
     try {
       // Use Supabase data service instead of MFL API
       console.log('🔍 Fetching agency players from database...');
-      // Retired players are loaded too; the "Include retired players" filter decides whether they show
-      const playerData = await supabaseDataService.getAgencyPlayers(walletAddress, { includeRetired: true });
+      // Retired players are loaded too; the "Include retired players" filter decides whether they show.
+      // A viewed wallet may not be stored yet, so it is loaded from MFL when it isn't.
+      const playerData = await supabaseDataService.getAgencyPlayers(walletAddress, { includeRetired: true, loadFromMfl: isViewing });
       console.log('📊 Fetched players from database:', playerData.length, 'players');
       
       if (playerData.length === 0) {
@@ -356,7 +357,8 @@ const AgencyPage: React.FC = () => {
       
     } catch (error: any) {
       console.error('❌ Error fetching players from database:', error);
-      setError('Failed to load your player collection from database. Please try again.');
+      // For a viewed wallet the server says why, such as how long to wait after too many lookups
+      setError(isViewing && error instanceof Error ? error.message : 'Failed to load your player collection from database. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -522,7 +524,7 @@ const AgencyPage: React.FC = () => {
       {isLoading && (
         <Panel className="flex items-center justify-center gap-3 py-12 text-muted">
           <div className="animate-spin rounded-full h-6 w-6 border-2 border-accent border-t-transparent"></div>
-          <span>Loading your players from database...</span>
+          <span>{isViewing ? "Loading this wallet's players..." : 'Loading your players from database...'}</span>
         </Panel>
       )}
 
@@ -537,8 +539,8 @@ const AgencyPage: React.FC = () => {
 
       {!isLoading && !error && hasAttemptedLoad && players.length === 0 && isViewing && (
         <Panel className="flex flex-col items-center gap-2 px-6 py-12 text-center">
-          <h3 className="m-0 font-display text-xl font-bold text-fg">No players stored for this wallet</h3>
-          <p className="m-0 text-muted">They appear here once the wallet&apos;s owner connects it on MFL Data.</p>
+          <h3 className="m-0 font-display text-xl font-bold text-fg">No players in this wallet</h3>
+          <p className="m-0 text-muted">MFL lists no players owned by this wallet.</p>
         </Panel>
       )}
 

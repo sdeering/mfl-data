@@ -136,7 +136,8 @@ export default function SquadBuilderPage() {
     setIsLoading(true);
     setError(null);
     supabaseDataService
-      .getAgencyPlayers(walletAddress)
+      // A viewed wallet may not be stored yet, so it is loaded from MFL when it isn't
+      .getAgencyPlayers(walletAddress, { loadFromMfl: isViewing })
       .then(agency => {
         if (cancelled) return;
         const owned = new Set(agency.map(player => player.id));
@@ -170,7 +171,7 @@ export default function SquadBuilderPage() {
     return () => {
       cancelled = true;
     };
-  }, [walletAddress]);
+  }, [walletAddress, isViewing]);
 
   useEffect(() => {
     if (!ownWallet) {

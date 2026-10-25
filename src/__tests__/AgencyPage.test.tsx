@@ -188,9 +188,38 @@ describe('AgencyPage without a connected wallet', () => {
     render(<AgencyPage />)
 
     expect(await screen.findByText('Igor Pavlović')).toBeInTheDocument()
-    expect(supabaseDataService.getAgencyPlayers).toHaveBeenCalledWith('0x95dc70d7d39f6f76', { includeRetired: true })
+    // Loaded from MFL when nobody has stored the wallet yet
+    expect(supabaseDataService.getAgencyPlayers).toHaveBeenCalledWith('0x95dc70d7d39f6f76', { includeRetired: true, loadFromMfl: true })
     expect(screen.getByRole('heading', { name: /^MFL Agency/ })).toHaveTextContent('MFL Agency')
     expect(screen.getByText(/read-only/)).toBeInTheDocument()
     expect(mockStartSync).not.toHaveBeenCalled()
+  })
+
+  it('says how long to wait when too many wallets have been looked up', async () => {
+    Object.assign(mockWallet, { isConnected: false, account: null, viewedAddress: '0x95dc70d7d39f6f76' })
+    const quiet = jest.spyOn(console, 'error').mockImplementation(() => {})
+    supabaseDataService.getAgencyPlayers.mockRejectedValueOnce(new Error('Too many wallet lookups right now. Try again in 8 seconds.'))
+    render(<AgencyPage />)
+
+    expect(await screen.findByText('Too many wallet lookups right now. Try again in 8 seconds.')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Try Again' }))
+    expect(await screen.findByText('Igor Pavlović')).toBeInTheDocument()
+    quiet.mockRestore()
+  })
+
+  it('says so when MFL lists no players for the wallet', async () => {
+    Object.assign(mockWallet, { isConnected: false, account: null, viewedAddress: '0x95dc70d7d39f6f76' })
+    supabaseDataService.getAgencyPlayers.mockResolvedValueOnce([])
+    render(<AgencyPage />)
+
+    expect(await screen.findByRole('heading', { name: 'No players in this wallet' })).toBeInTheDocument()
+  })
+
+  it("reads your own wallet's stored players, which it syncs itself", async () => {
+    supabaseDataService.getAgencyPlayers.mockClear()
+    render(<AgencyPage />)
+
+    expect(await screen.findByText('Igor Pavlović')).toBeInTheDocument()
+    expect(supabaseDataService.getAgencyPlayers).toHaveBeenCalledWith('0xTEST', { includeRetired: true, loadFromMfl: false })
   })
 })

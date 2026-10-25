@@ -118,7 +118,8 @@ export default function PlayerProgressionPage({ walletAddress }: PlayerProgressi
       loadedSquadsRef.current = new Set();
       try {
         const [playerData, clubs] = await Promise.all([
-          supabaseDataService.getAgencyPlayers(wallet),
+          // Someone else's wallet may not be stored yet, so it is loaded from MFL when it isn't
+          supabaseDataService.getAgencyPlayers(wallet, { loadFromMfl: wallet !== account }),
           // Ownership only picks the default squad, so the page still works without it
           supabaseDataService.getClubsForWallet(wallet).catch(() => [])
         ]);
@@ -138,7 +139,7 @@ export default function PlayerProgressionPage({ walletAddress }: PlayerProgressi
     return () => {
       cancelled = true;
     };
-  }, [wallet, reloadKey]);
+  }, [wallet, account, reloadKey]);
 
   const squads = useMemo(() => buildSquads(players, ownedClubIds), [players, ownedClubIds]);
   const playersWithoutSquad = useMemo(() => players.filter(player => getSquadId(player) === null).length, [players]);

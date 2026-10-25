@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { MFL_API_BASE_URL, getMflAuthHeaders } from '@/src/config/mflApi';
+import { blockFor, blockedFor, describeWait, takeRateLimits, visitorKey } from '@/src/lib/rateLimit';
+import { MFL_BLOCK, MFL_WALLET_LIMITS, visitorWalletsLimit } from '@/src/services/agencyLoader';
 
 export async function GET(request: NextRequest) {
   try {
@@ -12,6 +14,15 @@ export async function GET(request: NextRequest) {
       return NextResponse.json(
         { error: 'ownerWalletAddress parameter is required' },
         { status: 400 }
+      );
+    }
+
+    // Any wallet can be asked for here, so it shares the limits on wallet lookups
+    const wait = (await blockedFor(MFL_BLOCK)) || (await takeRateLimits([visitorWalletsLimit(visitorKey(request)), ...MFL_WALLET_LIMITS]));
+    if (wait > 0) {
+      return NextResponse.json(
+        { success: false, error: `Too many wallet lookups right now. Try again in ${describeWait(wait)}.`, data: [] },
+        { status: 429, headers: { 'Retry-After': String(wait) } }
       );
     }
 
@@ -51,6 +62,8 @@ export async function GET(request: NextRequest) {
 
       if (!response.ok) {
         console.error(`❌ [API] Players API error: ${response.status} - ${response.statusText}`);
+        // MFL blocks the token for a while after too many requests, and asking during a block seems to extend it
+        if (response.status === 429) await blockFor(MFL_BLOCK, Number(response.headers.get('retry-after')) || 600);
         return NextResponse.json(
           { success: false, error: `HTTP ${response.status}: ${response.statusText}`, data: [] },
           { status: response.status }
