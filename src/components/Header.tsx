@@ -112,12 +112,21 @@ export const Header: React.FC = () => {
   useEffect(() => {
     setOpenGroup(null);
     setIsMenuOpen(false);
-  }, [pathname]);
+    setSearchOpen(false);
+    // A searched ID stays in the field while that player is on screen
+    setQuery(current => (current === playerId ? current : ''));
+  }, [pathname, playerId]);
 
   const goToPlayer = (id: string) => {
     router.push(`/players/${id}`);
-    setQuery('');
+    setQuery(id);
     setSearchOpen(false);
+  };
+
+  const clearSearch = () => {
+    setQuery('');
+    setSearchOpen(true);
+    searchInputRef.current?.focus();
   };
 
   const handleSearch = (e: React.FormEvent) => {
@@ -157,7 +166,7 @@ export const Header: React.FC = () => {
   const searchForm = (
     <form
       onSubmit={handleSearch}
-      className="flex items-center gap-2 h-10 w-[240px] min-w-[150px] px-3.5 rounded-full border border-[rgba(var(--glass-rgb),.12)] bg-[rgba(var(--field-rgb),.7)] text-muted"
+      className={`${searchOpen ? 'flex' : 'hidden xl:flex'} items-center gap-2 h-10 w-[240px] min-w-[150px] pl-3.5 pr-1.5 rounded-full border border-[rgba(var(--glass-rgb),.12)] bg-[rgba(var(--field-rgb),.7)] text-muted`}
       role="search"
     >
       <SearchIcon />
@@ -172,6 +181,19 @@ export const Header: React.FC = () => {
         aria-label="Player ID"
         className="flex-1 min-w-0 bg-transparent border-0 outline-none text-strong text-[13px] font-medium"
       />
+      {query && (
+        <button
+          type="button"
+          onClick={clearSearch}
+          title="Clear"
+          aria-label="Clear player ID"
+          className="flex-none grid place-items-center w-7 h-7 rounded-full text-muted cursor-pointer transition-colors hover:bg-chip hover:text-fg"
+        >
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.6} strokeLinecap="round" aria-hidden="true">
+            <path d="M6 6l12 12M18 6 6 18" />
+          </svg>
+        </button>
+      )}
     </form>
   );
 
@@ -264,17 +286,13 @@ export const Header: React.FC = () => {
 
       <div className="flex-1 min-w-0" />
 
-      {/* Player search: a field on wide screens, an icon that opens one otherwise */}
-      <div className="hidden xl:block">{searchForm}</div>
-      <div className="xl:hidden">
-        {searchOpen ? (
-          searchForm
-        ) : (
-          <button type="button" onClick={openSearch} title="Search player" aria-label="Search player" className={`${glassButton} text-fg-2`}>
-            <SearchIcon size={16} />
-          </button>
-        )}
-      </div>
+      {/* Player search: a field on wide screens, an icon that opens one otherwise. A searched ID is still in it when it opens again. */}
+      {searchForm}
+      {!searchOpen && (
+        <button type="button" onClick={openSearch} title="Search player" aria-label="Search player" className={`${glassButton} xl:hidden text-fg-2`}>
+          <SearchIcon size={16} />
+        </button>
+      )}
 
       {/* Picked out in the accent, as comparing is the main thing to do next on a player's page */}
       {playerId && (

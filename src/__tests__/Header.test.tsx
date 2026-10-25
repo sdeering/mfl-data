@@ -49,6 +49,33 @@ describe('Header', () => {
     expect(mockPush).not.toHaveBeenCalled()
   })
 
+  it('keeps a pasted ID in the search, with an X to clear it', () => {
+    const { rerender } = render(<Header />)
+    const search = screen.getByLabelText('Player ID')
+    expect(screen.queryByRole('button', { name: 'Clear player ID' })).not.toBeInTheDocument()
+
+    fireEvent.paste(search, { clipboardData: { getData: () => 'https://app.playmfl.com/players/20686' } })
+    expect(search).toHaveValue('20686')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Clear player ID' }))
+    expect(search).toHaveValue('')
+    expect(search).toHaveFocus()
+    expect(screen.queryByRole('button', { name: 'Clear player ID' })).not.toBeInTheDocument()
+
+    // It stays while that player is on screen, and goes on leaving them
+    try {
+      fireEvent.paste(search, { clipboardData: { getData: () => '350355' } })
+      mockPathname = '/players/350355'
+      rerender(<Header />)
+      expect(search).toHaveValue('350355')
+      mockPathname = '/compare'
+      rerender(<Header />)
+      expect(search).toHaveValue('')
+    } finally {
+      mockPathname = '/squad-builder'
+    }
+  })
+
   it('picks out comparing on a player page', () => {
     mockPathname = '/players/20686'
     try {
