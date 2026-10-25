@@ -3,7 +3,7 @@ import type { MFLPlayer } from '../../types/mflApi';
 import { FORMATIONS, Lineup, SQUAD_SIZE, SlotRef, lineupPlayerIds, positionFit } from '../../utils/squadLineups';
 import { getTierColors } from '../../utils/tierColors';
 import { Panel } from '../ui';
-import { CloseIcon, DragHandlers, FIT_COLORS, PlayerAvatar, shortName, slotKey } from './shared';
+import { CAPTAIN_BADGE, CloseIcon, DragHandlers, FIT_COLORS, PlayerAvatar, shortName, slotKey } from './shared';
 
 interface LineupPitchProps {
   lineup: Lineup;
@@ -55,6 +55,7 @@ export function LineupPitch({ lineup, playersById, selected, onSelect, onRemove,
                 <FilledPosition
                   player={player}
                   position={position}
+                  isCaptain={player.id === lineup.captain}
                   outline={isSelected ? '#c6f432' : isOver ? '#ffffff' : 'transparent'}
                   onSelect={() => onSelect(slot)}
                   onRemove={() => onRemove(player.id)}
@@ -89,11 +90,12 @@ export function LineupPitch({ lineup, playersById, selected, onSelect, onRemove,
 const FilledPosition: React.FC<{
   player: MFLPlayer;
   position: Parameters<typeof positionFit>[1];
+  isCaptain: boolean;
   outline: string;
   onSelect: () => void;
   onRemove: () => void;
   drag: DragHandlers;
-}> = ({ player, position, outline, onSelect, onRemove, drag }) => {
+}> = ({ player, position, isCaptain, outline, onSelect, onRemove, drag }) => {
   const fit = positionFit(player, position);
   const tier = getTierColors(fit.rating);
   return (
@@ -111,7 +113,7 @@ const FilledPosition: React.FC<{
             onSelect();
           }
         }}
-        aria-label={`${position}: ${player.metadata.firstName} ${player.metadata.lastName}, ${fit.rating}`}
+        aria-label={`${position}: ${player.metadata.firstName} ${player.metadata.lastName}, ${fit.rating}${isCaptain ? ', captain' : ''}`}
         className="relative w-11 h-11 sm:w-[60px] sm:h-[60px] rounded-full p-[3px] box-border shadow-[0_8px_20px_rgba(0,0,0,.45)] cursor-grab outline-[3px] outline-offset-[3px]"
         style={{ background: FIT_COLORS[fit.kind], outlineStyle: 'solid', outlineColor: outline }}
       >
@@ -134,6 +136,15 @@ const FilledPosition: React.FC<{
         >
           <CloseIcon size={9} strokeWidth={3.2} />
         </button>
+        {isCaptain && (
+          <span
+            title="Captain"
+            aria-hidden="true"
+            className={`absolute -right-1.5 -bottom-1 w-5 h-5 rounded-full grid place-items-center text-[10px] font-extrabold ring-2 ring-[#0b1406] shadow-[0_2px_6px_rgba(0,0,0,.4)] ${CAPTAIN_BADGE}`}
+          >
+            C
+          </span>
+        )}
       </div>
       {/* Wider than its spot on the pitch when the name needs it, so "Silvestre CDM" fits */}
       <div className="flex items-center gap-[5px] max-w-full sm:w-max sm:max-w-[8.5rem] py-[3px] px-2 sm:pr-1 rounded-full bg-[rgba(8,12,10,.82)] backdrop-blur-md">

@@ -75,6 +75,8 @@ export interface Lineup {
   bench: (number | null)[];
   /** The rest of the squad, out of the matchday squad */
   reserves: (number | null)[];
+  /** One of the starting XI, who wears the armband */
+  captain: number | null;
 }
 
 const SLOT_TYPES = ['xi', 'bench', 'reserves'] as const;
@@ -112,6 +114,15 @@ export function positionFit(player: MFLPlayer, position: MFLPosition): PositionF
 export const emptyXi = () => Array<number | null>(XI_SIZE).fill(null);
 export const emptyBench = () => Array<number | null>(BENCH_SIZE).fill(null);
 export const emptyReserves = () => Array<number | null>(RESERVES_SIZE).fill(null);
+
+/** The captain has to start, so one who has left the XI is captain no longer. */
+export const keepCaptain = (lineup: Lineup): Lineup =>
+  lineup.captain !== null && !lineup.xi.includes(lineup.captain) ? { ...lineup, captain: null } : lineup;
+
+/** Makes a starter captain, or takes the armband off them when they already wear it. */
+export const toggleCaptain = (lineup: Lineup, playerId: number): Lineup =>
+  keepCaptain({ ...lineup, captain: lineup.captain === playerId ? null : playerId });
+
 export const lineupPlayerIds = (lineup: Lineup) => [...lineup.xi, ...lineup.bench, ...lineup.reserves].filter((id): id is number => id !== null);
 
 const isGoalkeeper = (player: MFLPlayer) => player.metadata.positions[0] === 'GK';
@@ -192,8 +203,8 @@ export function autoFillFromSquad(formation: string, squad: MFLPlayer[], others:
 /** A squad to start from: the best XI in two formations. */
 export function defaultLineups(players: MFLPlayer[]): Lineup[] {
   return [
-    { id: 1, name: 'Lineup A', formation: '4-3-3', ...autoFillLineup('4-3-3', players) },
-    { id: 2, name: 'Lineup B', formation: '4-4-2', ...autoFillLineup('4-4-2', players) },
+    { id: 1, name: 'Lineup A', formation: '4-3-3', ...autoFillLineup('4-3-3', players), captain: null },
+    { id: 2, name: 'Lineup B', formation: '4-4-2', ...autoFillLineup('4-4-2', players), captain: null },
   ];
 }
 
@@ -230,12 +241,12 @@ export function assignPlayer(lineup: Lineup, playerId: number, target: SlotRef):
   const occupant = targetList[target.index];
   if (from) from.list[from.index] = occupant;
   targetList[target.index] = playerId;
-  return { ...lineup, ...lists };
+  return keepCaptain({ ...lineup, ...lists });
 }
 
 export function removePlayer(lineup: Lineup, playerId: number): Lineup {
   const clear = (ids: (number | null)[]) => ids.map(id => (id === playerId ? null : id));
-  return { ...lineup, xi: clear(lineup.xi), bench: clear(lineup.bench), reserves: clear(lineup.reserves) };
+  return keepCaptain({ ...lineup, xi: clear(lineup.xi), bench: clear(lineup.bench), reserves: clear(lineup.reserves) });
 }
 
 /** Switches formation, keeping the same starters and moving each to the new position they suit best. */
@@ -269,7 +280,7 @@ export function toSavedSquad(lineups: Lineup[], playersById: Map<number, MFLPlay
   return {
     formationId: lineups[0]?.formation ?? DEFAULT_FORMATION,
     players: {
-      lineups: lineups.map(({ name, formation, xi, bench, reserves }) => ({ name, formation, xi, bench, reserves })),
+      lineups: lineups.map(({ name, formation, xi, bench, reserves, captain }) => ({ name, formation, xi, bench, reserves, captain })),
       players,
     },
   };
@@ -282,20 +293,24 @@ export const fitSlots = (ids: unknown, size: number): (number | null)[] =>
 /**
  * Lineups from a saved squad. Squads saved before lineups existed were one formation, keyed by position
  * ("CB1", "ST2") with any extra players as "EXTRA1"...; those become a single lineup, the extras on the bench
- * and then among the reserves. `dropped` counts the players that did not fit. Lineups saved before reserves have none.
+ * and then among the reserves. `dropped` counts the players that did not fit. Lineups saved before reserves or
+ * captains have none.
  */
 export function fromSavedSquad(saved: Pick<SavedSquad, 'formation_id' | 'players'>): { lineups: Lineup[]; players: MFLPlayer[]; dropped: number } {
   if (isLineupsData(saved.players)) {
     const lineups = saved.players.lineups
       .filter(lineup => FORMATIONS[lineup.formation])
-      .map((lineup, index) => ({
-        id: index + 1,
-        name: lineup.name,
-        formation: lineup.formation,
-        xi: fitSlots(lineup.xi, XI_SIZE),
-        bench: fitSlots(lineup.bench, BENCH_SIZE),
-        reserves: fitSlots(lineup.reserves, RESERVES_SIZE),
-      }));
+      .map((lineup, index) =>
+        keepCaptain({
+          id: index + 1,
+          name: lineup.name,
+          formation: lineup.formation,
+          xi: fitSlots(lineup.xi, XI_SIZE),
+          bench: fitSlots(lineup.bench, BENCH_SIZE),
+          reserves: fitSlots(lineup.reserves, RESERVES_SIZE),
+          captain: typeof lineup.captain === 'number' ? lineup.captain : null,
+        })
+      );
     return { lineups, players: Object.values(saved.players.players ?? {}), dropped: 0 };
   }
 
@@ -336,6 +351,7 @@ export function fromSavedSquad(saved: Pick<SavedSquad, 'formation_id' | 'players
         xi,
         bench: fitSlots(benchQueue, BENCH_SIZE),
         reserves: fitSlots(benchQueue.slice(BENCH_SIZE), RESERVES_SIZE),
+        captain: null,
       },
     ],
     players: entries.map(([, entry]) => entry.player),

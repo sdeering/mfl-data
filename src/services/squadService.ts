@@ -15,6 +15,8 @@ export interface SavedLineup {
   bench: (number | null)[];
   /** Missing from squads saved before lineups had reserves */
   reserves?: (number | null)[];
+  /** Missing from squads saved before lineups had captains */
+  captain?: number | null;
 }
 
 /** How squads are saved now: the lineups by player ID, and each of those players as they were when saved. */

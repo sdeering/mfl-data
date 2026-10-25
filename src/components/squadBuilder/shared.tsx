@@ -6,6 +6,8 @@ import type { FitKind, SlotRef } from '../../utils/squadLineups';
 export const FIT_COLORS: Record<FitKind, string> = { natural: '#8ae63a', alt: '#facc15', out: '#ef4444' };
 export const FIT_LABELS: Record<FitKind, string> = { natural: 'Natural position', alt: 'Alternative position', out: 'Out of position' };
 export const FIT_SHORT_LABELS: Record<FitKind, string> = { natural: 'Natural', alt: 'Alternative', out: 'Out of position' };
+/** The captain's armband: in the accent, as the fit colours already use yellow */
+export const CAPTAIN_BADGE = 'bg-accent text-accent-fg';
 
 export const STAT_KEYS = ['pace', 'shooting', 'passing', 'dribbling', 'defense', 'physical'] as const;
 export const STAT_LABELS = ['PAC', 'SHO', 'PAS', 'DRI', 'DEF', 'PHY'];

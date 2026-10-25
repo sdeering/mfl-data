@@ -24,6 +24,7 @@ import {
   emptyXi,
   fitSlots,
   fromSavedSquad,
+  keepCaptain,
   lineupPlayerIds,
   nextLineupName,
   removePlayer,
@@ -31,6 +32,7 @@ import {
   savedSquadPlayerIds,
   SQUAD_SIZE,
   toSavedSquad,
+  toggleCaptain,
   XI_SIZE,
 } from '../utils/squadLineups';
 import { currentSeason } from '../utils/playerSeasons';
@@ -82,7 +84,10 @@ function saveDraft(wallet: string, draft: Draft) {
 
 /** Compares lineups with what was last saved under a name, so auto-save only sends real changes. */
 const savedKey = (name: string, lineups: Lineup[]) =>
-  JSON.stringify([name, lineups.map(({ name: lineupName, formation, xi, bench, reserves }) => [lineupName, formation, xi, bench, reserves])]);
+  JSON.stringify([
+    name,
+    lineups.map(({ name: lineupName, formation, xi, bench, reserves, captain }) => [lineupName, formation, xi, bench, reserves, captain]),
+  ]);
 
 const fileSafe = (text: string) => text.trim().replace(/[^a-z0-9_-]+/gi, '_') || 'squad';
 
@@ -142,16 +147,19 @@ export default function SquadBuilderPage() {
         if (cancelled) return;
         const owned = new Set(agency.map(player => player.id));
         const draft = loadDraft(walletAddress);
-        // Drafts left before lineups had reserves have none
+        // Drafts left before lineups had reserves or captains have none
         const keep = (ids: unknown, size: number) => fitSlots(ids, size).map(id => (id !== null && owned.has(id) ? id : null));
         const restored = draft
-          ? draft.lineups.map((lineup, index) => ({
-              ...lineup,
-              id: lineup.id ?? index + 1,
-              xi: keep(lineup.xi, XI_SIZE),
-              bench: keep(lineup.bench, BENCH_SIZE),
-              reserves: keep(lineup.reserves, RESERVES_SIZE),
-            }))
+          ? draft.lineups.map((lineup, index) =>
+              keepCaptain({
+                ...lineup,
+                id: lineup.id ?? index + 1,
+                xi: keep(lineup.xi, XI_SIZE),
+                bench: keep(lineup.bench, BENCH_SIZE),
+                reserves: keep(lineup.reserves, RESERVES_SIZE),
+                captain: typeof lineup.captain === 'number' ? lineup.captain : null,
+              })
+            )
           : defaultLineups(agency);
         setPlayers(agency);
         setSnapshots([]);
@@ -286,6 +294,7 @@ export default function SquadBuilderPage() {
   const updateLineup = (change: (current: Lineup) => Lineup) => setLineups(all => all.map((l, i) => (i === activeIndex ? change(l) : l)));
   const assign = (playerId: number, slot: SlotRef) => updateLineup(current => assignPlayer(current, playerId, slot));
   const remove = (playerId: number) => updateLineup(current => removePlayer(current, playerId));
+  const toggleCaptainOf = (playerId: number) => updateLineup(current => toggleCaptain(current, playerId));
 
   const select = (slot: SlotRef) => {
     setSelected(current => (current?.type === slot.type && current.index === slot.index ? null : slot));
@@ -358,7 +367,7 @@ export default function SquadBuilderPage() {
   };
 
   const clearSquad = () => {
-    setLineups(all => all.map(l => ({ ...l, xi: emptyXi(), bench: emptyBench(), reserves: emptyReserves() })));
+    setLineups(all => all.map(l => ({ ...l, xi: emptyXi(), bench: emptyBench(), reserves: emptyReserves(), captain: null })));
     setSquadName('');
     setSnapshots([]);
     setSelected(null);
@@ -579,10 +588,13 @@ export default function SquadBuilderPage() {
                     info('No Players', 'No players match the search and filters.', 2500);
                     return;
                   }
-                  updateLineup(current => ({
-                    ...current,
-                    ...(squad.length > 0 ? autoFillFromSquad(current.formation, squad, shown) : autoFillLineup(current.formation, shown)),
-                  }));
+                  // The captain keeps the armband if they still start
+                  updateLineup(current =>
+                    keepCaptain({
+                      ...current,
+                      ...(squad.length > 0 ? autoFillFromSquad(current.formation, squad, shown) : autoFillLineup(current.formation, shown)),
+                    })
+                  );
                   setSelected(null);
                 }}
                 title="Fills the lineup from the squad's players, and from the players the list shows for any position they can't play"
@@ -593,7 +605,7 @@ export default function SquadBuilderPage() {
               <button
                 type="button"
                 onClick={() => {
-                  updateLineup(current => ({ ...current, xi: emptyXi(), bench: emptyBench(), reserves: emptyReserves() }));
+                  updateLineup(current => ({ ...current, xi: emptyXi(), bench: emptyBench(), reserves: emptyReserves(), captain: null }));
                   setSelected(null);
                 }}
                 className={btnPill}
@@ -614,6 +626,7 @@ export default function SquadBuilderPage() {
           playersById={playersById}
           selected={selected}
           onSelect={select}
+          onToggleCaptain={toggleCaptainOf}
           onClose={() => setSelected(null)}
           onPick={player => {
             if (!selected) return;

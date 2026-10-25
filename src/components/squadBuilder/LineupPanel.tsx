@@ -3,7 +3,7 @@ import type { MFLPlayer } from '../../types/mflApi';
 import { FORMATIONS, Lineup, PositionFit, SlotRef, XI_SIZE, formationLabel, positionFit } from '../../utils/squadLineups';
 import { getTierColors } from '../../utils/tierColors';
 import { Panel, fieldClass } from '../ui';
-import { CloseIcon, FIT_COLORS, FIT_LABELS, FIT_SHORT_LABELS, PlayerAvatar, fullName } from './shared';
+import { CAPTAIN_BADGE, CloseIcon, FIT_COLORS, FIT_LABELS, FIT_SHORT_LABELS, PlayerAvatar, fullName } from './shared';
 
 interface LineupPanelProps {
   lineup: Lineup;
@@ -11,6 +11,8 @@ interface LineupPanelProps {
   playersById: Map<number, MFLPlayer>;
   selected: SlotRef | null;
   onSelect: (slot: SlotRef) => void;
+  /** Gives a starter the captain's armband, or takes it back */
+  onToggleCaptain: (playerId: number) => void;
   onClose: () => void;
   onPick: (player: MFLPlayer) => void;
   query: string;
@@ -116,7 +118,7 @@ function Picker({ lineup, players, selected, onClose, onPick, query, onQuery }: 
   );
 }
 
-function Summary({ lineup, playersById, onSelect }: LineupPanelProps) {
+function Summary({ lineup, playersById, onSelect, onToggleCaptain }: LineupPanelProps) {
   const slots = FORMATIONS[lineup.formation];
   const starters = slots
     .map(([position], index) => {
@@ -125,6 +127,7 @@ function Summary({ lineup, playersById, onSelect }: LineupPanelProps) {
       return player ? { player, fit: positionFit(player, position) } : null;
     })
     .filter((starter): starter is { player: MFLPlayer; fit: PositionFit } => !!starter);
+  const captain = lineup.captain === null ? undefined : playersById.get(lineup.captain);
   const average = (values: number[]) => values.reduce((sum, value) => sum + value, 0) / values.length;
   const kpis: [string, string][] = [
     ['Avg overall (XI)', starters.length ? String(Math.round(average(starters.map(s => s.player.metadata.overall)))) : '–'],
@@ -150,29 +153,58 @@ function Summary({ lineup, playersById, onSelect }: LineupPanelProps) {
         ))}
       </div>
       <div className="flex flex-col">
-        <span className="pt-1 pb-1.5 text-[11px] font-bold uppercase tracking-[0.1em] text-muted-2">Starting XI</span>
+        <div className="flex items-baseline justify-between gap-3 pt-1 pb-1.5">
+          <span className="flex-none text-[11px] font-bold uppercase tracking-[0.1em] text-muted-2">Starting XI</span>
+          <span className="min-w-0 text-[11px] font-semibold text-muted truncate">
+            {captain ? (
+              <>
+                Captain: <span className="text-fg-2">{fullName(captain)}</span>
+              </>
+            ) : (
+              'Press C by a player to make them captain'
+            )}
+          </span>
+        </div>
         {slots.map(([position], index) => {
           const id = lineup.xi[index];
           const player = id === null ? undefined : playersById.get(id);
           const fit = player && positionFit(player, position);
+          const isCaptain = !!player && player.id === lineup.captain;
           return (
-            <button
-              key={index}
-              type="button"
-              onClick={() => onSelect({ type: 'xi', index })}
-              className="flex items-center gap-2.5 h-9 px-1 border-b border-divider text-left cursor-pointer hover:bg-row-hover"
-            >
-              <span className="w-10 text-[11px] font-extrabold text-muted">{position}</span>
-              <span className={`flex-1 min-w-0 text-[13px] font-semibold truncate ${player ? 'text-fg' : 'text-faint'}`}>{player ? fullName(player) : 'Empty'}</span>
-              {fit && (
-                <>
-                  <span className="flex-none w-2 h-2 rounded-full" style={{ background: FIT_COLORS[fit.kind] }} title={FIT_LABELS[fit.kind]} />
-                  <span className="w-[26px] text-right font-display text-sm font-extrabold" style={{ color: getTierColors(fit.rating).text }}>
-                    {fit.rating}
-                  </span>
-                </>
+            <div key={index} className="flex items-center gap-1.5 border-b border-divider">
+              <button
+                type="button"
+                onClick={() => onSelect({ type: 'xi', index })}
+                className="flex-1 min-w-0 flex items-center gap-2.5 h-9 px-1 text-left cursor-pointer hover:bg-row-hover"
+              >
+                <span className="w-10 text-[11px] font-extrabold text-muted">{position}</span>
+                <span className={`flex-1 min-w-0 text-[13px] font-semibold truncate ${player ? 'text-fg' : 'text-faint'}`}>{player ? fullName(player) : 'Empty'}</span>
+                {fit && (
+                  <>
+                    <span className="flex-none w-2 h-2 rounded-full" style={{ background: FIT_COLORS[fit.kind] }} title={FIT_LABELS[fit.kind]} />
+                    <span className="w-[26px] text-right font-display text-sm font-extrabold" style={{ color: getTierColors(fit.rating).text }}>
+                      {fit.rating}
+                    </span>
+                  </>
+                )}
+              </button>
+              {player ? (
+                <button
+                  type="button"
+                  onClick={() => onToggleCaptain(player.id)}
+                  aria-pressed={isCaptain}
+                  aria-label={`Captain: ${fullName(player)}`}
+                  title={isCaptain ? 'Captain. Press again to take the armband off' : 'Make captain'}
+                  className={`flex-none w-6 h-6 rounded-md grid place-items-center text-[11px] font-extrabold cursor-pointer transition-colors ${
+                    isCaptain ? CAPTAIN_BADGE : 'border border-line-2 text-faint hover:text-fg hover:border-line-hover'
+                  }`}
+                >
+                  C
+                </button>
+              ) : (
+                <span className="flex-none w-6" />
               )}
-            </button>
+            </div>
           );
         })}
       </div>

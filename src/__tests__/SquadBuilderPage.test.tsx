@@ -154,6 +154,34 @@ describe('Squad Builder', () => {
     expect(screen.getByRole('heading', { name: 'Squad statistics · Lineup A' })).toBeInTheDocument()
   })
 
+  it('makes a starter captain, shows the armband, and saves it', async () => {
+    await renderBuilder()
+    expect(screen.getByText('Press C by a player to make them captain')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Captain: Striker One' }))
+    expect(screen.getByRole('button', { name: 'Captain: Striker One' })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByText('Captain:', { exact: false })).toHaveTextContent('Captain: Striker One')
+    expect(screen.getByRole('button', { name: 'ST: Striker One, 75, captain' })).toBeInTheDocument()
+    expect(within(screen.getByRole('table')).getByTitle('Captain')).toBeInTheDocument()
+
+    // The armband moves to whoever is picked next
+    fireEvent.click(screen.getByRole('button', { name: 'Captain: Keeper One' }))
+    expect(screen.getByRole('button', { name: 'Captain: Striker One' })).toHaveAttribute('aria-pressed', 'false')
+    expect(screen.getByRole('button', { name: 'GK: Keeper One, 80, captain' })).toBeInTheDocument()
+
+    // Going to the bench takes it off
+    fireEvent.click(screen.getByRole('button', { name: 'GK: Keeper One, 80, captain' }))
+    fireEvent.click(within(screen.getByRole('list')).getByText('Keeper Two'))
+    expect(screen.getByText('Press C by a player to make them captain')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Captain: Striker One' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Save Squad' }))
+    fireEvent.change(screen.getByLabelText('Squad name'), { target: { value: 'Japan' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    await waitFor(() => expect(squadService.saveSquad).toHaveBeenCalled())
+    expect(squadService.saveSquad.mock.calls[0][3].lineups[0].captain).toBe(13) // Striker One
+  })
+
   it('names and saves a new squad with all its lineups', async () => {
     await renderBuilder()
 

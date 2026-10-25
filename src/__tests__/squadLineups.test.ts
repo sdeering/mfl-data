@@ -14,8 +14,10 @@ import {
   FORMATION_NAMES,
   fromSavedSquad,
   positionFit,
+  removePlayer,
   savedSquadPlayerIds,
   toSavedSquad,
+  toggleCaptain,
 } from '../utils/squadLineups'
 import { currentSeason } from '../utils/playerSeasons'
 
@@ -131,7 +133,20 @@ describe('formations', () => {
 })
 
 describe('placing players', () => {
-  const lineup: Lineup = { id: 1, name: 'Lineup A', formation: '4-3-3', ...autoFillLineup('4-3-3', squad) }
+  const lineup: Lineup = { id: 1, name: 'Lineup A', formation: '4-3-3', ...autoFillLineup('4-3-3', squad), captain: null }
+
+  it('gives the armband only to a starter, who loses it on leaving the XI', () => {
+    const captained = toggleCaptain(lineup, stA.id)
+    expect(captained.captain).toBe(stA.id)
+    expect(toggleCaptain(captained, stA.id).captain).toBeNull()
+    // A substitute can't be captain
+    expect(toggleCaptain(lineup, stB.id).captain).toBeNull()
+
+    // Moving to another position keeps it; going to the bench or out of the squad doesn't
+    expect(assignPlayer(captained, stA.id, { type: 'xi', index: 0 }).captain).toBe(stA.id)
+    expect(assignPlayer(captained, stB.id, { type: 'xi', index: 9 }).captain).toBeNull()
+    expect(removePlayer(captained, stA.id).captain).toBeNull()
+  })
 
   it('swaps a player in the lineup with whoever has the slot they move to', () => {
     const moved = assignPlayer(lineup, stB.id, { type: 'xi', index: 9 })
@@ -177,12 +192,14 @@ describe('placing players', () => {
 describe('saving squads', () => {
   it('saves every lineup by player ID, with the players as they are now', () => {
     const lineups: Lineup[] = [
-      { id: 1, name: 'Lineup A', formation: '4-4-2', xi: [1, ...Array(10).fill(null)], bench: [2, ...Array(6).fill(null)], reserves: [3, null, null, null, null] },
-      { id: 2, name: 'Lineup B', formation: '3-5-2', xi: emptyXi(), bench: emptyBench(), reserves: emptyReserves() },
+      { id: 1, name: 'Lineup A', formation: '4-4-2', xi: [1, ...Array(10).fill(null)], bench: [2, ...Array(6).fill(null)], reserves: [3, null, null, null, null], captain: 1 },
+      { id: 2, name: 'Lineup B', formation: '3-5-2', xi: emptyXi(), bench: emptyBench(), reserves: emptyReserves(), captain: null },
     ]
     const saved = toSavedSquad(lineups, byId)
     expect(saved.formationId).toBe('4-4-2')
-    expect(saved.players.lineups).toEqual(lineups.map(({ name, formation, xi, bench, reserves }) => ({ name, formation, xi, bench, reserves })))
+    expect(saved.players.lineups).toEqual(
+      lineups.map(({ name, formation, xi, bench, reserves, captain }) => ({ name, formation, xi, bench, reserves, captain }))
+    )
     expect(Object.keys(saved.players.players)).toEqual(['1', '2', '3'])
 
     const loaded = fromSavedSquad({ formation_id: saved.formationId, players: saved.players })
@@ -190,13 +207,22 @@ describe('saving squads', () => {
     expect(loaded.players.map(p => p.id)).toEqual([1, 2, 3])
   })
 
-  it('gives lineups saved before reserves existed empty ones', () => {
+  it('gives lineups saved before reserves and captains existed empty reserves and no captain', () => {
     const { lineups } = fromSavedSquad({
       formation_id: '4-4-2',
       players: { lineups: [{ name: 'Lineup A', formation: '4-4-2', xi: [1], bench: [2] }], players: {} },
     })
     expect(lineups[0].reserves).toEqual(emptyReserves())
     expect(lineups[0].bench).toEqual([2, null, null, null, null, null, null])
+    expect(lineups[0].captain).toBeNull()
+  })
+
+  it('only loads a captain who is in the XI', () => {
+    const { lineups } = fromSavedSquad({
+      formation_id: '4-4-2',
+      players: { lineups: [{ name: 'Lineup A', formation: '4-4-2', xi: [1], bench: [2], captain: 2 }], players: {} },
+    })
+    expect(lineups[0].captain).toBeNull()
   })
 
   it('turns a squad saved before lineups into one lineup, with its extra players on the bench', () => {

@@ -6,7 +6,7 @@ import { ALL_POSITIONS, FORMATIONS, Lineup, formationLabel, positionFit } from '
 import { getTierColors } from '../../utils/tierColors';
 import RetirementIcon from '../RetirementIcon';
 import { Panel, tableClass, tdClass, thClass, theadRowClass, rowClass } from '../ui';
-import { RatingText, STAT_KEYS, STAT_LABELS, fullName } from './shared';
+import { CAPTAIN_BADGE, RatingText, STAT_KEYS, STAT_LABELS, fullName } from './shared';
 import { SquadGroup, playerGroups } from './SquadAnalysis';
 
 /** The lineup's players in order, each with their role: a position in the XI, SUB, or RES for the reserves. */
@@ -29,13 +29,13 @@ const csvCell = (value: unknown) => {
 /** The lineup as a CSV Excel opens, with each player's rating at every position. */
 export function lineupCsv(lineup: Lineup, playersById: Map<number, MFLPlayer>): string {
   const headers = [
-    'Lineup', 'Formation', 'Role', 'Player ID', 'First Name', 'Last Name', 'Full Name', 'Overall', 'Role Rating', 'Age', 'Positions',
+    'Lineup', 'Formation', 'Role', 'Captain', 'Player ID', 'First Name', 'Last Name', 'Full Name', 'Overall', 'Role Rating', 'Age', 'Positions',
     'Preferred Foot', 'Nationalities', 'Height', 'PAC', 'SHO', 'PAS', 'DRI', 'DEF', 'PHY', 'GK', ...ALL_POSITIONS.map(position => `Rating ${position}`),
   ];
   const lines = lineupRows(lineup, playersById).map(({ role, player }) => {
     const m = player.metadata;
     return [
-      lineup.name, formationLabel(lineup.formation), role, player.id, m.firstName, m.lastName, fullName(player), m.overall,
+      lineup.name, formationLabel(lineup.formation), role, player.id === lineup.captain ? 'Yes' : '', player.id, m.firstName, m.lastName, fullName(player), m.overall,
       role === 'SUB' || role === 'RES' ? '' : positionFit(player, role as MFLPosition).rating, m.age, m.positions.join(' '),
       m.preferredFoot, (m.nationalities || []).join(' '), m.height, m.pace, m.shooting, m.passing, m.dribbling, m.defense, m.physical, m.goalkeeping,
       ...ALL_POSITIONS.map(position => positionFit(player, position).rating),
@@ -112,6 +112,11 @@ export default function SquadStatsTable({ lineup, playersById, group, season, on
                       <Link href={`/players/${player.id}`} className="text-sm font-bold text-fg hover:text-accent-ink">
                         {fullName(player)}
                       </Link>
+                      {player.id === lineup.captain && (
+                        <span title="Captain" className={`flex-none w-[18px] h-[18px] rounded-full grid place-items-center text-[10px] font-extrabold ${CAPTAIN_BADGE}`}>
+                          C
+                        </span>
+                      )}
                       <RetirementIcon retirementYears={m.retirementYears} currentSeason={season} className="w-3 h-3" />
                     </span>
                   </td>
