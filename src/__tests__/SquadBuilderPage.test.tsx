@@ -422,8 +422,54 @@ describe('Squad Builder', () => {
     fireEvent.click(within(reserves).getByRole('button', { name: 'Remove Squad Player 23' }))
     fireEvent.click(within(reserves).getByRole('button', { name: 'Pick a player for reserve 5' }))
     expect(screen.getByRole('heading', { name: 'Select reserve' })).toBeInTheDocument()
+    // Out of the squad, so among all the players
+    fireEvent.click(screen.getByRole('button', { name: /^All players/ }))
     fireEvent.click(within(screen.getByRole('list')).getByText('Squad Player 30'))
     expect(within(reserves).getByRole('button', { name: 'Reserve 5: Squad Player 30' })).toBeInTheDocument()
+  })
+
+  it("lists the squad's players for a position first, and all of them at a click", async () => {
+    const many = Array.from({ length: 30 }, (_, i) => player(100 + i, 'Squad', `Player ${String(i + 1).padStart(2, '0')}`, ['CM'], 90 - i))
+    supabaseDataService.getAgencyPlayers.mockResolvedValue(many)
+    await renderBuilder()
+    const names = () => within(screen.getByRole('list')).queryAllByRole('listitem').map(item => item.querySelector('.truncate')?.textContent)
+
+    fireEvent.click(pitchSlot('CM')[0])
+    const squadButton = screen.getByRole('button', { name: /^This squad/ })
+    expect(squadButton).toHaveAttribute('aria-pressed', 'true')
+    const squadCount = Number(squadButton.textContent?.match(/\d+/)?.[0])
+    expect(squadCount).toBeGreaterThanOrEqual(23)
+    expect(squadCount).toBeLessThan(30)
+    expect(names()).toHaveLength(squadCount)
+    expect(names()).not.toContain('Squad Player 30')
+
+    fireEvent.click(screen.getByRole('button', { name: /^All players/ }))
+    expect(screen.getByRole('button', { name: /^All players/ })).toHaveAttribute('aria-pressed', 'true')
+    expect(names()).toHaveLength(30)
+    expect(names()).toContain('Squad Player 30')
+
+    // A name not in the squad finds no one there, with a way to look among everyone
+    fireEvent.click(screen.getByRole('button', { name: /^This squad/ }))
+    fireEvent.change(screen.getByLabelText('Filter by name'), { target: { value: 'Player 30' } })
+    expect(screen.getByText(/No squad players match/)).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Show all players' }))
+    expect(names()).toEqual(['Squad Player 30'])
+
+    // Another position starts on the squad again
+    fireEvent.click(pitchSlot('GK')[0])
+    expect(screen.getByRole('button', { name: /^This squad/ })).toHaveAttribute('aria-pressed', 'true')
+  })
+
+  it('lists all the players for a position when the squad has none yet', async () => {
+    await renderBuilder()
+    fireEvent.click(screen.getByRole('button', { name: 'Clear' }))
+    fireEvent.click(screen.getByRole('button', { name: /^Lineup B/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Clear' }))
+
+    fireEvent.click(pitchSlot('GK')[0])
+    expect(screen.getByRole('button', { name: /^This squad/ })).toBeDisabled()
+    expect(screen.getByRole('button', { name: /^All players/ })).toHaveAttribute('aria-pressed', 'true')
+    expect(within(screen.getByRole('list')).getAllByRole('listitem')).toHaveLength(agency.length)
   })
 
   it("opens a player's menu without placing them: their page, their ID to copy and mfl.com", async () => {

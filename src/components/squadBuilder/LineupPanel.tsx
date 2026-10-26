@@ -1,12 +1,14 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import type { MFLPlayer } from '../../types/mflApi';
-import { FORMATIONS, Lineup, PositionFit, SlotRef, XI_SIZE, formationLabel, positionFit } from '../../utils/squadLineups';
+import { FORMATIONS, Lineup, PositionFit, SlotRef, XI_SIZE, formationLabel, lineupPlayerIds, positionFit } from '../../utils/squadLineups';
 import { getTierColors } from '../../utils/tierColors';
 import { Panel, SearchField } from '../ui';
 import { CAPTAIN_BADGE, CloseIcon, FIT_COLORS, FIT_LABELS, FIT_SHORT_LABELS, PlayerAvatar, fullName } from './shared';
 
 interface LineupPanelProps {
   lineup: Lineup;
+  /** All of the squad's lineups, the one on screen among them */
+  lineups: Lineup[];
   players: MFLPlayer[];
   playersById: Map<number, MFLPlayer>;
   selected: SlotRef | null;
@@ -28,25 +30,41 @@ interface LineupPanelProps {
 export default function LineupPanel(props: LineupPanelProps) {
   return (
     <Panel ref={props.panelRef} className="[grid-area:panel] min-w-0 flex flex-col gap-3 p-4 scroll-mt-4">
-      {props.selected ? <Picker {...props} selected={props.selected} /> : <Summary {...props} />}
+      {/* A new Picker for each position, so each one starts on the squad's players */}
+      {props.selected ? (
+        <Picker key={`${props.selected.type}-${props.selected.index}`} {...props} selected={props.selected} />
+      ) : (
+        <Summary {...props} />
+      )}
     </Panel>
   );
 }
 
-function Picker({ lineup, players, playersById, selected, onToggleCaptain, onClose, onPick, query, onQuery }: LineupPanelProps & { selected: SlotRef }) {
+const scopeClass = (active: boolean) =>
+  `flex-1 flex items-center justify-center gap-1.5 h-8 px-3 rounded-full text-xs font-bold whitespace-nowrap cursor-pointer transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+    active ? 'bg-accent text-accent-fg' : 'text-fg-3 hover:text-fg'
+  }`;
+
+function Picker({ lineup, lineups, players, playersById, selected, onToggleCaptain, onClose, onPick, query, onQuery }: LineupPanelProps & { selected: SlotRef }) {
   const position = selected.type === 'xi' ? FORMATIONS[lineup.formation][selected.index][0] : null;
   const current = lineup[selected.type][selected.index];
   // Only a starter can be captain
   const starter = position && current !== null ? playersById.get(current) : undefined;
   const isCaptain = !!starter && starter.id === lineup.captain;
 
+  // The players in any of the squad's lineups come first, the rest of the agency a click away
+  const squadIds = useMemo(() => new Set(lineups.flatMap(lineupPlayerIds)), [lineups]);
+  const squadCount = players.filter(player => squadIds.has(player.id)).length;
+  const [showAll, setShowAll] = useState(squadCount === 0);
+
   const candidates = useMemo(() => {
     const q = query.trim().toLowerCase();
     return players
+      .filter(player => showAll || squadIds.has(player.id))
       .filter(player => !q || fullName(player).toLowerCase().includes(q))
       .map(player => ({ player, fit: position ? positionFit(player, position) : ({ rating: player.metadata.overall, kind: 'natural' } as PositionFit) }))
       .sort((a, b) => b.fit.rating - a.fit.rating || b.player.metadata.overall - a.player.metadata.overall);
-  }, [players, position, query]);
+  }, [players, position, query, showAll, squadIds]);
 
   return (
     <>
@@ -101,6 +119,27 @@ function Picker({ lineup, players, playersById, selected, onToggleCaptain, onClo
         aria-label="Filter by name"
         wrapperClassName="w-full"
       />
+      <div className="flex gap-1 p-1 rounded-full border border-line bg-inset" role="group" aria-label="Players to show">
+        <button type="button" aria-pressed={!showAll} disabled={squadCount === 0} onClick={() => setShowAll(false)} className={scopeClass(!showAll)}>
+          This squad <span className="font-mono font-semibold opacity-75">{squadCount}</span>
+        </button>
+        <button type="button" aria-pressed={showAll} onClick={() => setShowAll(true)} className={scopeClass(showAll)}>
+          All players <span className="font-mono font-semibold opacity-75">{players.length}</span>
+        </button>
+      </div>
+      {candidates.length === 0 && (
+        <p className="m-0 py-6 text-center text-sm font-medium text-muted">
+          {showAll ? 'No players match.' : 'No squad players match.'}
+          {!showAll && (
+            <>
+              {' '}
+              <button type="button" onClick={() => setShowAll(true)} className="p-0 bg-transparent border-0 font-bold text-accent-ink cursor-pointer hover:underline">
+                Show all players
+              </button>
+            </>
+          )}
+        </p>
+      )}
       <div className="flex flex-col gap-1.5 max-h-[60vh] min-[64rem]:max-h-[900px] overflow-y-auto" role="list">
         {candidates.map(({ player, fit }) => {
           const isCurrent = current === player.id;
@@ -112,7 +151,7 @@ function Picker({ lineup, players, playersById, selected, onToggleCaptain, onClo
                 ? 'Bench'
                 : lineup.reserves.includes(player.id)
                   ? 'Reserves'
-                  : null;
+                  : (lineups.find(other => other !== lineup && lineupPlayerIds(other).includes(player.id))?.name ?? null);
           const tier = getTierColors(fit.rating);
           return (
             <button

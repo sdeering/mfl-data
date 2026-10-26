@@ -666,6 +666,7 @@ export default function SquadBuilderPage() {
         <LineupPanel
           panelRef={panelRef}
           lineup={lineup}
+          lineups={lineups}
           players={players}
           playersById={playersById}
           selected={selected}
