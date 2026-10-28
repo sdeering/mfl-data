@@ -3,7 +3,7 @@ import { crawlFormationResults, mflBlockedFor } from '@/src/services/formationRe
 
 export const maxDuration = 60;
 
-/** Matches read per run: with a pause between requests this fits well inside the function's minute */
+/** Most matches read per run. At 1.5 seconds a request the run's 50 seconds end it first, after about 30 */
 const MAX_MATCHES = 120;
 const RUN_MS = 50 * 1000;
 

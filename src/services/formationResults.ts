@@ -247,10 +247,11 @@ const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
 
 /** Random club IDs MFL has, to find squads with when nothing has been kept yet */
 const SEED_CLUB_IDS = 9000
-/** Between MFL requests, to stay well under the burst that gets the token blocked (~65 in 10 seconds) */
-const CRAWL_GAP_MS = 300
-/** Match details read at once */
-const CRAWL_CONCURRENCY = 2
+/**
+ * Least time between the starts of two MFL requests. Two at a time 0.3 seconds apart got the token blocked for
+ * 10 minutes, about 90 requests in, so the crawl asks one at a time, at most 40 a minute.
+ */
+const CRAWL_GAP_MS = 1500
 
 export interface CrawlReport {
   squads: number
@@ -262,18 +263,20 @@ export interface CrawlReport {
 
 /**
  * Reads more competitive matches into the meta: the latest matches of squads seen lately (random clubs when there
- * are none), and the details of each match not kept yet. One request at a time, a little apart, until `maxMatches`
- * have been read or `deadline` passes.
+ * are none), and the details of each match not kept yet. One request at a time, 1.5 seconds apart, until
+ * `maxMatches` have been read or `deadline` passes.
  */
 export async function crawlFormationResults({ maxMatches, deadline }: { maxMatches: number; deadline: number }): Promise<CrawlReport> {
   const report: CrawlReport = { squads: 0, listed: 0, fetched: 0, kept: 0, stoppedBy: 'squads' }
   const timeLeft = () => Date.now() < deadline
+  let lastAsk = 0
   const ask = async <T>(path: string, revalidate: number): Promise<T> => {
-    await sleep(CRAWL_GAP_MS)
+    await sleep(Math.max(0, lastAsk + CRAWL_GAP_MS - Date.now()))
+    lastAsk = Date.now()
     return fetchMflCached<T>(path, revalidate)
   }
 
-  let squads = shuffle(await crawlSquads(400)).slice(0, 60)
+  const squads = shuffle(await crawlSquads(400)).slice(0, 60)
   try {
     while (squads.length < 10 && timeLeft()) {
       const club = await ask<{ squads?: { id: number }[] }>(`/clubs/${1 + Math.floor(Math.random() * SEED_CLUB_IDS)}`, 24 * HOUR).catch(error => {
@@ -297,22 +300,15 @@ export async function crawlFormationResults({ maxMatches, deadline }: { maxMatch
       const results: FormationResult[] = []
       const unread = listed.filter(match => !kept.has(match.id))
       try {
-        // Two at a time, each a little apart: about 3 requests a second
-        for (let index = 0; index < unread.length; index += CRAWL_CONCURRENCY) {
+        for (const match of unread) {
           if (report.fetched >= maxMatches || !timeLeft()) break
-          const batch = unread.slice(index, index + Math.min(CRAWL_CONCURRENCY, maxMatches - report.fetched))
-          report.fetched += batch.length
-          const read = await Promise.all(
-            batch.map(match =>
-              ask<MatchDetails>(`/matches/${match.id}?withFormations=true`, 168 * HOUR)
-                .then(details => toFormationResult(match.id, { ...details, startDate: details.startDate ?? match.startDate }))
-                .catch(error => {
-                  if (error instanceof MflRateLimitError) throw error
-                  return null
-                }),
-            ),
-          )
-          results.push(...read.filter((result): result is FormationResult => result !== null))
+          report.fetched++
+          const details = await ask<MatchDetails>(`/matches/${match.id}?withFormations=true`, 168 * HOUR).catch(error => {
+            if (error instanceof MflRateLimitError) throw error
+            return null
+          })
+          const result = details && toFormationResult(match.id, { ...details, startDate: details.startDate ?? match.startDate })
+          if (result) results.push(result)
         }
       } finally {
         // Keep what was read, even when MFL stopped us partway
