@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { clubsService } from '../../services/clubsService';
 import type { ScoutMatch } from '../../services/scoutService';
 import { matchResult, type FilledSlot, type FormationFit, type FormationGuess, type FormationPick } from '../../utils/formationPlanner';
 import { FORMATIONS, FORMATION_NAMES, formationLabel } from '../../utils/squadLineups';
+import { placeSpots, type PitchSpot, type PlacedSpot } from '../../utils/pitchSpots';
 import type { MFLPlayer } from '../../types/mflApi';
 import { Panel } from '../ui';
 
@@ -128,17 +129,21 @@ export const OpponentCard: React.FC<{
 const record = (matches: ScoutMatch[]) =>
   (['W', 'D', 'L'] as const).map(result => `${matches.filter(match => matchResult(match) === result).length}${result}`).join(' ');
 
+/** Planning against every formation an opponent may play, weighed by how likely it is, rather than one of them */
+export const LIKELY_MIX = 'mix';
+
 /**
- * The formations an opponent will likely play. Picking one (a row, or any formation from the list) plans against
- * it alone instead of the likely mix.
+ * The formations an opponent will likely play, the likeliest picked to plan against. Picking another (a row, or
+ * any formation from the list) plans against it instead, or against their likely mix.
  */
 export const LikelyFormationPanel: React.FC<{
   name: string;
   guesses: FormationGuess[];
   matches: ScoutMatch[];
-  assumed: string | null;
-  onAssume: (formation: string | null) => void;
-}> = ({ name, guesses, matches, assumed, onAssume }) => {
+  /** The formation planned against, or LIKELY_MIX */
+  against: string;
+  onAgainst: (against: string) => void;
+}> = ({ name, guesses, matches, against, onAgainst }) => {
   const [top] = guesses;
   return (
     <Panel className="p-[22px] flex flex-col gap-4">
@@ -150,14 +155,14 @@ export const LikelyFormationPanel: React.FC<{
       <div className="flex flex-col gap-1">
         {guesses.slice(0, 3).map((guess, index) => {
           const played = matches.filter(match => match.formation === guess.formation);
-          const on = guess.formation === assumed;
+          const on = guess.formation === against;
           return (
             <button
               key={guess.formation}
               type="button"
-              onClick={() => onAssume(on ? null : guess.formation)}
+              onClick={() => onAgainst(guess.formation)}
               aria-pressed={on}
-              title={on ? 'Plan against their likely mix again' : `Plan against ${formationLabel(guess.formation)}`}
+              title={`Plan against ${formationLabel(guess.formation)}`}
               className={`-mx-2.5 px-2.5 py-2 flex flex-col gap-[5px] rounded-xl border text-fg text-left cursor-pointer transition-colors hover:border-[#c6f432] ${
                 on ? 'border-[#c6f432] bg-[rgba(198,244,50,.07)]' : 'border-transparent'
               }`}
@@ -185,11 +190,11 @@ export const LikelyFormationPanel: React.FC<{
         Plan against
         <span className="relative block">
           <select
-            value={assumed ?? ''}
-            onChange={event => onAssume(event.target.value || null)}
+            value={against}
+            onChange={event => onAgainst(event.target.value)}
             className="appearance-none h-8 pl-3 pr-8 rounded-lg border border-line-2 bg-field text-fg text-xs font-bold cursor-pointer outline-none"
           >
-            <option value="">Their likely mix</option>
+            <option value={LIKELY_MIX}>Their likely mix</option>
             {FORMATION_NAMES.map(formation => (
               <option key={formation} value={formation}>
                 {formationLabel(formation)}
@@ -386,41 +391,58 @@ const PITCH_LINE = 'rgba(255,255,255,.45)';
 const ourX = (down: number) => 4 + (100 - down) * 0.46;
 const ourY = (across: number) => 6 + across * 0.88;
 
-/** A spot on the matchup pitch: the position in a ring, and below it who plays there and their rating at it. */
-const PitchSpot: React.FC<{
+interface MatchupSpot {
   position: string;
+  /** Where the formation stands them, as % across and down the pitch */
   left: number;
   top: number;
   slot: FilledSlot | undefined;
   playersById: Map<number, MFLPlayer>;
   ours: boolean;
-}> = ({ position, left, top, slot, playersById, ours }) => {
+}
+
+/**
+ * A player on the matchup pitch: their position in a ring, and on a tag below it (above, when that makes room) who
+ * plays there and their rating at it.
+ */
+const PitchPlayer: React.FC<
+  MatchupSpot & {
+    tagAbove: boolean;
+    ringRef: (element: HTMLSpanElement | null) => void;
+    tagRef: (element: HTMLSpanElement | null) => void;
+  }
+> = ({ position, left, top, slot, playersById, ours, tagAbove, ringRef, tagRef }) => {
   const player = slot?.playerId ? playersById.get(slot.playerId) : undefined;
   const rating = player && Math.round(slot!.rating);
   return (
-    <div
+    <span
+      ref={ringRef}
       title={
         player
           ? `${player.metadata.firstName} ${player.metadata.lastName} · ${rating} at ${position}${rating !== player.metadata.overall ? ` (overall ${player.metadata.overall})` : ''}`
           : position
       }
-      className="absolute -translate-x-1/2 -translate-y-1/2 flex flex-col items-center gap-0.5"
-      style={{ left: `${left}%`, top: `${top}%` }}
+      className={`absolute -translate-x-1/2 -translate-y-1/2 w-5 h-5 sm:w-7 sm:h-7 rounded-full grid place-items-center text-[7px] sm:text-[9px] font-extrabold ${
+        ours ? 'text-white bg-[#0b1406]' : 'text-[#1a0d02]'
+      }`}
+      style={{
+        left: `${left}%`,
+        top: `${top}%`,
+        ...(ours ? { border: `2px solid ${FIT_COLOURS[slot?.kind ?? 'out']}` } : { background: ORANGE, border: '2px solid rgba(0,0,0,.35)' }),
+      }}
     >
-      <span
-        className={`w-5 h-5 sm:w-[30px] sm:h-[30px] rounded-full grid place-items-center text-[7px] sm:text-[9px] font-extrabold ${ours ? 'text-white bg-[#0b1406]' : 'text-[#1a0d02]'}`}
-        style={ours ? { border: `2px solid ${FIT_COLOURS[slot?.kind ?? 'out']}` } : { background: ORANGE, border: '2px solid rgba(0,0,0,.35)' }}
-      >
-        {position}
-      </span>
+      {position}
       {/* On a phone the pitch is too narrow for 22 names, so it shows ratings alone */}
       {(player || ours) && (
-        <span className="px-[3px] sm:px-[5px] py-px rounded-[5px] bg-black/60 text-[9px] sm:text-[10px] font-bold text-white whitespace-nowrap">
-          <span className={player ? 'hidden sm:inline' : ''}>{player?.metadata.lastName ?? '—'}</span>
-          {player && <span className={`sm:ml-1 ${ours ? 'text-[#c6f432]' : 'text-[#fdba74]'}`}>{rating}</span>}
+        <span
+          ref={tagRef}
+          className={`absolute left-1/2 -translate-x-1/2 ${tagAbove ? 'bottom-[calc(100%+4px)]' : 'top-[calc(100%+4px)]'} w-max flex items-center sm:gap-1 px-[3px] sm:px-[5px] py-px rounded-[5px] bg-black/60 text-[9px] sm:text-[10px] font-bold text-white`}
+        >
+          <span className={`${player ? 'hidden sm:block' : 'block'} max-w-[44px] truncate`}>{player?.metadata.lastName ?? '—'}</span>
+          {player && <span className={ours ? 'text-[#c6f432]' : 'text-[#fdba74]'}>{rating}</span>}
         </span>
       )}
-    </div>
+    </span>
   );
 };
 
@@ -434,64 +456,125 @@ export const MatchupPanel: React.FC<{
   theirFit: FormationFit | undefined;
   theirPlayersById: Map<number, MFLPlayer>;
   onOpenSquad: () => void;
-}> = ({ name, formation, theirFormation, fit, playersById, theirFit, theirPlayersById, onOpenSquad }) => (
-  <Panel className="p-[22px] flex flex-col gap-4">
-    <div className="flex items-start justify-between gap-3 flex-wrap">
-      <div className="flex flex-col gap-1">
-        <span className={capsLabel}>Matchup</span>
-        <span className="font-display text-2xl leading-[1.1] font-extrabold">
-          <span className="text-accent-ink">{formationLabel(formation)}</span> <span className="text-muted-3 text-base">vs</span>{' '}
-          <span className="text-[#fb923c]">{formationLabel(theirFormation)}</span>
+}> = ({ name, formation, theirFormation, fit, playersById, theirFit, theirPlayersById, onOpenSquad }) => {
+  const pitchRef = useRef<HTMLDivElement>(null);
+  const rings = useRef<(HTMLSpanElement | null)[]>([]);
+  const tags = useRef<(HTMLSpanElement | null)[]>([]);
+  const [size, setSize] = useState({ width: 0, height: 0 });
+  // Where each player is drawn, moved from their spot when names would crowd, for the layout it was worked out for
+  const [layout, setLayout] = useState<{ key: string; spots: PlacedSpot[] } | null>(null);
+
+  const spots: MatchupSpot[] = [
+    ...FORMATIONS[theirFormation].map(([position, across, down], index) => ({
+      position,
+      left: 100 - ourX(down),
+      top: 100 - ourY(across),
+      slot: theirFit?.slots[index],
+      playersById: theirPlayersById,
+      ours: false,
+    })),
+    ...FORMATIONS[formation].map(([position, across, down], index) => ({
+      position,
+      left: ourX(down),
+      top: ourY(across),
+      slot: fit?.slots[index],
+      playersById,
+      ours: true,
+    })),
+  ];
+
+  useEffect(() => {
+    const pitch = pitchRef.current;
+    if (!pitch) return;
+    const observer = new ResizeObserver(([entry]) => setSize({ width: entry.contentRect.width, height: entry.contentRect.height }));
+    observer.observe(pitch);
+    return () => observer.disconnect();
+  }, []);
+
+  // Once drawn, measures every ring and name tag and makes room between them, before the page shows
+  useLayoutEffect(() => {
+    if (!size.width) return;
+    const measured: PitchSpot[] = spots.map((spot, index) => ({
+      x: (spot.left / 100) * size.width,
+      y: (spot.top / 100) * size.height,
+      ring: rings.current[index]?.offsetWidth ?? 0,
+      tagWidth: tags.current[index]?.offsetWidth ?? 0,
+      tagHeight: tags.current[index]?.offsetHeight ?? 0,
+    }));
+    const key = JSON.stringify([size, measured]);
+    if (layout?.key === key) return;
+    const placed = placeSpots(measured, size.width, size.height).map(spot => ({
+      x: (spot.x / size.width) * 100,
+      y: (spot.y / size.height) * 100,
+      tagAbove: spot.tagAbove,
+    }));
+    setLayout({ key, spots: placed });
+  });
+
+  return (
+    <Panel className="p-[22px] flex flex-col gap-4">
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <div className="flex flex-col gap-1">
+          <span className={capsLabel}>Matchup</span>
+          <span className="font-display text-2xl leading-[1.1] font-extrabold">
+            <span className="text-accent-ink">{formationLabel(formation)}</span> <span className="text-muted-3 text-base">vs</span>{' '}
+            <span className="text-[#fb923c]">{formationLabel(theirFormation)}</span>
+          </span>
+        </div>
+        <button type="button" onClick={onOpenSquad} disabled={!fit} className={limeButton}>
+          Open in Squad Builder
+        </button>
+      </div>
+      <div
+        ref={pitchRef}
+        className="relative aspect-[100/64] rounded-2xl overflow-hidden"
+        style={{ background: 'repeating-linear-gradient(90deg,#0d3a22 0 10%,#104429 10% 20%)' }}
+      >
+        <div className="absolute inset-[4%] rounded-[3px]" style={{ border: `2px solid ${PITCH_LINE}` }} />
+        <div className="absolute top-[4%] bottom-[4%] left-1/2 w-0.5" style={{ background: PITCH_LINE }} />
+        <div className="absolute left-1/2 top-1/2 h-[26%] aspect-square -translate-x-1/2 -translate-y-1/2 rounded-full" style={{ border: `2px solid ${PITCH_LINE}` }} />
+        <div className="absolute left-[4%] top-[24%] bottom-[24%] w-[13%]" style={{ border: `2px solid ${PITCH_LINE}`, borderLeft: 0 }} />
+        <div className="absolute right-[4%] top-[24%] bottom-[24%] w-[13%]" style={{ border: `2px solid ${PITCH_LINE}`, borderRight: 0 }} />
+        {spots.map((spot, index) => {
+          const placed = layout?.spots[index];
+          return (
+            <PitchPlayer
+              key={index}
+              {...spot}
+              left={placed?.x ?? spot.left}
+              top={placed?.y ?? spot.top}
+              tagAbove={placed?.tagAbove ?? false}
+              ringRef={element => {
+                rings.current[index] = element;
+              }}
+              tagRef={element => {
+                tags.current[index] = element;
+              }}
+            />
+          );
+        })}
+      </div>
+      <div className="flex gap-3.5 flex-wrap text-xs font-semibold text-muted">
+        {(
+          [
+            ['Natural', FIT_COLOURS.natural],
+            ['Alternative', FIT_COLOURS.alt],
+            ['Out of position', FIT_COLOURS.out],
+          ] as const
+        ).map(([label, colour]) => (
+          <span key={label} className="flex items-center gap-1.5">
+            <span className="w-2.5 h-2.5 rounded-full" style={{ border: `2px solid ${colour}` }} />
+            {label}
+          </span>
+        ))}
+        <span className="flex items-center gap-1.5">
+          <span className="w-2.5 h-2.5 rounded-full" style={{ background: ORANGE }} />
+          {name}
         </span>
       </div>
-      <button type="button" onClick={onOpenSquad} disabled={!fit} className={limeButton}>
-        Open in Squad Builder
-      </button>
-    </div>
-    <div
-      className="relative aspect-[100/64] rounded-2xl overflow-hidden"
-      style={{ background: 'repeating-linear-gradient(90deg,#0d3a22 0 10%,#104429 10% 20%)' }}
-    >
-      <div className="absolute inset-[4%] rounded-[3px]" style={{ border: `2px solid ${PITCH_LINE}` }} />
-      <div className="absolute top-[4%] bottom-[4%] left-1/2 w-0.5" style={{ background: PITCH_LINE }} />
-      <div className="absolute left-1/2 top-1/2 h-[26%] aspect-square -translate-x-1/2 -translate-y-1/2 rounded-full" style={{ border: `2px solid ${PITCH_LINE}` }} />
-      <div className="absolute left-[4%] top-[24%] bottom-[24%] w-[13%]" style={{ border: `2px solid ${PITCH_LINE}`, borderLeft: 0 }} />
-      <div className="absolute right-[4%] top-[24%] bottom-[24%] w-[13%]" style={{ border: `2px solid ${PITCH_LINE}`, borderRight: 0 }} />
-      {FORMATIONS[theirFormation].map(([position, across, down], index) => (
-        <PitchSpot
-          key={`them-${index}`}
-          position={position}
-          left={100 - ourX(down)}
-          top={100 - ourY(across)}
-          slot={theirFit?.slots[index]}
-          playersById={theirPlayersById}
-          ours={false}
-        />
-      ))}
-      {FORMATIONS[formation].map(([position, across, down], index) => (
-        <PitchSpot key={`us-${index}`} position={position} left={ourX(down)} top={ourY(across)} slot={fit?.slots[index]} playersById={playersById} ours />
-      ))}
-    </div>
-    <div className="flex gap-3.5 flex-wrap text-xs font-semibold text-muted">
-      {(
-        [
-          ['Natural', FIT_COLOURS.natural],
-          ['Alternative', FIT_COLOURS.alt],
-          ['Out of position', FIT_COLOURS.out],
-        ] as const
-      ).map(([label, colour]) => (
-        <span key={label} className="flex items-center gap-1.5">
-          <span className="w-2.5 h-2.5 rounded-full" style={{ border: `2px solid ${colour}` }} />
-          {label}
-        </span>
-      ))}
-      <span className="flex items-center gap-1.5">
-        <span className="w-2.5 h-2.5 rounded-full" style={{ background: ORANGE }} />
-        {name}
-      </span>
-    </div>
-  </Panel>
-);
+    </Panel>
+  );
+};
 
 export const RecentResultsPanel: React.FC<{ name: string; matches: ScoutMatch[]; ourClubId: number }> = ({ name, matches, ourClubId }) => (
   <Panel className="w-[calc((100%-22px)/2)] min-w-[min(100%,560px)] p-[22px] flex flex-col gap-1">

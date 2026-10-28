@@ -26,6 +26,7 @@ import WalletGate from './WalletGate';
 import {
   CounterPanel,
   FormationChangePanel,
+  LIKELY_MIX,
   LikelyFormationPanel,
   MatchupPanel,
   OpponentCard,
@@ -95,24 +96,25 @@ const OpponentPrep: React.FC<{
   meta: FormationMeta;
   pick: string | undefined;
   onPick: (formation: string) => void;
-  /** The one formation we plan against, picked by the user, or undefined for their likely mix */
-  assumed: string | undefined;
-  onAssume: (formation: string | null) => void;
+  /** What the user picked to plan against: a formation or LIKELY_MIX, undefined for their likeliest formation */
+  against: string | undefined;
+  onAgainst: (against: string) => void;
   onOpenSquad: (opponentName: string, formation: string) => void;
-}> = ({ opponent, ourClubId, ours, ourFits, ourPlayersById, meta, pick, onPick, assumed, onAssume, onOpenSquad }) => {
+}> = ({ opponent, ourClubId, ours, ourFits, ourPlayersById, meta, pick, onPick, against: picked, onAgainst, onOpenSquad }) => {
   const { report, error, isLoading } = useScoutReport(opponent.clubId, THEIR_MATCHES);
   const theirFits = useMemo(() => squadFits(report?.players ?? []), [report]);
   const theirPlayersById = useMemo(() => new Map((report?.players ?? []).map(player => [player.id, player])), [report]);
   const guesses = useMemo(() => (report ? predictFormations(report.matches, theirFits, meta) : []), [report, theirFits, meta]);
+  const against = picked ?? guesses[0]?.formation ?? LIKELY_MIX;
   const picks = useMemo(() => {
     if (!report || !ours) return [];
-    const guess = assumed && guesses.find(item => item.formation === assumed);
+    const guess = guesses.find(item => item.formation === against);
     // Their strength: their XI in the formation, or the XI their squad will likely field, or without a squad now,
     // the XIs they fielded lately
     return guess
       ? rankFormations([{ ...guess, probability: 1 }], ourFits, ours.matches, report.matches, meta, guess.fit?.rating ?? report.recentOvr)
       : rankFormations(guesses, ourFits, ours.matches, report.matches, meta, likelyRating(guesses) ?? report.recentOvr);
-  }, [report, ours, guesses, assumed, ourFits, meta]);
+  }, [report, ours, guesses, against, ourFits, meta]);
 
   if (isLoading) return <Spinner label={`Scouting ${opponent.name}…`} />;
   if (error || !report) {
@@ -125,17 +127,17 @@ const OpponentPrep: React.FC<{
 
   const name = report.club.name;
   const likeliest = guesses[0].formation;
-  const theirFormation = assumed ?? likeliest;
+  const theirFormation = against === LIKELY_MIX ? likeliest : against;
   const selected = picks.some(item => item.formation === pick) ? pick! : picks[0]?.formation;
   return (
     <>
       <div className={panelRow}>
-        <LikelyFormationPanel name={name} guesses={guesses} matches={report.matches} assumed={assumed ?? null} onAssume={onAssume} />
+        <LikelyFormationPanel name={name} guesses={guesses} matches={report.matches} against={against} onAgainst={onAgainst} />
         {report.matches.length > 0 && <FormationChangePanel name={name} matches={report.matches} likeliest={likeliest} />}
       </div>
       {selected ? (
         <div className={panelRow}>
-          <CounterPanel name={name} against={assumed ?? null} picks={picks} selected={selected} onSelect={onPick} />
+          <CounterPanel name={name} against={against === LIKELY_MIX ? null : against} picks={picks} selected={selected} onSelect={onPick} />
           <MatchupPanel
             name={name}
             formation={selected}
@@ -171,14 +173,14 @@ const MatchesPage: React.FC = () => {
   const [clubQuery, setClubQuery] = useState('');
   const [clubError, setClubError] = useState('');
   const [selectedId, setSelectedId] = useState<number | null>(null);
-  // The counter picked against each opponent, and the formation planned against when not their likely mix, by club ID
+  // The counter picked against each opponent, and what was picked to plan against when not their likeliest
+  // formation, by club ID
   const [picks, setPicks] = useState<Record<number, string>>({});
-  const [assumed, setAssumed] = useState<Record<number, string>>({});
-  const assume = (opponentId: number, formation: string | null) => {
-    const without = <T,>(record: Record<number, T>) => Object.fromEntries(Object.entries(record).filter(([id]) => Number(id) !== opponentId));
-    setAssumed(current => (formation ? { ...current, [opponentId]: formation } : without(current)));
+  const [plannedAgainst, setPlannedAgainst] = useState<Record<number, string>>({});
+  const planAgainst = (opponentId: number, against: string) => {
+    setPlannedAgainst(current => ({ ...current, [opponentId]: against }));
     // Show the best counter to it rather than one picked against something else
-    setPicks(current => without(current));
+    setPicks(current => Object.fromEntries(Object.entries(current).filter(([id]) => Number(id) !== opponentId)));
   };
 
   const { meta, own } = useFormationMeta();
@@ -403,8 +405,8 @@ const MatchesPage: React.FC = () => {
               meta={meta}
               pick={picks[selected.clubId]}
               onPick={formation => setPicks(current => ({ ...current, [selected.clubId]: formation }))}
-              assumed={assumed[selected.clubId]}
-              onAssume={formation => assume(selected.clubId, formation)}
+              against={plannedAgainst[selected.clubId]}
+              onAgainst={against => planAgainst(selected.clubId, against)}
               onOpenSquad={openSquad}
             />
           )}
