@@ -46,6 +46,7 @@ interface Opponent {
   clubId: number;
   name: string;
   when: string;
+  scouted?: boolean;
 }
 
 const COMPETITION_KINDS: Record<string, string> = { LEAGUE: 'League', CUP: 'Cup' };
@@ -58,11 +59,12 @@ const Spinner: React.FC<{ label: string }> = ({ label }) => (
 );
 
 /** An opponent's card, with their division, OVR and likely formation once they are scouted. */
-const OpponentChoice: React.FC<{ opponent: Opponent; meta: FormationMeta; selected: boolean; onSelect: () => void }> = ({
+const OpponentChoice: React.FC<{ opponent: Opponent; meta: FormationMeta; selected: boolean; onSelect: () => void; onRemove?: () => void }> = ({
   opponent,
   meta,
   selected,
   onSelect,
+  onRemove,
 }) => {
   const { report, error, isLoading } = useScoutReport(opponent.clubId, THEIR_MATCHES);
   const fits = useMemo(() => squadFits(report?.players ?? []), [report]);
@@ -80,6 +82,7 @@ const OpponentChoice: React.FC<{ opponent: Opponent; meta: FormationMeta; select
       error={error}
       selected={selected}
       onSelect={onSelect}
+      onRemove={onRemove}
     />
   );
 };
@@ -242,7 +245,7 @@ const MatchesPage: React.FC = () => {
   const { next, later } = splitByMatchDay(fixtures);
   const opponents: Opponent[] = [
     ...(showLater ? fixtures : next),
-    ...scouted.filter(id => !fixtures.some(fixture => fixture.clubId === id)).map(id => ({ clubId: id, name: `Club ${id}`, when: `Scouted · Club ID ${id}` })),
+    ...scouted.filter(id => !fixtures.some(fixture => fixture.clubId === id)).map(id => ({ clubId: id, name: `Club ${id}`, when: `Scouted · Club ID ${id}`, scouted: true })),
   ];
   const selected = opponents.find(opponent => opponent.clubId === selectedId) ?? opponents[0];
 
@@ -366,6 +369,7 @@ const MatchesPage: React.FC = () => {
                     meta={meta}
                     selected={opponent.clubId === selected?.clubId}
                     onSelect={() => setSelectedId(opponent.clubId)}
+                    onRemove={opponent.scouted ? () => setScouted(current => current.filter(id => id !== opponent.clubId)) : undefined}
                   />
                 ))}
               </div>

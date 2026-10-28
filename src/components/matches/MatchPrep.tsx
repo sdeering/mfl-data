@@ -5,7 +5,7 @@ import { matchResult, type FilledSlot, type FormationFit, type FormationGuess, t
 import { FORMATIONS, FORMATION_NAMES, formationLabel } from '../../utils/squadLineups';
 import { placeSpots, type PitchSpot, type PlacedSpot } from '../../utils/pitchSpots';
 import type { MFLPlayer } from '../../types/mflApi';
-import { Panel } from '../ui';
+import { ClearButton, Panel } from '../ui';
 
 /*
  * The panels of the Match Prep Tool (the Matches page), from the "MFL Matches" Claude Design file: an opponent's
@@ -81,7 +81,7 @@ const ClubLogo: React.FC<{ clubId: number; name: string; logoVersion?: string }>
   );
 };
 
-/** An opponent to pick, with when we play them and the formation they'll likely play. */
+/** An opponent to pick, with when we play them and the formation they'll likely play. With `onRemove`, an X takes it away. */
 export const OpponentCard: React.FC<{
   clubId: number;
   name: string;
@@ -94,35 +94,43 @@ export const OpponentCard: React.FC<{
   error: string | null;
   selected: boolean;
   onSelect: () => void;
-}> = ({ clubId, name, logoVersion, division, when, ovr, likely, isLoading, error, selected, onSelect }) => (
-  <button
-    type="button"
-    onClick={onSelect}
-    aria-pressed={selected}
-    className={`flex items-center gap-3.5 px-4 py-3.5 rounded-[18px] border text-fg text-left cursor-pointer transition-colors hover:border-[#c6f432] ${
-      selected ? 'border-[#c6f432] bg-[rgba(198,244,50,.07)]' : 'border-line bg-panel/92'
-    }`}
-  >
-    <ClubLogo key={`${clubId}-${logoVersion}`} clubId={clubId} name={name} logoVersion={logoVersion} />
-    <span className="flex-1 min-w-0 flex flex-col gap-[5px]">
-      <span className="flex items-center gap-2 min-w-0">
-        <span className="text-base font-bold truncate">{name}</span>
-        {division !== undefined && <DivisionChip division={division} />}
-      </span>
-      <span className="text-xs font-medium text-muted">
-        {error ? <span className="text-[#f87171]">{error}</span> : <>{when} · OVR {ovr !== null ? ovr.toFixed(1) : isLoading ? '…' : '–'}</>}
-      </span>
-    </span>
-    {likely && (
-      <span className="flex flex-col items-end gap-0.5">
-        <span className="flex items-center gap-[5px]">
-          <span className="text-[11px] font-semibold text-accent-ink">{percent(likely.probability)}</span>
-          <span className="text-[10px] font-bold tracking-[0.08em] uppercase text-muted-3">Likely</span>
+  onRemove?: () => void;
+}> = ({ clubId, name, logoVersion, division, when, ovr, likely, isLoading, error, selected, onSelect, onRemove }) => (
+  <div className="relative flex">
+    <button
+      type="button"
+      onClick={onSelect}
+      aria-pressed={selected}
+      className={`flex-1 min-w-0 flex items-center gap-3.5 pl-4 ${onRemove ? 'pr-12' : 'pr-4'} py-3.5 rounded-[18px] border text-fg text-left cursor-pointer transition-colors hover:border-[#c6f432] ${
+        selected ? 'border-[#c6f432] bg-[rgba(198,244,50,.07)]' : 'border-line bg-panel/92'
+      }`}
+    >
+      <ClubLogo key={`${clubId}-${logoVersion}`} clubId={clubId} name={name} logoVersion={logoVersion} />
+      <span className="flex-1 min-w-0 flex flex-col gap-[5px]">
+        <span className="flex items-center gap-2 min-w-0">
+          <span className="text-base font-bold truncate">{name}</span>
+          {division !== undefined && <DivisionChip division={division} />}
         </span>
-        <span className="font-display text-base font-extrabold whitespace-nowrap">{formationLabel(likely.formation)}</span>
+        <span className="text-xs font-medium text-muted">
+          {error ? <span className="text-[#f87171]">{error}</span> : <>{when} · OVR {ovr !== null ? ovr.toFixed(1) : isLoading ? '…' : '–'}</>}
+        </span>
+      </span>
+      {likely && (
+        <span className="flex flex-col items-end gap-0.5">
+          <span className="flex items-center gap-[5px]">
+            <span className="text-[11px] font-semibold text-accent-ink">{percent(likely.probability)}</span>
+            <span className="text-[10px] font-bold tracking-[0.08em] uppercase text-muted-3">Likely</span>
+          </span>
+          <span className="font-display text-base font-extrabold whitespace-nowrap">{formationLabel(likely.formation)}</span>
+        </span>
+      )}
+    </button>
+    {onRemove && (
+      <span className="absolute right-2.5 top-1/2 -translate-y-1/2">
+        <ClearButton onClear={onRemove} label={`Remove ${name}`} />
       </span>
     )}
-  </button>
+  </div>
 );
 
 /** "2W 0D 1L" */
