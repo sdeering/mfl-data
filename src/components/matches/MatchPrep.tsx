@@ -1,8 +1,8 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { clubsService } from '../../services/clubsService';
 import type { ScoutMatch } from '../../services/scoutService';
-import { matchResult, type FormationFit, type FormationGuess, type FormationPick } from '../../utils/formationPlanner';
-import { FORMATIONS, formationLabel } from '../../utils/squadLineups';
+import { matchResult, type FilledSlot, type FormationFit, type FormationGuess, type FormationPick } from '../../utils/formationPlanner';
+import { FORMATIONS, FORMATION_NAMES, formationLabel } from '../../utils/squadLineups';
 import type { MFLPlayer } from '../../types/mflApi';
 import { Panel } from '../ui';
 
@@ -55,9 +55,36 @@ export const DivisionChip: React.FC<{ division: number | null | undefined }> = (
   );
 };
 
+/** A club's crest from MFL, or its initials while it loads or when it has none (a club not founded yet). */
+const ClubLogo: React.FC<{ clubId: number; name: string; logoVersion?: string }> = ({ clubId, name, logoVersion }) => {
+  const [logo, setLogo] = useState<'loading' | 'shown' | 'missing'>('loading');
+  return (
+    <span className="relative w-11 h-11 flex-none grid place-items-center">
+      {logo !== 'shown' && (
+        <span className="w-full h-full rounded-full bg-chip border border-line-2 grid place-items-center font-display text-sm font-extrabold text-fg-3">
+          {name.split(/\s+/).map(word => word[0]).join('').slice(0, 2)}
+        </span>
+      )}
+      {logo !== 'missing' && (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={`https://d13e14gtps4iwl.cloudfront.net/u/clubs/${clubId}/logo.webp${logoVersion ? `?v=${logoVersion}` : ''}`}
+          alt=""
+          draggable={false}
+          onLoad={() => setLogo('shown')}
+          onError={() => setLogo('missing')}
+          className={`absolute inset-0 w-full h-full object-contain ${logo === 'shown' ? '' : 'invisible'}`}
+        />
+      )}
+    </span>
+  );
+};
+
 /** An opponent to pick, with when we play them and the formation they'll likely play. */
 export const OpponentCard: React.FC<{
+  clubId: number;
   name: string;
+  logoVersion?: string;
   division: number | null | undefined;
   when: string;
   ovr: number | null;
@@ -66,7 +93,7 @@ export const OpponentCard: React.FC<{
   error: string | null;
   selected: boolean;
   onSelect: () => void;
-}> = ({ name, division, when, ovr, likely, isLoading, error, selected, onSelect }) => (
+}> = ({ clubId, name, logoVersion, division, when, ovr, likely, isLoading, error, selected, onSelect }) => (
   <button
     type="button"
     onClick={onSelect}
@@ -75,9 +102,7 @@ export const OpponentCard: React.FC<{
       selected ? 'border-[#c6f432] bg-[rgba(198,244,50,.07)]' : 'border-line bg-panel/92'
     }`}
   >
-    <span className="w-11 h-11 flex-none rounded-full bg-chip border border-line-2 grid place-items-center font-display text-sm font-extrabold text-fg-3">
-      {name.split(/\s+/).map(word => word[0]).join('').slice(0, 2)}
-    </span>
+    <ClubLogo key={`${clubId}-${logoVersion}`} clubId={clubId} name={name} logoVersion={logoVersion} />
     <span className="flex-1 min-w-0 flex flex-col gap-[5px]">
       <span className="flex items-center gap-2 min-w-0">
         <span className="text-base font-bold truncate">{name}</span>
@@ -103,7 +128,17 @@ export const OpponentCard: React.FC<{
 const record = (matches: ScoutMatch[]) =>
   (['W', 'D', 'L'] as const).map(result => `${matches.filter(match => matchResult(match) === result).length}${result}`).join(' ');
 
-export const LikelyFormationPanel: React.FC<{ name: string; guesses: FormationGuess[]; matches: ScoutMatch[] }> = ({ name, guesses, matches }) => {
+/**
+ * The formations an opponent will likely play. Picking one (a row, or any formation from the list) plans against
+ * it alone instead of the likely mix.
+ */
+export const LikelyFormationPanel: React.FC<{
+  name: string;
+  guesses: FormationGuess[];
+  matches: ScoutMatch[];
+  assumed: string | null;
+  onAssume: (formation: string | null) => void;
+}> = ({ name, guesses, matches, assumed, onAssume }) => {
   const [top] = guesses;
   return (
     <Panel className="p-[22px] flex flex-col gap-4">
@@ -112,12 +147,22 @@ export const LikelyFormationPanel: React.FC<{ name: string; guesses: FormationGu
         <span className="font-display text-[48px] leading-none font-extrabold tracking-[-0.02em] text-accent-ink">{formationLabel(top.formation)}</span>
         <span className="text-lg font-bold">{percent(top.probability)} likely</span>
       </div>
-      <div className="flex flex-col gap-3">
+      <div className="flex flex-col gap-1">
         {guesses.slice(0, 3).map((guess, index) => {
           const played = matches.filter(match => match.formation === guess.formation);
+          const on = guess.formation === assumed;
           return (
-            <div key={guess.formation} className="flex flex-col gap-[5px]">
-              <div className="grid grid-cols-[110px_minmax(0,1fr)_48px] items-center gap-3.5">
+            <button
+              key={guess.formation}
+              type="button"
+              onClick={() => onAssume(on ? null : guess.formation)}
+              aria-pressed={on}
+              title={on ? 'Plan against their likely mix again' : `Plan against ${formationLabel(guess.formation)}`}
+              className={`-mx-2.5 px-2.5 py-2 flex flex-col gap-[5px] rounded-xl border text-fg text-left cursor-pointer transition-colors hover:border-[#c6f432] ${
+                on ? 'border-[#c6f432] bg-[rgba(198,244,50,.07)]' : 'border-transparent'
+              }`}
+            >
+              <span className="grid grid-cols-[110px_minmax(0,1fr)_48px] items-center gap-3.5 w-full">
                 <span className="text-[15px] font-bold truncate" title={formationLabel(guess.formation)}>
                   {formationLabel(guess.formation)}
                 </span>
@@ -128,14 +173,34 @@ export const LikelyFormationPanel: React.FC<{ name: string; guesses: FormationGu
                   />
                 </span>
                 <span className="text-sm font-bold text-right">{percent(guess.probability)}</span>
-              </div>
+              </span>
               <span className="text-xs font-medium text-muted">
                 {played.length ? `Played ${played.length} of last ${matches.length} · ${record(played)}` : 'Not played lately'}
               </span>
-            </div>
+            </button>
           );
         })}
       </div>
+      <label className="flex items-center gap-2.5 flex-wrap text-xs font-semibold text-muted">
+        Plan against
+        <span className="relative block">
+          <select
+            value={assumed ?? ''}
+            onChange={event => onAssume(event.target.value || null)}
+            className="appearance-none h-8 pl-3 pr-8 rounded-lg border border-line-2 bg-field text-fg text-xs font-bold cursor-pointer outline-none"
+          >
+            <option value="">Their likely mix</option>
+            {FORMATION_NAMES.map(formation => (
+              <option key={formation} value={formation}>
+                {formationLabel(formation)}
+              </option>
+            ))}
+          </select>
+          <svg className="absolute right-2.5 top-2.5 pointer-events-none stroke-muted" width="12" height="12" viewBox="0 0 24 24" fill="none" strokeWidth={2.4} aria-hidden="true">
+            <path d="m6 9 6 6 6-6" />
+          </svg>
+        </span>
+      </label>
     </Panel>
   );
 };
@@ -248,16 +313,22 @@ export function wdl(pick: FormationPick): [number, number, number] {
   return [win, draw, 100 - win - draw];
 }
 
-export const CounterPanel: React.FC<{ name: string; picks: FormationPick[]; selected: string; onSelect: (formation: string) => void }> = ({
-  name,
-  picks,
-  selected,
-  onSelect,
-}) => (
+export const CounterPanel: React.FC<{
+  name: string;
+  /** The one formation planned against, or null for their likely mix */
+  against: string | null;
+  picks: FormationPick[];
+  selected: string;
+  onSelect: (formation: string) => void;
+}> = ({ name, against, picks, selected, onSelect }) => (
   <Panel className="p-[22px] flex flex-col gap-3.5">
     <div className="flex flex-col gap-1">
       <h2 className={panelTitle}>Your counter vs {name}</h2>
-      <span className="text-[13px] font-medium text-muted">Ranked by expected points, weighted by their likely formations and checked against your squad</span>
+      <span className="text-[13px] font-medium text-muted">
+        {against
+          ? `Ranked by expected points if they play ${formationLabel(against)}, checked against your squad`
+          : 'Ranked by expected points, weighted by their likely formations and checked against your squad'}
+      </span>
     </div>
     {picks.slice(0, 3).map((pick, index) => {
       const on = pick.formation === selected;
@@ -314,7 +385,44 @@ const PITCH_LINE = 'rgba(255,255,255,.45)';
 // Formations stand up the pitch with our goal at the bottom; the matchup lays it sideways, us attacking left to right
 const ourX = (down: number) => 4 + (100 - down) * 0.46;
 const ourY = (across: number) => 6 + across * 0.88;
-const lastName = (player: MFLPlayer | undefined) => player?.metadata.lastName ?? '—';
+
+/** A spot on the matchup pitch: the position in a ring, and below it who plays there and their rating at it. */
+const PitchSpot: React.FC<{
+  position: string;
+  left: number;
+  top: number;
+  slot: FilledSlot | undefined;
+  playersById: Map<number, MFLPlayer>;
+  ours: boolean;
+}> = ({ position, left, top, slot, playersById, ours }) => {
+  const player = slot?.playerId ? playersById.get(slot.playerId) : undefined;
+  const rating = player && Math.round(slot!.rating);
+  return (
+    <div
+      title={
+        player
+          ? `${player.metadata.firstName} ${player.metadata.lastName} · ${rating} at ${position}${rating !== player.metadata.overall ? ` (overall ${player.metadata.overall})` : ''}`
+          : position
+      }
+      className="absolute -translate-x-1/2 -translate-y-1/2 flex flex-col items-center gap-0.5"
+      style={{ left: `${left}%`, top: `${top}%` }}
+    >
+      <span
+        className={`w-5 h-5 sm:w-[30px] sm:h-[30px] rounded-full grid place-items-center text-[7px] sm:text-[9px] font-extrabold ${ours ? 'text-white bg-[#0b1406]' : 'text-[#1a0d02]'}`}
+        style={ours ? { border: `2px solid ${FIT_COLOURS[slot?.kind ?? 'out']}` } : { background: ORANGE, border: '2px solid rgba(0,0,0,.35)' }}
+      >
+        {position}
+      </span>
+      {/* On a phone the pitch is too narrow for 22 names, so it shows ratings alone */}
+      {(player || ours) && (
+        <span className="px-[3px] sm:px-[5px] py-px rounded-[5px] bg-black/60 text-[9px] sm:text-[10px] font-bold text-white whitespace-nowrap">
+          <span className={player ? 'hidden sm:inline' : ''}>{player?.metadata.lastName ?? '—'}</span>
+          {player && <span className={`sm:ml-1 ${ours ? 'text-[#c6f432]' : 'text-[#fdba74]'}`}>{rating}</span>}
+        </span>
+      )}
+    </div>
+  );
+};
 
 export const MatchupPanel: React.FC<{
   name: string;
@@ -322,8 +430,11 @@ export const MatchupPanel: React.FC<{
   theirFormation: string;
   fit: FormationFit | undefined;
   playersById: Map<number, MFLPlayer>;
+  /** Their best XI in their formation, when we know their squad */
+  theirFit: FormationFit | undefined;
+  theirPlayersById: Map<number, MFLPlayer>;
   onOpenSquad: () => void;
-}> = ({ name, formation, theirFormation, fit, playersById, onOpenSquad }) => (
+}> = ({ name, formation, theirFormation, fit, playersById, theirFit, theirPlayersById, onOpenSquad }) => (
   <Panel className="p-[22px] flex flex-col gap-4">
     <div className="flex items-start justify-between gap-3 flex-wrap">
       <div className="flex flex-col gap-1">
@@ -347,34 +458,19 @@ export const MatchupPanel: React.FC<{
       <div className="absolute left-[4%] top-[24%] bottom-[24%] w-[13%]" style={{ border: `2px solid ${PITCH_LINE}`, borderLeft: 0 }} />
       <div className="absolute right-[4%] top-[24%] bottom-[24%] w-[13%]" style={{ border: `2px solid ${PITCH_LINE}`, borderRight: 0 }} />
       {FORMATIONS[theirFormation].map(([position, across, down], index) => (
-        <div
+        <PitchSpot
           key={`them-${index}`}
-          className="absolute -translate-x-1/2 -translate-y-1/2 w-7 h-7 rounded-full grid place-items-center text-[9px] font-extrabold text-[#1a0d02]"
-          style={{ left: `${100 - ourX(down)}%`, top: `${100 - ourY(across)}%`, background: ORANGE, border: '2px solid rgba(0,0,0,.35)' }}
-        >
-          {position}
-        </div>
+          position={position}
+          left={100 - ourX(down)}
+          top={100 - ourY(across)}
+          slot={theirFit?.slots[index]}
+          playersById={theirPlayersById}
+          ours={false}
+        />
       ))}
-      {FORMATIONS[formation].map(([position, across, down], index) => {
-        const slot = fit?.slots[index];
-        const player = slot?.playerId ? playersById.get(slot.playerId) : undefined;
-        return (
-          <div
-            key={`us-${index}`}
-            title={player ? `${player.metadata.firstName} ${player.metadata.lastName} · ${slot!.rating}` : position}
-            className="absolute -translate-x-1/2 -translate-y-1/2 flex flex-col items-center gap-0.5"
-            style={{ left: `${ourX(down)}%`, top: `${ourY(across)}%` }}
-          >
-            <span
-              className="w-[30px] h-[30px] rounded-full grid place-items-center text-[9px] font-extrabold text-white bg-[#0b1406]"
-              style={{ border: `2px solid ${FIT_COLOURS[slot?.kind ?? 'out']}` }}
-            >
-              {position}
-            </span>
-            <span className="px-[5px] py-px rounded-[5px] bg-black/60 text-[10px] font-bold text-white whitespace-nowrap">{lastName(player)}</span>
-          </div>
-        );
-      })}
+      {FORMATIONS[formation].map(([position, across, down], index) => (
+        <PitchSpot key={`us-${index}`} position={position} left={ourX(down)} top={ourY(across)} slot={fit?.slots[index]} playersById={playersById} ours />
+      ))}
     </div>
     <div className="flex gap-3.5 flex-wrap text-xs font-semibold text-muted">
       {(

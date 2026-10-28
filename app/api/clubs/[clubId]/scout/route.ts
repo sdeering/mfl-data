@@ -124,7 +124,9 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     const report: ScoutReport = {
       club: {
         id: club.id,
-        name: club.name,
+        // A club not founded yet has no name
+        name: club.name || `Club ${club.id}`,
+        founded: club.status !== 'NOT_FOUNDED',
         division: club.division ?? null,
         logoVersion: club.logoVersion,
         city: club.city,

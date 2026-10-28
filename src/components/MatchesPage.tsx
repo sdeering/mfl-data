@@ -68,9 +68,11 @@ const OpponentChoice: React.FC<{ opponent: Opponent; meta: FormationMeta; select
   const likely = useMemo(() => (report ? predictFormations(report.matches, fits, meta)[0] : null), [report, fits, meta]);
   return (
     <OpponentCard
+      clubId={opponent.clubId}
       name={report?.club.name ?? opponent.name}
+      logoVersion={report?.club.logoVersion}
       division={report ? report.club.division : undefined}
-      when={opponent.when}
+      when={report?.club.founded === false ? `${opponent.when} · Not founded` : opponent.when}
       ovr={fits.size ? Math.max(...[...fits.values()].map(fit => fit.rating)) : report?.recentOvr ?? null}
       likely={likely}
       isLoading={isLoading}
@@ -93,16 +95,24 @@ const OpponentPrep: React.FC<{
   meta: FormationMeta;
   pick: string | undefined;
   onPick: (formation: string) => void;
+  /** The one formation we plan against, picked by the user, or undefined for their likely mix */
+  assumed: string | undefined;
+  onAssume: (formation: string | null) => void;
   onOpenSquad: (opponentName: string, formation: string) => void;
-}> = ({ opponent, ourClubId, ours, ourFits, ourPlayersById, meta, pick, onPick, onOpenSquad }) => {
+}> = ({ opponent, ourClubId, ours, ourFits, ourPlayersById, meta, pick, onPick, assumed, onAssume, onOpenSquad }) => {
   const { report, error, isLoading } = useScoutReport(opponent.clubId, THEIR_MATCHES);
   const theirFits = useMemo(() => squadFits(report?.players ?? []), [report]);
+  const theirPlayersById = useMemo(() => new Map((report?.players ?? []).map(player => [player.id, player])), [report]);
   const guesses = useMemo(() => (report ? predictFormations(report.matches, theirFits, meta) : []), [report, theirFits, meta]);
-  const picks = useMemo(
-    // Their strength: the XI their squad will likely field, or without a squad now, the XIs they fielded lately
-    () => (report && ours ? rankFormations(guesses, ourFits, ours.matches, report.matches, meta, likelyRating(guesses) ?? report.recentOvr) : []),
-    [report, ours, guesses, ourFits, meta],
-  );
+  const picks = useMemo(() => {
+    if (!report || !ours) return [];
+    const guess = assumed && guesses.find(item => item.formation === assumed);
+    // Their strength: their XI in the formation, or the XI their squad will likely field, or without a squad now,
+    // the XIs they fielded lately
+    return guess
+      ? rankFormations([{ ...guess, probability: 1 }], ourFits, ours.matches, report.matches, meta, guess.fit?.rating ?? report.recentOvr)
+      : rankFormations(guesses, ourFits, ours.matches, report.matches, meta, likelyRating(guesses) ?? report.recentOvr);
+  }, [report, ours, guesses, assumed, ourFits, meta]);
 
   if (isLoading) return <Spinner label={`Scouting ${opponent.name}…`} />;
   if (error || !report) {
@@ -114,23 +124,26 @@ const OpponentPrep: React.FC<{
   }
 
   const name = report.club.name;
-  const theirFormation = guesses[0].formation;
+  const likeliest = guesses[0].formation;
+  const theirFormation = assumed ?? likeliest;
   const selected = picks.some(item => item.formation === pick) ? pick! : picks[0]?.formation;
   return (
     <>
       <div className={panelRow}>
-        <LikelyFormationPanel name={name} guesses={guesses} matches={report.matches} />
-        {report.matches.length > 0 && <FormationChangePanel name={name} matches={report.matches} likeliest={theirFormation} />}
+        <LikelyFormationPanel name={name} guesses={guesses} matches={report.matches} assumed={assumed ?? null} onAssume={onAssume} />
+        {report.matches.length > 0 && <FormationChangePanel name={name} matches={report.matches} likeliest={likeliest} />}
       </div>
       {selected ? (
         <div className={panelRow}>
-          <CounterPanel name={name} picks={picks} selected={selected} onSelect={onPick} />
+          <CounterPanel name={name} against={assumed ?? null} picks={picks} selected={selected} onSelect={onPick} />
           <MatchupPanel
             name={name}
             formation={selected}
             theirFormation={theirFormation}
             fit={ourFits.get(selected)}
             playersById={ourPlayersById}
+            theirFit={theirFits.get(theirFormation)}
+            theirPlayersById={theirPlayersById}
             onOpenSquad={() => onOpenSquad(name, selected)}
           />
         </div>
@@ -158,8 +171,15 @@ const MatchesPage: React.FC = () => {
   const [clubQuery, setClubQuery] = useState('');
   const [clubError, setClubError] = useState('');
   const [selectedId, setSelectedId] = useState<number | null>(null);
-  // The counter picked against each opponent, by club ID
+  // The counter picked against each opponent, and the formation planned against when not their likely mix, by club ID
   const [picks, setPicks] = useState<Record<number, string>>({});
+  const [assumed, setAssumed] = useState<Record<number, string>>({});
+  const assume = (opponentId: number, formation: string | null) => {
+    const without = <T,>(record: Record<number, T>) => Object.fromEntries(Object.entries(record).filter(([id]) => Number(id) !== opponentId));
+    setAssumed(current => (formation ? { ...current, [opponentId]: formation } : without(current)));
+    // Show the best counter to it rather than one picked against something else
+    setPicks(current => without(current));
+  };
 
   const { meta, own } = useFormationMeta();
   const { report: ours, error: ourError } = useScoutReport(clubId, OUR_MATCHES);
@@ -220,7 +240,7 @@ const MatchesPage: React.FC = () => {
   const { next, later } = splitByMatchDay(fixtures);
   const opponents: Opponent[] = [
     ...(showLater ? fixtures : next),
-    ...scouted.filter(id => !fixtures.some(fixture => fixture.clubId === id)).map(id => ({ clubId: id, name: `Club #${id}`, when: `Scouted · Club ID ${id}` })),
+    ...scouted.filter(id => !fixtures.some(fixture => fixture.clubId === id)).map(id => ({ clubId: id, name: `Club ${id}`, when: `Scouted · Club ID ${id}` })),
   ];
   const selected = opponents.find(opponent => opponent.clubId === selectedId) ?? opponents[0];
 
@@ -383,6 +403,8 @@ const MatchesPage: React.FC = () => {
               meta={meta}
               pick={picks[selected.clubId]}
               onPick={formation => setPicks(current => ({ ...current, [selected.clubId]: formation }))}
+              assumed={assumed[selected.clubId]}
+              onAssume={formation => assume(selected.clubId, formation)}
               onOpenSquad={openSquad}
             />
           )}

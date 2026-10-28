@@ -14,6 +14,8 @@ export interface ScoutReport {
   club: {
     id: number;
     name: string;
+    /** False for a club no one has founded yet, with no squad or matches */
+    founded?: boolean;
     division: number | null;
     logoVersion?: string;
     city?: string;
