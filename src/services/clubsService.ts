@@ -105,40 +105,41 @@ class ClubsService {
     return `${club.city}, ${club.country}`;
   }
 
-  getDivisionName(division: number): string {
-    // Based on the actual MFL data structure from the API
+  getDivisionName(division: number | null | undefined): string {
+    // MFL's divisions, top first, as its league names show them ("Silver – League 4")
     const divisionNames: { [key: number]: string } = {
-      1: 'Premier League',
-      2: 'Championship', 
-      3: 'League One',
-      4: 'League Two',
-      5: 'Bronze League',
-      6: 'Iron League',
-      7: 'Stone League',
-      8: 'Ice League',
-      9: 'County League',
-      10: 'Local League'
+      1: 'Diamond',
+      2: 'Platinum',
+      3: 'Gold',
+      4: 'Silver',
+      5: 'Bronze',
+      6: 'Iron',
+      7: 'Stone',
+      8: 'Ice',
+      9: 'Spark',
+      10: 'Flint'
     };
-    
+
+    if (!division) return 'No division';
     return divisionNames[division] || `Division ${division}`;
   }
 
-  getDivisionColor(division: number): string {
-    // Based on the division color mapping from PlayerRecentMatches.tsx
+  getDivisionColor(division: number | null | undefined): string {
+    // The same colours as the division badges in PlayerRecentMatches.tsx
     const divisionColors: { [key: number]: string } = {
-      1: 'bg-red-600 text-white', // Premier League
-      2: 'bg-blue-600 text-white', // Championship
-      3: 'bg-green-600 text-white', // League One
-      4: 'bg-purple-600 text-white', // League Two
-      5: 'bg-amber-600 text-white', // Bronze League
-      6: 'bg-gray-700 text-white', // Iron League
-      7: 'bg-gray-500 text-white', // Stone League
-      8: 'bg-cyan-400 text-gray-900', // Ice League
-      9: 'bg-yellow-500 text-gray-900', // County League
-      10: 'bg-gray-400 text-gray-900' // Local League
+      1: 'bg-purple-500 text-white', // Diamond
+      2: 'bg-blue-400 text-white', // Platinum
+      3: 'bg-yellow-500 text-gray-900', // Gold
+      4: 'bg-gray-400 text-gray-900', // Silver
+      5: 'bg-amber-600 text-white', // Bronze
+      6: 'bg-gray-700 text-white', // Iron
+      7: 'bg-gray-500 text-white', // Stone
+      8: 'bg-cyan-400 text-gray-900', // Ice
+      9: 'bg-yellow-400 text-gray-900', // Spark
+      10: 'bg-orange-600 text-white' // Flint
     };
-    
-    return divisionColors[division] || 'bg-gray-200 text-gray-700';
+
+    return (division && divisionColors[division]) || 'bg-gray-200 text-gray-700';
   }
 
   getCompetitionTypeIcon(type: string): string {

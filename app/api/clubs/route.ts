@@ -1,13 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { MFL_API_BASE_URL, getMflAuthHeaders } from '@/src/config/mflApi';
 
+// Arena mode clubs (MFL flags them type ARENA, off-chain) aren't real clubs in the leagues, so the site leaves them out
+const isArenaClub = (club: any) => club?.type === 'ARENA';
+
 // Normalize both response shapes to the { title, club, tactics, competitions }
-// wrapper the frontend expects (MFLClubData in clubsService).
+// wrapper the frontend expects (MFLClubData in clubsService), without Arena clubs.
 // - /clubs?ownerWalletAddress= returns raw club objects
 // - the legacy /users/{wallet}/clubs returned pre-wrapped items
 function normalizeClubs(data: any): any[] {
   const list = Array.isArray(data) ? data : (data?.clubs || []);
-  return list.map((item: any) => {
+  return list.filter((item: any) => !isArenaClub(item?.club ?? item)).map((item: any) => {
     if (item && typeof item === 'object' && 'club' in item) {
       return { competitions: [], ...item };
     }

@@ -242,6 +242,22 @@ CREATE TABLE IF NOT EXISTS rate_limits (
   PRIMARY KEY (key, window_start)
 );
 
+-- Each competitive match's formations and score, from MFL, for our own formation meta (how formations do against each other)
+CREATE TABLE IF NOT EXISTS formation_results (
+  mfl_match_id INTEGER PRIMARY KEY,
+  engine TEXT,
+  start_date INTEGER,
+  home_squad_id INTEGER,
+  away_squad_id INTEGER,
+  home_formation TEXT NOT NULL,
+  away_formation TEXT NOT NULL,
+  home_score INTEGER NOT NULL,
+  away_score INTEGER NOT NULL,
+  home_ovr INTEGER,
+  away_ovr INTEGER,
+  created_at TEXT DEFAULT (datetime('now'))
+);
+
 -- Schema version tracking
 CREATE TABLE IF NOT EXISTS schema_version (
   version INTEGER PRIMARY KEY,
@@ -275,6 +291,7 @@ CREATE INDEX IF NOT EXISTS idx_sync_status_status ON sync_status(status);
 CREATE INDEX IF NOT EXISTS idx_squads_wallet_address ON squads(wallet_address);
 CREATE INDEX IF NOT EXISTS idx_squads_formation ON squads(formation_id);
 CREATE INDEX IF NOT EXISTS idx_scout_presets_wallet_address ON scout_presets(wallet_address);
+CREATE INDEX IF NOT EXISTS idx_formation_results_engine ON formation_results(engine, start_date);
 `
 
 let _initialized = false

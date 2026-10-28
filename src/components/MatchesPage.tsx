@@ -1,20 +1,30 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useWallet } from '../contexts/WalletContext';
 import { matchesService, MFLMatch } from '../services/matchesService';
-import { clubsService } from '../services/clubsService';
-import { PageHeader, Panel, Select, btnSecondary, labelClass, linkClass } from './ui';
+import { clubsService, type MFLClubData } from '../services/clubsService';
+import { useScoutReport } from '../hooks/useScoutReport';
+import { formationLabel } from '../utils/squadLineups';
+import { PageHeader, Panel, btnSecondary, linkClass } from './ui';
 import WalletGate from './WalletGate';
+import { ClubLogo } from './matches/ClubLogo';
+import { ClubStrip } from './matches/ClubStrip';
+import { FormationPlanner, type Fixture } from './matches/FormationPlanner';
+
+/** Upcoming opponents the formation planner can scout, beyond the next match day's */
+const MAX_UPCOMING_OPPONENTS = 6;
 
 const chipClass = 'inline-flex items-center h-6 px-2.5 rounded-full border text-[11px] font-bold whitespace-nowrap';
 
-// Lightweight child component to fetch and render formations for a given match
-const MatchFormations: React.FC<{ matchId: string }> = ({ matchId }) => {
-  const [home, setHome] = useState<string | null>(null);
-  const [away, setAway] = useState<string | null>(null);
+type KnownFormations = { home: string | null; away: string | null };
+
+// Lightweight child component to fetch and render formations for a given match, unless they're already known
+const MatchFormations: React.FC<{ matchId: string; known?: KnownFormations }> = ({ matchId, known }) => {
+  const [home, setHome] = useState<string | null>(known?.home ?? null);
+  const [away, setAway] = useState<string | null>(known?.away ?? null);
   const [loading, setLoading] = useState<boolean>(false);
-  const [loaded, setLoaded] = useState<boolean>(false);
+  const [loaded, setLoaded] = useState<boolean>(!!known);
 
   useEffect(() => {
     if (loaded) return;
@@ -48,8 +58,8 @@ const MatchFormations: React.FC<{ matchId: string }> = ({ matchId }) => {
 
   return (
     <div className="flex flex-wrap justify-center gap-1.5">
-      {home && <span className={`${chipClass} border-chip-line bg-chip text-fg-3`}>Home: {home}</span>}
-      {away && <span className={`${chipClass} border-chip-line bg-chip text-fg-3`}>Away: {away}</span>}
+      {home && <span className={`${chipClass} border-chip-line bg-chip text-fg-3`}>Home: {formationLabel(home)}</span>}
+      {away && <span className={`${chipClass} border-chip-line bg-chip text-fg-3`}>Away: {formationLabel(away)}</span>}
     </div>
   );
 };
@@ -86,9 +96,10 @@ const RESULT_BADGE = {
   D: 'border-chip-line bg-chip text-fg-3',
 };
 
-const TeamName: React.FC<{ name: string; side: 'Home' | 'Away'; isSelected: boolean }> = ({ name, side, isSelected }) => (
-  <div className="text-center min-w-[150px]">
-    <div className={`text-[15px] font-bold ${isSelected ? 'text-accent-ink' : 'text-fg'}`}>
+const TeamName: React.FC<{ name: string; side: 'Home' | 'Away'; isSelected: boolean; club?: { id: number; logoVersion?: string } }> = ({ name, side, isSelected, club }) => (
+  <div className="flex flex-col items-center gap-1 text-center w-24 sm:w-auto sm:min-w-[150px]">
+    {club && <ClubLogo clubId={club.id} name={name} logoVersion={club.logoVersion} className="w-9 h-9" />}
+    <div className={`text-[13px] sm:text-[15px] font-bold break-words ${isSelected ? 'text-accent-ink' : 'text-fg'}`}>
       {name}
     </div>
     <div className="text-[11px] font-bold uppercase tracking-[0.1em] text-muted-3">
@@ -115,8 +126,8 @@ const MatchesPage: React.FC = () => {
   const { isConnected, account, viewedAddress = null } = useWallet();
   // The connected wallet, or one pasted in to look at read-only
   const walletAddress = (isConnected ? account : null) ?? viewedAddress;
-  const [clubs, setClubs] = useState<any[]>([]);
-  const [selectedClub, setSelectedClub] = useState<any>(null);
+  const [clubs, setClubs] = useState<MFLClubData[]>([]);
+  const [selectedClub, setSelectedClub] = useState<MFLClubData | null>(null);
   const [pastMatches, setPastMatches] = useState<MFLMatch[]>([]);
   const [upcomingMatches, setUpcomingMatches] = useState<MFLMatch[]>([]);
   const [showAllPast, setShowAllPast] = useState(false);
@@ -133,11 +144,12 @@ const MatchesPage: React.FC = () => {
     setError(null);
     
     try {
-      const clubsData = await clubsService.fetchClubsForWallet(walletAddress);
-      console.log('Clubs data received:', clubsData);
+      // Top division first; clubs with none, such as Arena clubs, last
+      const clubsData = [...(await clubsService.fetchClubsForWallet(walletAddress))].sort(
+        (a, b) => (a.club.division || 99) - (b.club.division || 99)
+      );
       setClubs(clubsData);
       if (clubsData.length > 0) {
-        console.log('Setting selected club to:', clubsData[0]);
         setSelectedClub(clubsData[0]);
       }
     } catch (err) {
@@ -182,45 +194,14 @@ const MatchesPage: React.FC = () => {
     }
   };
 
-  // Helper function to determine if the selected club won the match
-  const getMatchResult = (match: MFLMatch, clubName: string): 'W' | 'L' | 'D' | null => {
-    console.log('getMatchResult called:', {
-      matchStatus: match.status,
-      clubName,
-      homeTeam: match.homeTeamName,
-      awayTeam: match.awayTeamName,
-      homeScore: match.homeScore,
-      awayScore: match.awayScore
-    });
-    
-    if (match.status !== 'FINISHED' && match.status !== 'ENDED') {
-      console.log('Match not finished, status:', match.status);
-      return null;
-    }
-    
-    const isHomeTeam = match.homeTeamName === clubName;
-    const isAwayTeam = match.awayTeamName === clubName;
-    
-    if (!isHomeTeam && !isAwayTeam) {
-      console.log('Club not found in match teams');
-      return null;
-    }
-    
-    // Check if it's a draw
-    if (match.homeScore === match.awayScore) {
-      console.log('Draw detected');
-      return 'D';
-    }
-    
-    if (isHomeTeam) {
-      const result = match.homeScore > match.awayScore ? 'W' : 'L';
-      console.log('Home team result:', result);
-      return result;
-    } else {
-      const result = match.awayScore > match.homeScore ? 'W' : 'L';
-      console.log('Away team result:', result);
-      return result;
-    }
+  // Win, draw or loss for the selected club, matched by club ID: a club's team name in a match can differ from its club name
+  const getMatchResult = (match: MFLMatch, clubId: number): 'W' | 'L' | 'D' | null => {
+    if (match.status !== 'FINISHED' && match.status !== 'ENDED') return null;
+    const isHomeTeam = match.homeSquad?.club?.id === clubId;
+    const isAwayTeam = match.awaySquad?.club?.id === clubId;
+    if (!isHomeTeam && !isAwayTeam) return null;
+    if (match.homeScore === match.awayScore) return 'D';
+    return (isHomeTeam ? match.homeScore > match.awayScore : match.awayScore > match.homeScore) ? 'W' : 'L';
   };
 
   useEffect(() => {
@@ -237,38 +218,67 @@ const MatchesPage: React.FC = () => {
   }, [walletAddress]);
 
   useEffect(() => {
-    console.log('selectedClub changed:', selectedClub);
     if (selectedClub) {
-      console.log('selectedClub.club:', selectedClub.club);
-      console.log('selectedClub.club.id:', selectedClub.club.id);
-      
-      // Use the club ID directly
-      const clubId = selectedClub.club.id.toString();
-      console.log('Using club ID:', clubId, 'for club:', selectedClub.club.name);
       // Fetch matches in background - don't block UI
-      fetchMatches(clubId).catch(err => {
+      fetchMatches(selectedClub.club.id.toString()).catch(err => {
         console.error('Background fetch matches error:', err);
       });
     }
   }, [selectedClub]);
+
+  const selectedClubId = selectedClub?.club.id;
+
+  // The formation planner's read of our recent matches, so their rows needn't ask MFL for formations again
+  const { report: ourReport } = useScoutReport(selectedClubId, 15);
+  const knownFormations = useMemo(() => {
+    const known = new Map<number, KnownFormations>();
+    for (const match of ourReport?.matches ?? []) {
+      const pastMatch = pastMatches.find(past => past.id === match.id);
+      if (!pastMatch) continue;
+      const home = pastMatch.homeSquad?.club?.id === selectedClubId;
+      known.set(match.id, home ? { home: match.formation, away: match.opponentFormation } : { home: match.opponentFormation, away: match.formation });
+    }
+    return known;
+  }, [ourReport, pastMatches, selectedClubId]);
+
+  // The clubs we play next in competitions, soonest first; the planner shows the next match day's
+  const fixtures = useMemo(() => {
+    const next: Fixture[] = [];
+    const planned = upcomingMatches.filter(match => match.type !== 'FRIENDLY' && match.status !== 'LIVE' && match.status !== 'ENDED');
+    for (const match of planned.sort((a, b) => a.startDate - b.startDate)) {
+      const home = match.homeSquad?.club?.id === selectedClubId;
+      const opponent = home ? match.awaySquad?.club : match.homeSquad?.club;
+      if (!opponent || opponent.id === selectedClubId || next.some(fixture => fixture.clubId === opponent.id)) continue;
+      next.push({
+        clubId: opponent.id,
+        name: home ? match.awayTeamName : match.homeTeamName,
+        logoVersion: opponent.logoVersion,
+        startDate: match.startDate,
+        competition: match.competition?.name ?? '',
+        home,
+      });
+      if (next.length === MAX_UPCOMING_OPPONENTS) break;
+    }
+    return next;
+  }, [upcomingMatches, selectedClubId]);
 
   if (!walletAddress) {
     return <WalletGate title="MFL Matches" description="your clubs' matches" />;
   }
 
   const renderMatch = (match: MFLMatch, result: 'W' | 'L' | 'D' | null, showFormations: boolean) => (
-    <div key={match.id} className="flex items-center justify-between gap-4 px-[18px] py-4 border-t border-divider hover:bg-row-hover transition-colors">
+    <div key={match.id} className="flex flex-wrap items-center justify-between gap-3 sm:gap-4 px-[18px] py-4 border-t border-divider hover:bg-row-hover transition-colors">
       <div className="flex-1">
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-2 sm:gap-4">
           {/* Win/Loss/Draw Indicator */}
           {result && (
-            <span className={`flex-none grid place-items-center w-14 h-14 rounded-2xl border font-display text-2xl font-extrabold ${RESULT_BADGE[result]}`}>
+            <span className={`flex-none grid place-items-center w-10 h-10 sm:w-14 sm:h-14 rounded-xl sm:rounded-2xl border font-display text-xl sm:text-2xl font-extrabold ${RESULT_BADGE[result]}`}>
               {result}
             </span>
           )}
 
-          <TeamName name={match.homeTeamName} side="Home" isSelected={match.homeTeamName === selectedClub?.club.name} />
-          <div className="text-center min-w-[120px]">
+          <TeamName name={match.homeTeamName} side="Home" isSelected={match.homeSquad?.club?.id === selectedClubId} club={match.homeSquad?.club} />
+          <div className="text-center min-w-[88px] sm:min-w-[120px]">
             <div className="font-display text-2xl font-extrabold tabular-nums text-fg">
               {match.homeScore} - {match.awayScore}
             </div>
@@ -278,14 +288,14 @@ const MatchesPage: React.FC = () => {
             {/* Formations row (always shown) */}
             {showFormations && (
               <div className="mt-1.5 text-xs font-medium text-muted">
-                <MatchFormations matchId={match.id.toString()} />
+                <MatchFormations key={`${match.id}-${knownFormations.has(match.id)}`} matchId={match.id.toString()} known={knownFormations.get(match.id)} />
               </div>
             )}
           </div>
-          <TeamName name={match.awayTeamName} side="Away" isSelected={match.awayTeamName === selectedClub?.club.name} />
+          <TeamName name={match.awayTeamName} side="Away" isSelected={match.awaySquad?.club?.id === selectedClubId} club={match.awaySquad?.club} />
         </div>
       </div>
-      <div className="flex flex-col items-end gap-1.5">
+      <div className="flex md:flex-col items-end gap-1.5">
         <span className={`${chipClass} ${getStatusChip(match.status)}`}>
           {matchesService.formatMatchStatus(match.status)}
         </span>
@@ -313,26 +323,9 @@ const MatchesPage: React.FC = () => {
       <PageHeader
         title="MFL Matches"
         subtitle={clubs.length > 0 && `${clubs.length} club${clubs.length !== 1 ? 's' : ''} available`}
-        actions={clubs.length > 0 && (
-          <label className={labelClass}>
-            Select Club
-            <Select
-              value={selectedClub?.club.id ?? ''}
-              onChange={(e) => {
-                const clubData = clubs.find(c => c.club.id.toString() === e.target.value);
-                if (clubData) setSelectedClub(clubData);
-              }}
-              className="min-w-[260px]"
-            >
-              {clubs.map((clubData) => (
-                <option key={clubData.club.id} value={clubData.club.id}>
-                  {clubData.club.name} · {clubsService.getDivisionName(clubData.club.division)}
-                </option>
-              ))}
-            </Select>
-          </label>
-        )}
       />
+
+      {clubs.length > 0 && <ClubStrip clubs={clubs} selectedId={selectedClubId} onSelect={setSelectedClub} />}
 
       {error && (
         <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-4 rounded-[22px] border border-red-500/45 bg-red-500/10">
@@ -361,6 +354,8 @@ const MatchesPage: React.FC = () => {
       {/* Matches Content */}
       {clubs.length > 0 && selectedClub && (
         <>
+          <FormationPlanner key={selectedClub.club.id} clubId={selectedClub.club.id} clubName={selectedClub.club.name} fixtures={fixtures} />
+
           {/* Show loading indicator only when matches are loading and we have no data yet */}
           {isLoadingMatches && upcomingMatches.length === 0 && pastMatches.length === 0 && (
             <Panel className="flex items-center justify-center gap-3 px-6 py-14">
@@ -387,7 +382,7 @@ const MatchesPage: React.FC = () => {
                 Recent Matches <span className="font-semibold text-muted">({pastMatches.length})</span>
               </h2>
               {(showAllPast ? pastMatches : pastMatches.slice(0, 3)).map((match) =>
-                renderMatch(match, getMatchResult(match, selectedClub.club.name), true)
+                renderMatch(match, getMatchResult(match, selectedClub.club.id), true)
               )}
               {renderShowMore(showAllPast, setShowAllPast, pastMatches.length)}
             </Panel>
