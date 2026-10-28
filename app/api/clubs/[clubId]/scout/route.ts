@@ -92,6 +92,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
     const kept = await keptFormationResults(listed.map(match => match.id));
     const fresh: FormationResult[] = [];
+    // The club's starting XI's overalls added up, in each match
+    const fielded: number[] = [];
     const matches = await mapLimited(listed, CONCURRENCY, async (match): Promise<ScoutMatch> => {
       let result = kept.get(match.id) ?? null;
       if (!result) {
@@ -104,6 +106,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       }
       const home = match.homeSquad.id === squadId;
       const opponent = home ? match.awaySquad.club : match.homeSquad.club;
+      const ovr = home ? result?.homeOvr : result?.awayOvr;
+      if (ovr) fielded.push(ovr);
       return {
         id: match.id,
         startDate: match.startDate,
@@ -129,6 +133,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       season: league?.season?.name ?? null,
       players: Array.isArray(players) ? players : [],
       matches,
+      recentOvr: fielded.length ? Math.round((fielded.reduce((total, ovr) => total + ovr, 0) / fielded.length / 11) * 10) / 10 : null,
     };
     return NextResponse.json({ success: true, data: report });
   } catch (error) {

@@ -24,6 +24,8 @@ export interface ScoutReport {
   players: MFLPlayer[];
   /** Newest first */
   matches: ScoutMatch[];
+  /** Average rating of the starting XIs it fielded in those matches, when known: its strength even without a squad now */
+  recentOvr: number | null;
 }
 
 /** Most recent matches a report covers */
@@ -34,6 +36,13 @@ export function parseClubId(input: string): number | null {
   const text = input.trim();
   const id = /^\d+$/.test(text) ? text : text.match(/clubs\/(\d+)/)?.[1];
   return id ? Number(id) : null;
+}
+
+/** The site is pacing its requests to MFL: try again after `retryAfter` seconds. */
+export class ScoutBusyError extends Error {
+  constructor(message: string, public retryAfter: number) {
+    super(message);
+  }
 }
 
 class ScoutService {
@@ -48,6 +57,7 @@ class ScoutService {
 
     const data = fetch(`/api/clubs/${clubId}/scout?limit=${limit}`, { headers: { Accept: 'application/json' } }).then(async response => {
       const result = await response.json().catch(() => ({}));
+      if (response.status === 429) throw new ScoutBusyError(result.error || 'Busy', Number(response.headers.get('retry-after')) || 10);
       if (!response.ok || !result.success) throw new Error(result.error || `HTTP ${response.status}`);
       return result.data as ScoutReport;
     });

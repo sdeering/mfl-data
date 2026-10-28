@@ -8,7 +8,6 @@ import { getSquads, saveSquad, updateSquad, deleteSquad, renameSquad, reorderSqu
 import type { MFLPlayer } from '../types/mflApi';
 import {
   BENCH_SIZE,
-  FORMATIONS,
   FORMATION_NAMES,
   autoFillFromSquad,
   formationLabel,
@@ -37,6 +36,7 @@ import {
 } from '../utils/squadLineups';
 import { currentSeason } from '../utils/playerSeasons';
 import { isRetiringThisSeason } from '../utils/appSettings';
+import { loadDraft, saveDraft } from '../utils/squadDraft';
 import { useToast, ToastContainer } from './Toast';
 import WalletGate from './WalletGate';
 import { PageHeader, Panel, Select, btnDanger, btnPill, btnPrimary } from './ui';
@@ -50,37 +50,6 @@ import { LoadSquadModal, SaveSquadModal } from './squadBuilder/SquadModals';
 import { CloseIcon, DragHandlers } from './squadBuilder/shared';
 
 const spinnerClass = 'rounded-full border-2 border-accent border-t-transparent animate-spin';
-
-// The squad being built is kept per wallet in the browser, so a refresh or a visit later carries on from it
-const draftKey = (wallet: string) => `mfl-data-squad-builder:${wallet.toLowerCase()}`;
-
-interface Draft {
-  name: string;
-  lineups: Lineup[];
-  active: number;
-}
-
-function loadDraft(wallet: string): Draft | null {
-  try {
-    const draft = JSON.parse(window.localStorage.getItem(draftKey(wallet)) || 'null');
-    const valid =
-      Array.isArray(draft?.lineups) &&
-      draft.lineups.length > 0 &&
-      draft.lineups.every((lineup: Lineup) => FORMATIONS[lineup.formation] && Array.isArray(lineup.xi) && Array.isArray(lineup.bench));
-    if (!valid) return null;
-    return { name: typeof draft.name === 'string' ? draft.name : '', lineups: draft.lineups, active: Number(draft.active) || 0 };
-  } catch {
-    return null;
-  }
-}
-
-function saveDraft(wallet: string, draft: Draft) {
-  try {
-    window.localStorage.setItem(draftKey(wallet), JSON.stringify(draft));
-  } catch {
-    // A convenience: without it the builder starts afresh next time
-  }
-}
 
 /** Compares lineups with what was last saved under a name, so auto-save only sends real changes. */
 const savedKey = (name: string, lineups: Lineup[]) =>

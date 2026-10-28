@@ -1,5 +1,5 @@
 import type { MFLPlayer } from '../types/mflApi';
-import { FORMATIONS, FORMATION_NAMES, XI_SIZE, autoFillLineup, positionFit } from './squadLineups';
+import { FORMATIONS, FORMATION_NAMES, XI_SIZE, autoFillLineup, positionFit, type FitKind } from './squadLineups';
 import metaSnapshot from '../data/formationMeta.json';
 
 /*
@@ -29,6 +29,8 @@ export interface FormationMeta {
   overall: Map<string, Tally>;
   /** Points a game across every match, about 1.4 as a draw gives both sides a point */
   averagePpg: number;
+  /** Chances of a win, draw and loss across every match */
+  averageOdds: Odds;
   /** Games across all the formations, every match counted from both sides */
   totalGames: number;
   /** Matches behind it */
@@ -46,7 +48,17 @@ export interface MetaSnapshot {
 
 export const BUNDLED_META = metaSnapshot as MetaSnapshot;
 
+/** Chances of a win, a draw and a loss, adding up to 1 */
+export interface Odds {
+  win: number;
+  draw: number;
+  loss: number;
+}
+
 const games = (tally: Tally) => tally.wins + tally.draws + tally.losses;
+const oddsOf = (tally: Tally): Odds => ({ win: tally.wins / games(tally), draw: tally.draws / games(tally), loss: tally.losses / games(tally) });
+/** Expected points a game for these chances */
+export const oddsPoints = (odds: Odds) => 3 * odds.win + odds.draw;
 const points = (tally: Tally) => 3 * tally.wins + tally.draws;
 const emptyTally = (): Tally => ({ wins: 0, draws: 0, losses: 0, goalsFor: 0, goalsAgainst: 0 });
 const sum = (values: number[]) => values.reduce((total, value) => total + value, 0);
@@ -67,6 +79,10 @@ export function buildFormationMeta(snapshot: MetaSnapshot = BUNDLED_META): Forma
   }
   const all = [...overall.values()];
   const totalGames = sum(all.map(games));
+  const everything = all.reduce(
+    (total, tally) => ({ ...total, wins: total.wins + tally.wins, draws: total.draws + tally.draws, losses: total.losses + tally.losses }),
+    emptyTally(),
+  );
   return {
     source: snapshot.source,
     engine: snapshot.engine,
@@ -75,6 +91,7 @@ export function buildFormationMeta(snapshot: MetaSnapshot = BUNDLED_META): Forma
     cells,
     overall,
     averagePpg: totalGames ? sum(all.map(points)) / totalGames : 1.4,
+    averageOdds: totalGames ? oddsOf(everything) : { win: 0.37, draw: 0.26, loss: 0.37 },
     totalGames,
     matches: Math.round(totalGames / 2),
   };
@@ -91,9 +108,9 @@ export function chooseFormationMeta(own: (MetaSnapshot & { totalGames: number })
   return own && own.totalGames >= MIN_OWN_GAMES ? buildFormationMeta(own) : buildFormationMeta(BUNDLED_META);
 }
 
-const ppgOf = (meta: FormationMeta, formation: string) => {
+const overallOdds = (meta: FormationMeta, formation: string): Odds => {
   const tally = meta.overall.get(formation);
-  return tally && games(tally) ? points(tally) / games(tally) : meta.averagePpg;
+  return tally && games(tally) ? oddsOf(tally) : meta.averageOdds;
 };
 
 /** How much of all play a formation is, from 0 to 1. */
@@ -104,18 +121,33 @@ export const metaShare = (meta: FormationMeta, formation: string) =>
 const META_PRIOR_GAMES = 30;
 
 /**
- * Points a game `formation` can expect against `opponentFormation`. A pairing seen only a few times is
- * pulled toward what the two formations do against everyone, so a lucky handful of games can't top the table.
+ * Chances of `formation` beating, drawing with and losing to `opponentFormation`. A pairing seen only a few times
+ * is pulled toward what the two formations do against everyone, so a lucky handful of games can't top the table.
  */
-export function metaPpg(meta: FormationMeta, formation: string, opponentFormation: string): number {
+export function metaOdds(meta: FormationMeta, formation: string, opponentFormation: string): Odds {
   const cell = meta.cells.get(`${formation}|${opponentFormation}`) ?? emptyTally();
-  const baseline = ppgOf(meta, formation) + meta.averagePpg - ppgOf(meta, opponentFormation);
-  return (points(cell) + META_PRIOR_GAMES * baseline) / (games(cell) + META_PRIOR_GAMES);
+  const ours = overallOdds(meta, formation);
+  const theirs = overallOdds(meta, opponentFormation);
+  // What the two do against everyone: our wins are as likely as their losses
+  const baseline = { win: (ours.win + theirs.loss) / 2, draw: (ours.draw + theirs.draw) / 2, loss: (ours.loss + theirs.win) / 2 };
+  const weigh = (count: number, base: number) => (count + META_PRIOR_GAMES * base) / (games(cell) + META_PRIOR_GAMES);
+  return { win: weigh(cell.wins, baseline.win), draw: weigh(cell.draws, baseline.draw), loss: weigh(cell.losses, baseline.loss) };
 }
+
+/** Points a game `formation` can expect against `opponentFormation`, from the meta. */
+export const metaPpg = (meta: FormationMeta, formation: string, opponentFormation: string) =>
+  oddsPoints(metaOdds(meta, formation, opponentFormation));
 
 /** Games behind a pairing in the meta. */
 export const metaGames = (meta: FormationMeta, formation: string, opponentFormation: string) =>
   games(meta.cells.get(`${formation}|${opponentFormation}`) ?? emptyTally());
+
+/** One of a formation's positions in a squad's best XI: who plays it, their rating there and how familiar it is to them */
+export interface FilledSlot {
+  playerId: number | null;
+  rating: number;
+  kind: FitKind;
+}
 
 export interface FormationFit {
   formation: string;
@@ -123,6 +155,10 @@ export interface FormationFit {
   rating: number;
   /** How far that is below the squad's best formation, 0 for the best */
   gap: number;
+  /** That XI, position by position in the formation's order */
+  slots: FilledSlot[];
+  /** Positions it fills with someone at an alternative position */
+  alternative: string[];
   /** Positions the XI has to fill with someone who doesn't play there */
   outOfPosition: string[];
 }
@@ -133,20 +169,19 @@ export function squadFits(players: MFLPlayer[]): Map<string, FormationFit> {
   const byId = new Map(players.map(player => [player.id, player]));
   const fits = FORMATION_NAMES.map(formation => {
     const { xi } = autoFillLineup(formation, players);
-    let total = 0;
-    const outOfPosition: string[] = [];
-    FORMATIONS[formation].forEach(([position], index) => {
+    const slots: FilledSlot[] = FORMATIONS[formation].map(([position], index) => {
       const id = xi[index];
       const player = id === null ? undefined : byId.get(id);
-      if (!player) {
-        outOfPosition.push(position);
-        return;
-      }
-      const fit = positionFit(player, position);
-      total += fit.rating;
-      if (fit.kind === 'out') outOfPosition.push(position);
+      return player ? { playerId: player.id, ...positionFit(player, position) } : { playerId: null, rating: 0, kind: 'out' as const };
     });
-    return { formation, rating: total / XI_SIZE, outOfPosition };
+    const positions = (kind: FitKind) => FORMATIONS[formation].filter((_, index) => slots[index].kind === kind).map(([position]) => position);
+    return {
+      formation,
+      rating: sum(slots.map(slot => slot.rating)) / XI_SIZE,
+      slots,
+      alternative: positions('alt'),
+      outOfPosition: positions('out'),
+    };
   });
   const best = Math.max(...fits.map(fit => fit.rating));
   return new Map(fits.map(fit => [fit.formation, { ...fit, gap: best - fit.rating }]));
@@ -229,20 +264,26 @@ export function seasonField(ourMatches: PlayedMatch[], meta: FormationMeta): For
   }).sort((a, b) => b.probability - a.probability);
 }
 
-export interface FormationPick {
+export interface FormationPick extends Odds {
   formation: string;
   /** Expected points a game against the likely opposition, from the meta */
   meta: number;
-  /** Points a game the squad gains or loses lining up in it, against its best formation */
-  fit: number;
+  /**
+   * Points a game from how strong our XI is in it: against the opponent's likely XI when we know their squad,
+   * otherwise against our own best formation
+   */
+  strength: number;
+  /** Average rating of our best XI in it */
+  xiRating: number;
   /** How much better our recent results with it were than with our other formations, against the meta, in points a game */
   ourForm: number;
   ourGames: number;
   /** How much better teams playing it did against this opponent lately than its other opponents did */
   theirRecord: number;
   theirGames: number;
-  /** All of the above added up: expected points a game in an even match */
+  /** All of the above added up: expected points a game */
   score: number;
+  alternative: string[];
   outOfPosition: string[];
 }
 
@@ -271,10 +312,32 @@ function beatTheMeta(
   return { value: sum(withIt.map(result => surplus(result) - usual)) / (withIt.length + priorGames), games: withIt.length };
 }
 
+/** Moves chance between a win and a loss to add `points` expected points a game, leaving each at least 1%. */
+function shiftOdds(odds: Odds, points: number): Odds {
+  const move = points / 3;
+  if (move >= 0) {
+    const moved = Math.min(move, Math.max(0, odds.loss - 0.01));
+    return { win: odds.win + moved, draw: odds.draw, loss: odds.loss - moved };
+  }
+  const moved = Math.min(-move, Math.max(0, odds.win - 0.01));
+  return { win: odds.win - moved, draw: odds.draw, loss: odds.loss + moved };
+}
+
 /**
- * Our formations ranked by expected points a game against `opposition` (the formations it will likely play),
- * from the meta, adjusted for how our squad lines up in each and for recent results: ours with each formation,
- * and the opponent's against it.
+ * Average rating of the XI an opponent will likely field: their best XI in each formation they may play,
+ * weighed by how likely it is. Null without their squad.
+ */
+export function likelyRating(guesses: FormationGuess[]): number | null {
+  const known = guesses.filter(guess => guess.fit);
+  const weight = sum(known.map(guess => guess.probability));
+  return weight ? sum(known.map(guess => guess.probability * guess.fit!.rating)) / weight : null;
+}
+
+/**
+ * Our formations ranked by expected points a game against `opposition` (the formations it will likely play):
+ * the chances of a win, draw and loss from the meta, adjusted for how strong our XI is in each (against the
+ * opponent's likely XI, `theirRating`, when known) and for recent results: ours with each formation, and the
+ * opponent's against it.
  */
 export function rankFormations(
   opposition: FormationGuess[],
@@ -282,6 +345,7 @@ export function rankFormations(
   ourMatches: PlayedMatch[],
   theirMatches: PlayedMatch[],
   meta: FormationMeta,
+  theirRating: number | null = null,
 ): FormationPick[] {
   const ours = ourMatches
     .filter(match => isFormation(match.formation) && isFormation(match.opponentFormation))
@@ -296,20 +360,30 @@ export function rankFormations(
     }));
 
   return FORMATION_NAMES.map(formation => {
-    const expected = sum(opposition.map(guess => guess.probability * metaPpg(meta, formation, guess.formation)));
+    const metaOddsAgainst = opposition.reduce(
+      (total, guess) => {
+        const odds = metaOdds(meta, formation, guess.formation);
+        return { win: total.win + guess.probability * odds.win, draw: total.draw + guess.probability * odds.draw, loss: total.loss + guess.probability * odds.loss };
+      },
+      { win: 0, draw: 0, loss: 0 },
+    );
     const fit = ourFits.get(formation);
     const ourForm = beatTheMeta(ours, formation, OUR_PRIOR_GAMES, meta);
     const theirRecord = beatTheMeta(againstThem, formation, THEIR_PRIOR_GAMES, meta);
-    const fitPoints = -PPG_PER_OVR * (fit?.gap ?? 0);
+    const strength = fit && theirRating !== null ? PPG_PER_OVR * (fit.rating - theirRating) : -PPG_PER_OVR * (fit?.gap ?? 0);
+    const odds = shiftOdds(metaOddsAgainst, strength + ourForm.value + theirRecord.value);
     return {
       formation,
-      meta: expected,
-      fit: fitPoints,
+      ...odds,
+      meta: oddsPoints(metaOddsAgainst),
+      strength,
+      xiRating: fit?.rating ?? 0,
       ourForm: ourForm.value,
       ourGames: ourForm.games,
       theirRecord: theirRecord.value,
       theirGames: theirRecord.games,
-      score: expected + fitPoints + ourForm.value + theirRecord.value,
+      score: oddsPoints(odds),
+      alternative: fit?.alternative ?? [],
       outOfPosition: fit?.outOfPosition ?? [],
     };
   }).sort((a, b) => b.score - a.score);

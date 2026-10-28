@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { scoutService, type ScoutReport } from '../services/scoutService';
+import { ScoutBusyError, scoutService, type ScoutReport } from '../services/scoutService';
 
 export interface ScoutReportState {
   report: ScoutReport | null;
@@ -7,7 +7,10 @@ export interface ScoutReportState {
   isLoading: boolean;
 }
 
-/** A club's squad and recent matches with formations, for the formation planner. Nothing for no club. */
+/** Times to wait and ask again while the site paces its requests to MFL */
+const BUSY_RETRIES = 4;
+
+/** A club's squad and recent matches with formations, for the match prep tool. Nothing for no club. */
 export function useScoutReport(clubId: number | null | undefined, limit: number): ScoutReportState {
   const [state, setState] = useState<ScoutReportState>({ report: null, error: null, isLoading: !!clubId });
 
@@ -17,13 +20,22 @@ export function useScoutReport(clubId: number | null | undefined, limit: number)
       return;
     }
     let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
     setState({ report: null, error: null, isLoading: true });
-    scoutService.fetchReport(clubId, limit).then(
-      report => !cancelled && setState({ report, error: null, isLoading: false }),
-      (error: Error) => !cancelled && setState({ report: null, error: error.message, isLoading: false }),
-    );
+    const load = (attempt: number) =>
+      scoutService.fetchReport(clubId, limit).then(
+        report => !cancelled && setState({ report, error: null, isLoading: false }),
+        (error: Error) => {
+          if (cancelled) return;
+          // Still loading: it asks again once the wait is over
+          if (error instanceof ScoutBusyError && attempt < BUSY_RETRIES) timer = setTimeout(() => load(attempt + 1), error.retryAfter * 1000);
+          else setState({ report: null, error: error.message, isLoading: false });
+        },
+      );
+    load(0);
     return () => {
       cancelled = true;
+      clearTimeout(timer);
     };
   }, [clubId, limit]);
 

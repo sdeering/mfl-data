@@ -94,7 +94,7 @@ describe('squadFits', () => {
 
 describe('predictFormations', () => {
   const fits = (gaps: Record<string, number>) =>
-    new Map<string, FormationFit>(FORMATION_NAMES.map(formation => [formation, { formation, rating: 80, gap: gaps[formation] ?? 3, outOfPosition: [] }]))
+    new Map<string, FormationFit>(FORMATION_NAMES.map(formation => [formation, { formation, rating: 80, gap: gaps[formation] ?? 3, slots: [], alternative: [], outOfPosition: [] }]))
 
   it('expects what a club has been playing, the latest counting most', () => {
     const matches = [played('4-4-2', '4-3-3', 1, 0), played('4-4-2', '4-3-3', 1, 0), played('4-3-3', '4-3-3', 1, 0), played('4-3-3', '4-3-3', 1, 0)]
@@ -130,11 +130,25 @@ describe('rankFormations', () => {
   })
 
   it('takes off points for a formation our squad lines up badly in', () => {
-    const fits = new Map<string, FormationFit>([['4-4-2', { formation: '4-4-2', rating: 70, gap: 5, outOfPosition: ['LM', 'RM'] }]])
+    const fits = new Map<string, FormationFit>([['4-4-2', { formation: '4-4-2', rating: 70, gap: 5, slots: [], alternative: [], outOfPosition: ['LM', 'RM'] }]])
     const picks = rankFormations([{ formation: '4-3-3', probability: 1, timesPlayed: 5 }], fits, [], [], meta)
     const pick = picks.find(p => p.formation === '4-4-2')!
-    expect(pick.fit).toBeCloseTo(-0.5)
+    expect(pick.strength).toBeCloseTo(-0.5)
+    expect(pick.score).toBeCloseTo(pick.meta - 0.5)
     expect(pick.outOfPosition).toEqual(['LM', 'RM'])
+  })
+
+  it('gives win, draw and loss chances that add up, and favours the stronger XI', () => {
+    const fits = new Map<string, FormationFit>([['4-4-2', { formation: '4-4-2', rating: 88, gap: 0, slots: [], alternative: [], outOfPosition: [] }]])
+    const opposition = [{ formation: '4-3-3', probability: 1, timesPlayed: 5 }]
+    const even = rankFormations(opposition, fits, [], [], meta, 88).find(p => p.formation === '4-4-2')!
+    const stronger = rankFormations(opposition, fits, [], [], meta, 84).find(p => p.formation === '4-4-2')!
+    expect(even.win + even.draw + even.loss).toBeCloseTo(1)
+    expect(stronger.win + stronger.draw + stronger.loss).toBeCloseTo(1)
+    expect(even.strength).toBeCloseTo(0)
+    expect(stronger.strength).toBeCloseTo(0.4)
+    expect(stronger.win).toBeGreaterThan(even.win)
+    expect(stronger.score).toBeCloseTo(even.score + 0.4)
   })
 
   it('nudges a formation by our results with it and by how teams playing it did against the opponent', () => {
