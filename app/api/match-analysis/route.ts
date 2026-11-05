@@ -6,6 +6,7 @@ import { SCOUT_LIMITS, buildScoutReport } from '@/src/services/scoutReportBuilde
 import {
   ANALYSIS_SCHEMA,
   buildAnalysisPrompt,
+  cleanTactics,
   type MatchAnalysis,
   type MatchAnalysisRequest,
   type MatchReport,
@@ -93,6 +94,8 @@ async function askGemini(prompt: string): Promise<MatchAnalysis> {
     defend: analysis.defend ?? [],
     matchups: analysis.matchups ?? [],
     lineup: analysis.lineup ?? [],
+    styleSummary: typeof analysis.styleSummary === 'string' ? analysis.styleSummary : '',
+    tactics: cleanTactics(analysis.tactics),
   };
 }
 
@@ -110,7 +113,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ success: false, error: "AI analysis isn't set up on this site yet" }, { status: 503 });
   }
   const { ourClubId, theirClubId, ourFormation, theirFormation } = body;
-  const cacheKey = `${ourClubId}:${theirClubId}:${ourFormation}:${theirFormation}`;
+  const cacheKey = `v2:${ourClubId}:${theirClubId}:${ourFormation}:${theirFormation}`;
   const cached = cache.get(cacheKey);
   if (cached && Date.now() - cached.at < CACHE_MS) return NextResponse.json({ success: true, data: cached.analysis, cached: true });
 

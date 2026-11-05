@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import type { MatchAnalysis, MatchAnalysisRequest } from '../../services/matchAnalysis';
+import { TACTIC_SETTINGS, TACTIC_STEPS, type MatchAnalysis, type MatchAnalysisRequest, type TacticPick, type TacticSetting } from '../../services/matchAnalysis';
 import type { ComparisonRow, SquadComparison, Weakness } from '../../utils/squadComparison';
 import { formationLabel } from '../../utils/squadLineups';
 import { Panel } from '../ui';
@@ -116,6 +116,62 @@ const Points: React.FC<{ title: string; items: { title: string; detail: string }
       ))}
     </div>
   ) : null;
+
+// MFL's colours for the two halves of its playing style screen
+const SETTING_GROUPS = [
+  { group: 'in', title: 'In possession', sub: 'How your team attacks', colour: '#facc15' },
+  { group: 'out', title: 'Out of possession', sub: 'How your team defends', colour: '#3b8bf0' },
+] as const;
+
+/** A playing style setting as MFL's Steps view draws it: the step filled in, the ends labelled, and why */
+const SettingRow: React.FC<{ setting: TacticSetting; pick: TacticPick; colour: string }> = ({ setting, pick, colour }) => (
+  <div className="flex flex-col gap-1.5" title={`${setting.label}: step ${pick.step} of ${TACTIC_STEPS}`}>
+    <span className="flex items-baseline justify-between gap-2">
+      <span className="text-[13px] font-bold">{setting.label}</span>
+      <span className="text-[11px] font-bold text-muted-3">
+        {pick.step} / {TACTIC_STEPS}
+      </span>
+    </span>
+    <span className="flex gap-1" aria-label={`Step ${pick.step} of ${TACTIC_STEPS}`}>
+      {Array.from({ length: TACTIC_STEPS }, (_, index) => (
+        <span key={index} className="flex-1 h-1.5 rounded-full" style={{ background: index < pick.step ? colour : 'var(--line)' }} />
+      ))}
+    </span>
+    <span className="flex justify-between gap-2 text-[10px] font-semibold text-muted-3">
+      <span>{setting.low}</span>
+      <span className="text-right">{setting.high}</span>
+    </span>
+    {pick.reason && <span className="text-xs font-medium text-muted">{pick.reason}</span>}
+  </div>
+);
+
+/** The playing style to set in MFL for this match, both halves side by side */
+const MatchSettings: React.FC<{ summary?: string; tactics: TacticPick[] }> = ({ summary, tactics }) => {
+  const picks = new Map(tactics.map(pick => [pick.key, pick]));
+  return (
+    <div className="flex flex-col gap-2.5">
+      <span className={capsLabel}>Match settings</span>
+      {summary && <p className="m-0 text-sm font-medium text-muted">{summary}</p>}
+      <div className="grid gap-3 grid-cols-[repeat(auto-fit,minmax(min(100%,320px),1fr))]">
+        {SETTING_GROUPS.map(({ group, title, sub, colour }) => {
+          const rows = TACTIC_SETTINGS.filter(setting => setting.group === group && picks.has(setting.key));
+          if (!rows.length) return null;
+          return (
+            <div key={group} className="flex flex-col gap-3.5 px-4 py-3.5 rounded-2xl bg-inset border border-line">
+              <span className="flex flex-col">
+                <span className="text-sm font-bold">{title}</span>
+                <span className="text-xs font-medium text-muted-3">{sub}</span>
+              </span>
+              {rows.map(setting => (
+                <SettingRow key={setting.key} setting={setting} pick={picks.get(setting.key)!} colour={colour} />
+              ))}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
 
 /**
  * Gemini's read of the matchup, asked for at a click: both squads, their form and their latest match stats go to
@@ -239,6 +295,7 @@ export const AiAnalysisPanel: React.FC<{ name: string; request: MatchAnalysisReq
               colour="#facc15"
             />
           )}
+          {analysis.tactics && analysis.tactics.length > 0 && <MatchSettings summary={analysis.styleSummary} tactics={analysis.tactics} />}
           <span className="text-[11px] font-medium text-muted-3">AI generated from MFL data. It can be wrong, so check it against the numbers above.</span>
         </div>
       )}

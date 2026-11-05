@@ -26,6 +26,41 @@ export interface MatchAnalysisRequest {
   counters?: RankedCounter[];
 }
 
+/** Steps on each playing style setting, as MFL's Steps view shows them */
+export const TACTIC_STEPS = 6;
+
+export interface TacticSetting {
+  key: string;
+  label: string;
+  group: 'in' | 'out';
+  /** What step 1 and the last step mean, as MFL labels the ends of the slider */
+  low: string;
+  high: string;
+}
+
+/** MFL's playing style settings: how the team attacks (in possession) and defends (out of possession) */
+export const TACTIC_SETTINGS: TacticSetting[] = [
+  { key: 'attackingWidth', label: 'Attacking Width', group: 'in', low: 'Very narrow', high: 'Very wide' },
+  { key: 'directness', label: 'Directness', group: 'in', low: 'Controlled', high: 'Direct' },
+  { key: 'flankPreference', label: 'Flank Preference', group: 'in', low: 'Prioritise left flank', high: 'Prioritise right flank' },
+  { key: 'shooting', label: 'Shooting', group: 'in', low: 'Shoot less often', high: 'Shoot more often' },
+  { key: 'crossing', label: 'Crossing', group: 'in', low: 'Cross less often', high: 'Cross more often' },
+  { key: 'dribbling', label: 'Dribbling', group: 'in', low: 'Dribble less often', high: 'Dribble more often' },
+  { key: 'attackTendency', label: 'Attack Tendency', group: 'in', low: 'More defensive', high: 'More offensive' },
+  { key: 'teamDepth', label: 'Team Depth', group: 'out', low: 'Low', high: 'High' },
+  { key: 'compactness', label: 'Compactness', group: 'out', low: 'Tight block', high: 'Spread out' },
+  { key: 'triggerPress', label: 'Trigger Press', group: 'out', low: 'Less often', high: 'More often' },
+  { key: 'aggressiveness', label: 'Aggressiveness', group: 'out', low: 'Less aggressive', high: 'More aggressive' },
+  { key: 'clearances', label: 'Clearances', group: 'out', low: 'Play out of defence', high: 'Clear the ball often' },
+];
+
+export interface TacticPick {
+  key: string;
+  /** 1 to TACTIC_STEPS */
+  step: number;
+  reason: string;
+}
+
 export interface MatchAnalysis {
   summary: string;
   formation: { pick: string; reason: string };
@@ -33,6 +68,9 @@ export interface MatchAnalysis {
   defend: { title: string; detail: string }[];
   matchups: { ours: string; theirs: string; edge: 'ours' | 'theirs' | 'even'; note: string }[];
   lineup: { position: string; change: string; reason: string }[];
+  /** One sentence on the playing style, and a step for each setting; missing from analyses made before settings existed */
+  styleSummary?: string;
+  tactics?: TacticPick[];
 }
 
 /** Gemini's response schema for a MatchAnalysis */
@@ -81,8 +119,22 @@ export const ANALYSIS_SCHEMA = {
         required: ['position', 'change', 'reason'],
       },
     },
+    styleSummary: { type: 'STRING', description: 'One sentence on the playing style these settings add up to' },
+    tactics: {
+      type: 'ARRAY',
+      description: `A step from 1 to ${TACTIC_STEPS} for every playing style setting, each key once`,
+      items: {
+        type: 'OBJECT',
+        properties: {
+          key: { type: 'STRING', enum: TACTIC_SETTINGS.map(setting => setting.key) },
+          step: { type: 'INTEGER', description: `1 is the low end of the setting, ${TACTIC_STEPS} the high end` },
+          reason: { type: 'STRING', description: 'One short sentence tied to the data' },
+        },
+        required: ['key', 'step', 'reason'],
+      },
+    },
   },
-  required: ['summary', 'formation', 'attack', 'defend', 'matchups', 'lineup'],
+  required: ['summary', 'formation', 'attack', 'defend', 'matchups', 'lineup', 'styleSummary', 'tactics'],
 } as const;
 
 /** A player's line in a match report from MFL's /matches/{id}/report */
@@ -206,7 +258,9 @@ export const MFL_TACTICS_GUIDE = [
   "A player's rating at a position is their overall less a familiarity penalty: none at a primary position, -5 fairly familiar, -8 somewhat familiar, -20 unfamiliar. Fit 'natural', 'alt' and 'out' mark these.",
   'Attributes run 0-100: pace, shooting, passing, dribbling, defense, physical (goalkeeping for keepers). Wide players beat full-backs with pace and dribbling; centre-backs stop strikers with defense and physical.',
   "Positions with side 'left' or 'right' are from that team's own point of view: their left-back faces our right winger.",
-  'Only recommend formations, who plays where and swaps from the listed squads. Do not invent other team instructions or settings.',
+  `Besides the formation and XI, the manager sets a playing style: ${TACTIC_SETTINGS.length} settings, each on ${TACTIC_STEPS} steps from 1 (the low end) to ${TACTIC_STEPS} (the high end), listed under playingStyleSettings with what each end means. Flank Preference low favours attacking down our left, high our right.`,
+  'Pick a step for every setting to suit this matchup: flank preference, width, crossing and dribbling to aim at their weak flank and use our best wide players; directness and team depth to use or deny pace in behind; pressing, aggressiveness and compactness against their midfield and creators; shooting by our shooters and their keeper; clearances by how good our defenders are on the ball.',
+  'Only recommend formations, who plays where, swaps from the listed squads and the listed playing style settings. Do not invent other instructions.',
 ];
 
 export interface AnalysisInput {
@@ -228,6 +282,13 @@ export function buildAnalysisPrompt({ ours, theirs, ourFormation, theirFormation
 
   const data = {
     tacticsGuide: MFL_TACTICS_GUIDE,
+    playingStyleSettings: TACTIC_SETTINGS.map(({ key, label, group, low, high }) => ({
+      key,
+      label,
+      phase: group === 'in' ? 'in possession (how we attack)' : 'out of possession (how we defend)',
+      lowEnd: low,
+      highEnd: high,
+    })),
     formations: Object.keys(FORMATIONS).map(formation => ({ key: formation, positions: describeFormation(formation) })),
     us: {
       club: ours.club.name,
@@ -257,4 +318,17 @@ export function buildAnalysisPrompt({ ours, theirs, ourFormation, theirFormation
     '',
     JSON.stringify(data),
   ].join('\n');
+}
+
+/** The model's settings cut to the known ones, each once, its step a whole number from 1 to TACTIC_STEPS, in MFL's order */
+export function cleanTactics(value: unknown): TacticPick[] {
+  if (!Array.isArray(value)) return [];
+  const byKey = new Map<string, TacticPick>();
+  for (const item of value) {
+    if (!item || typeof item.key !== 'string' || byKey.has(item.key) || !TACTIC_SETTINGS.some(setting => setting.key === item.key)) continue;
+    const step = Math.round(Number(item.step));
+    if (!Number.isFinite(step)) continue;
+    byKey.set(item.key, { key: item.key, step: Math.min(TACTIC_STEPS, Math.max(1, step)), reason: String(item.reason ?? '') });
+  }
+  return TACTIC_SETTINGS.flatMap(setting => byKey.get(setting.key) ?? []);
 }

@@ -1,7 +1,7 @@
 import type { MFLPlayer } from '../types/mflApi'
 import { squadFits } from '../utils/formationPlanner'
 import { compareSquads, findWeaknesses, xiPlayers, type XiPlayer } from '../utils/squadComparison'
-import { summariseReports, type ReportPlayerStats } from '../services/matchAnalysis'
+import { cleanTactics, summariseReports, TACTIC_SETTINGS, type ReportPlayerStats } from '../services/matchAnalysis'
 
 // Every outfield attribute the same unless given, so a player rates their overall at their primary position
 const player = (id: number, positions: string[], overall: number, attributes: Partial<Record<string, number>> = {}): MFLPlayer => {
@@ -111,5 +111,29 @@ describe('summariseReports', () => {
     )
     expect(summary.players[0]).toMatchObject({ name: 'Player P7', games: 2, avgMatchRating: 6, dribbledPast: 5, passAccuracy: 80 })
     expect(summary.matches[0]).toEqual({ matchId: 1, shotsFor: 2, xGFor: 0.4, shotsAgainst: 5, xGAgainst: 1.2 })
+  })
+})
+
+describe('cleanTactics', () => {
+  it("keeps known settings once each, in MFL's order, with whole steps from 1 to 6", () => {
+    const tactics = cleanTactics([
+      { key: 'clearances', step: 9, reason: 'Big lump' },
+      { key: 'attackingWidth', step: 4.6, reason: 'Go wide' },
+      { key: 'attackingWidth', step: 1, reason: 'Repeat' },
+      { key: 'madeUp', step: 3, reason: 'Not a setting' },
+      { key: 'shooting', step: 'lots', reason: 'Not a number' },
+      { key: 'teamDepth', step: 0 },
+    ])
+    expect(tactics).toEqual([
+      { key: 'attackingWidth', step: 5, reason: 'Go wide' },
+      { key: 'teamDepth', step: 1, reason: '' },
+      { key: 'clearances', step: 6, reason: 'Big lump' },
+    ])
+  })
+
+  it('has the twelve settings from MFL, seven in possession and five out', () => {
+    expect(TACTIC_SETTINGS.filter(setting => setting.group === 'in')).toHaveLength(7)
+    expect(TACTIC_SETTINGS.filter(setting => setting.group === 'out')).toHaveLength(5)
+    expect(cleanTactics('nope')).toEqual([])
   })
 })
