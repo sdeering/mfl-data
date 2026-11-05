@@ -35,6 +35,8 @@ import {
   limeButton,
 } from './matches/MatchPrep';
 import { AiAnalysisPanel, SquadComparisonPanel } from './matches/MatchAnalysisPanels';
+import { TacticsLogPanel } from './matches/TacticsLog';
+import { useTacticsLog, type TacticsLogState } from '../hooks/useTacticsLog';
 import { compareSquads, findWeaknesses, xiPlayers } from '../utils/squadComparison';
 
 /** Matches of ours the tool reads, and of each opponent's */
@@ -48,6 +50,9 @@ interface Opponent {
   clubId: number;
   name: string;
   when: string;
+  /** The fixture's match, and its day, for an opponent we play next */
+  matchId?: number;
+  day?: string;
   scouted?: boolean;
 }
 
@@ -105,7 +110,10 @@ const OpponentPrep: React.FC<{
   against: string | undefined;
   onAgainst: (against: string) => void;
   onOpenSquad: (opponentName: string, formation: string) => void;
-}> = ({ opponent, ourClubId, ours, ourFits, ourPlayersById, meta, pick, onPick, against: picked, onAgainst, onOpenSquad }) => {
+  tactics: TacticsLogState;
+  /** Whether the connected wallet owns our club, so it can log tactics */
+  canLog: boolean;
+}> = ({ opponent, ourClubId, ours, ourFits, ourPlayersById, meta, pick, onPick, against: picked, onAgainst, onOpenSquad, tactics, canLog }) => {
   const { report, error, isLoading } = useScoutReport(opponent.clubId, THEIR_MATCHES);
   const theirFits = useMemo(() => squadFits(report?.players ?? []), [report]);
   const theirPlayersById = useMemo(() => new Map((report?.players ?? []).map(player => [player.id, player])), [report]);
@@ -186,6 +194,9 @@ const OpponentPrep: React.FC<{
             counters: picks.slice(0, 5).map(item => ({ formation: item.formation, win: item.win, draw: item.draw, loss: item.loss, points: item.score })),
           }}
           onUseFormation={onPick}
+          history={tactics.history}
+          fixture={opponent.matchId && opponent.day ? { matchId: opponent.matchId, when: opponent.day } : undefined}
+          onSaveSettings={canLog ? tactics.save : undefined}
         />
       )}
     </>
@@ -220,6 +231,9 @@ const MatchesPage: React.FC = () => {
 
   const { meta, own } = useFormationMeta();
   const { report: ours, error: ourError } = useScoutReport(clubId, OUR_MATCHES);
+  // Only the connected wallet can log tactics, for its own clubs; a wallet pasted in only looks
+  const canLog = isConnected && !!account;
+  const tactics = useTacticsLog(clubId, canLog ? account : null);
   const ourFits = useMemo(() => squadFits(ours?.players ?? []), [ours]);
   const ourPlayersById = useMemo(() => new Map((ours?.players ?? []).map(player => [player.id, player])), [ours]);
 
@@ -271,7 +285,14 @@ const MatchesPage: React.FC = () => {
       if (!opponent || opponent.id === clubId || next.some(fixture => fixture.clubId === opponent.id)) continue;
       const kind = COMPETITION_KINDS[match.competition?.type] ?? match.competition?.name ?? 'Match';
       const day = new Date(match.startDate).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
-      next.push({ clubId: opponent.id, name: home ? match.awayTeamName : match.homeTeamName, when: `${kind} · ${day} · ${home ? 'Home' : 'Away'}`, startDate: match.startDate });
+      next.push({
+        clubId: opponent.id,
+        name: home ? match.awayTeamName : match.homeTeamName,
+        when: `${kind} · ${day} · ${home ? 'Home' : 'Away'}`,
+        matchId: match.id,
+        day,
+        startDate: match.startDate,
+      });
       if (next.length === MAX_UPCOMING) break;
     }
     return next;
@@ -448,8 +469,19 @@ const MatchesPage: React.FC = () => {
               against={plannedAgainst[selected.clubId]}
               onAgainst={against => planAgainst(selected.clubId, against)}
               onOpenSquad={openSquad}
+              tactics={tactics}
+              canLog={canLog}
             />
           )}
+
+          <TacticsLogPanel
+            clubName={clubs.find(item => item.club.id === clubId)?.club.name ?? 'Your club'}
+            history={tactics.history}
+            isLoading={tactics.isLoading}
+            error={tactics.error}
+            canEdit={canLog}
+            onSave={tactics.save}
+          />
 
           <p className="m-0 text-[11px] font-medium text-muted-3">
             {meta.source === 'mfldata' ? (

@@ -3,6 +3,8 @@ import { TACTIC_SETTINGS, TACTIC_STEPS, type MatchAnalysis, type MatchAnalysisRe
 import type { ComparisonRow, SquadComparison, Weakness } from '../../utils/squadComparison';
 import { formationLabel } from '../../utils/squadLineups';
 import { Panel } from '../ui';
+import type { TacticSettings, TacticsHistory } from '../../utils/tacticsHistory';
+import { WhatWorkedSection } from './TacticsLog';
 import { capsLabel, limeButton, panelTitle } from './MatchPrep';
 
 /*
@@ -146,11 +148,56 @@ const SettingRow: React.FC<{ setting: TacticSetting; pick: TacticPick; colour: s
 );
 
 /** The playing style to set in MFL for this match, both halves side by side */
-const MatchSettings: React.FC<{ summary?: string; tactics: TacticPick[] }> = ({ summary, tactics }) => {
+/** The match to save settings to: the fixture against this opponent, and whether the owner can */
+interface SaveTarget {
+  matchId: number;
+  when: string;
+  saved: TacticSettings | null;
+  onSave: (matchId: number, settings: TacticSettings) => Promise<void>;
+}
+
+const sameSettings = (a: TacticSettings | null, b: TacticSettings | null) =>
+  !!a && !!b && TACTIC_SETTINGS.every(setting => a[setting.key] === b[setting.key]);
+
+const MatchSettings: React.FC<{ summary?: string; tactics: TacticPick[]; target?: SaveTarget }> = ({ summary, tactics, target }) => {
   const picks = new Map(tactics.map(pick => [pick.key, pick]));
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState('');
+  // Only a full set of settings can be logged
+  const settings: TacticSettings | null =
+    picks.size === TACTIC_SETTINGS.length ? Object.fromEntries(TACTIC_SETTINGS.map(setting => [setting.key, picks.get(setting.key)!.step])) : null;
+  const saved = !!target && sameSettings(target.saved, settings);
+  const save = async () => {
+    if (!target || !settings) return;
+    setSaving(true);
+    setSaveError('');
+    try {
+      await target.onSave(target.matchId, settings);
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : 'Could not save');
+    } finally {
+      setSaving(false);
+    }
+  };
   return (
     <div className="flex flex-col gap-2.5">
-      <span className={capsLabel}>Match settings</span>
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <span className={capsLabel}>Match settings</span>
+        {target && settings && (
+          <span className="flex items-center gap-2">
+            {saveError && <span className="text-xs font-semibold text-[#f87171]">{saveError}</span>}
+            <button
+              type="button"
+              onClick={save}
+              disabled={saving || saved}
+              title="Log these settings for the match, so the tactics log has them once it's played"
+              className="h-8 px-3 rounded-lg border border-line-2 text-xs font-bold text-fg-3 cursor-pointer hover:border-[#c6f432] hover:text-[#c6f432] disabled:cursor-default disabled:hover:border-line-2 disabled:hover:text-fg-3"
+            >
+              {saved ? `Logged for ${target.when}` : saving ? 'Saving…' : `Log for ${target.when}`}
+            </button>
+          </span>
+        )}
+      </div>
       {summary && <p className="m-0 text-sm font-medium text-muted">{summary}</p>}
       <div className="grid gap-3 grid-cols-[repeat(auto-fit,minmax(min(100%,320px),1fr))]">
         {SETTING_GROUPS.map(({ group, title, sub, colour }) => {
@@ -177,11 +224,16 @@ const MatchSettings: React.FC<{ summary?: string; tactics: TacticPick[] }> = ({ 
  * Gemini's read of the matchup, asked for at a click: both squads, their form and their latest match stats go to
  * /api/match-analysis. It suggests a formation, which a click plays.
  */
-export const AiAnalysisPanel: React.FC<{ name: string; request: MatchAnalysisRequest; onUseFormation: (formation: string) => void }> = ({
-  name,
-  request,
-  onUseFormation,
-}) => {
+export const AiAnalysisPanel: React.FC<{
+  name: string;
+  request: MatchAnalysisRequest;
+  onUseFormation: (formation: string) => void;
+  /** Our tactics log, for what worked before */
+  history: TacticsHistory | null;
+  /** The fixture against them, when we play them next, and saving settings to it when the owner is connected */
+  fixture?: { matchId: number; when: string };
+  onSaveSettings?: (matchId: number, settings: TacticSettings) => Promise<void>;
+}> = ({ name, request, onUseFormation, history, fixture, onSaveSettings }) => {
   const key = keyOf(request);
   const [state, setState] = useState<AnalysisState>(() => {
     const known = analyses.get(key);
@@ -295,8 +347,28 @@ export const AiAnalysisPanel: React.FC<{ name: string; request: MatchAnalysisReq
               colour="#facc15"
             />
           )}
-          {analysis.tactics && analysis.tactics.length > 0 && <MatchSettings summary={analysis.styleSummary} tactics={analysis.tactics} />}
+          {analysis.tactics && analysis.tactics.length > 0 && (
+            <MatchSettings
+              summary={analysis.styleSummary}
+              tactics={analysis.tactics}
+              target={
+                fixture && onSaveSettings ? { ...fixture, saved: history?.planned[fixture.matchId] ?? null, onSave: onSaveSettings } : undefined
+              }
+            />
+          )}
           <span className="text-[11px] font-medium text-muted-3">AI generated from MFL data. It can be wrong, so check it against the numbers above.</span>
+        </div>
+      )}
+      {history && (
+        <div className="pt-4 border-t border-divider">
+          <WhatWorkedSection
+            history={history}
+            opponentClubId={request.theirClubId}
+            opponentName={name}
+            opponentFormation={request.theirFormation}
+            tactics={stale ? undefined : analysis?.tactics}
+            notes={stale ? undefined : analysis?.historyNotes}
+          />
         </div>
       )}
     </Panel>

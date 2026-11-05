@@ -3,6 +3,7 @@ import { MflHttpError, fetchMflCached, mflBlockedFor } from '@/src/services/form
 import type { ScoutMatch } from '@/src/services/scoutService';
 import { MflRateLimitError } from '@/src/services/playerProgressionCache';
 import { SCOUT_LIMITS, buildScoutReport } from '@/src/services/scoutReportBuilder';
+import { buildTacticsHistory, loadTacticsEntries } from '@/src/services/tacticsLog';
 import {
   ANALYSIS_SCHEMA,
   buildAnalysisPrompt,
@@ -96,6 +97,7 @@ async function askGemini(prompt: string): Promise<MatchAnalysis> {
     lineup: analysis.lineup ?? [],
     styleSummary: typeof analysis.styleSummary === 'string' ? analysis.styleSummary : '',
     tactics: cleanTactics(analysis.tactics),
+    historyNotes: Array.isArray(analysis.historyNotes) ? analysis.historyNotes.filter(note => note?.title && note?.detail) : [],
   };
 }
 
@@ -113,7 +115,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ success: false, error: "AI analysis isn't set up on this site yet" }, { status: 503 });
   }
   const { ourClubId, theirClubId, ourFormation, theirFormation } = body;
-  const cacheKey = `v2:${ourClubId}:${theirClubId}:${ourFormation}:${theirFormation}`;
+  // Logging a match makes a new analysis, so it reads the log as it is
+  const entries = await loadTacticsEntries(ourClubId);
+  const logVersion = entries.length ? `${entries.length}-${entries.map(entry => entry.updatedAt).sort().at(-1)}` : '0';
+  const cacheKey = `v3:${ourClubId}:${theirClubId}:${ourFormation}:${theirFormation}:${logVersion}`;
   const cached = cache.get(cacheKey);
   if (cached && Date.now() - cached.at < CACHE_MS) return NextResponse.json({ success: true, data: cached.analysis, cached: true });
 
@@ -132,8 +137,10 @@ export async function POST(request: NextRequest) {
     if (!theirs.players.length) return NextResponse.json({ success: false, error: `${theirs.club.name} has no squad to analyse` }, { status: 422 });
 
     const reports = await theirReports(theirs.matches);
+    // Our log only costs MFL requests when there is one
+    const history = entries.length ? await buildTacticsHistory(ourClubId, entries) : null;
 
-    const prompt = buildAnalysisPrompt({ ours, theirs, ourFormation, theirFormation, counters: readCounters(body.counters), theirReports: reports });
+    const prompt = buildAnalysisPrompt({ ours, theirs, ourFormation, theirFormation, counters: readCounters(body.counters), theirReports: reports, history });
     const analysis = await askGemini(prompt);
     cache.set(cacheKey, { analysis, at: Date.now() });
     if (cache.size > 300) cache.delete(cache.keys().next().value!);

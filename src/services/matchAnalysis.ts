@@ -3,6 +3,7 @@ import { squadFits, type PlayedMatch } from '../utils/formationPlanner';
 import { compareSquads, describeFormation, findWeaknesses, xiPlayers, type XiPlayer } from '../utils/squadComparison';
 import { FORMATIONS, FORMATION_NAMES, formationLabel } from '../utils/squadLineups';
 import type { ScoutMatch, ScoutReport } from './scoutService';
+import { recordOf, settingEffects, similarMatches, type TacticsHistory } from '../utils/tacticsHistory';
 
 /*
  * The AI match analysis on the Matches page: what the page asks for, what comes back, and the prompt the server
@@ -71,6 +72,8 @@ export interface MatchAnalysis {
   /** One sentence on the playing style, and a step for each setting; missing from analyses made before settings existed */
   styleSummary?: string;
   tactics?: TacticPick[];
+  /** What our logged matches say, empty when none are logged */
+  historyNotes?: { title: string; detail: string }[];
 }
 
 /** Gemini's response schema for a MatchAnalysis */
@@ -133,8 +136,13 @@ export const ANALYSIS_SCHEMA = {
         required: ['key', 'step', 'reason'],
       },
     },
+    historyNotes: {
+      type: 'ARRAY',
+      description: 'What our logged matches (ourTacticsLog) say about the settings to use here, citing results and xG; empty if none are logged',
+      items: { type: 'OBJECT', properties: { title: { type: 'STRING' }, detail: { type: 'STRING' } }, required: ['title', 'detail'] },
+    },
   },
-  required: ['summary', 'formation', 'attack', 'defend', 'matchups', 'lineup', 'styleSummary', 'tactics'],
+  required: ['summary', 'formation', 'attack', 'defend', 'matchups', 'lineup', 'styleSummary', 'tactics', 'historyNotes'],
 } as const;
 
 /** A player's line in a match report from MFL's /matches/{id}/report */
@@ -260,6 +268,7 @@ export const MFL_TACTICS_GUIDE = [
   "Positions with side 'left' or 'right' are from that team's own point of view: their left-back faces our right winger.",
   `Besides the formation and XI, the manager sets a playing style: ${TACTIC_SETTINGS.length} settings, each on ${TACTIC_STEPS} steps from 1 (the low end) to ${TACTIC_STEPS} (the high end), listed under playingStyleSettings with what each end means. Flank Preference low favours attacking down our left, high our right.`,
   'Pick a step for every setting to suit this matchup: flank preference, width, crossing and dribbling to aim at their weak flank and use our best wide players; directness and team depth to use or deny pace in behind; pressing, aggressiveness and compactness against their midfield and creators; shooting by our shooters and their keeper; clearances by how good our defenders are on the ball.',
+  'ourTacticsLog, when present, holds the settings we actually used in our own logged matches (league, cup and friendly) with the result and xG, how we did with each setting low (steps 1-2), mid (3-4) and high (5-6), and the logged matches against this opponent and this formation. Weigh it by sample size: a few friendlies are weak evidence, and say so. Let it shape the settings you pick and explain the link in historyNotes.',
   'Only recommend formations, who plays where, swaps from the listed squads and the listed playing style settings. Do not invent other instructions.',
 ];
 
@@ -270,10 +279,37 @@ export interface AnalysisInput {
   theirFormation: string;
   counters: RankedCounter[];
   theirReports: SideReport[];
+  /** Our tactics log, when any matches are logged */
+  history?: TacticsHistory | null;
 }
 
 /** The prompt for one analysis: the guide, both squads and XIs, their form, the planner's numbers and our weak-spot finds */
-export function buildAnalysisPrompt({ ours, theirs, ourFormation, theirFormation, counters, theirReports }: AnalysisInput): string {
+/** Our logged matches, for the prompt: each with its settings, and the record by setting band */
+function describeHistory(history: TacticsHistory | null | undefined, theirClubId: number, theirFormation: string) {
+  const logged = (history?.matches ?? []).filter(match => match.settings).slice(0, 30);
+  if (!logged.length) return null;
+  const describe = (match: (typeof logged)[number]) => ({
+    date: new Date(match.startDate).toISOString().slice(0, 10),
+    type: match.type,
+    opponent: match.opponent.name,
+    result: `${match.goalsFor}-${match.goalsAgainst}`,
+    formation: match.formation ? formationLabel(match.formation) : 'unknown',
+    opponentFormation: match.opponentFormation ? formationLabel(match.opponentFormation) : 'unknown',
+    xGFor: match.xGFor,
+    xGAgainst: match.xGAgainst,
+    settings: match.settings,
+  });
+  const similar = similarMatches(logged, theirClubId, theirFormation);
+  return {
+    overall: recordOf(logged),
+    bySetting: settingEffects(logged).map(effect => ({ setting: effect.key, ...effect.bands, bestBand: effect.best })),
+    againstThisOpponent: similar.sameOpponent.map(describe),
+    againstThisFormation: similar.sameFormation.map(describe),
+    matches: logged.map(describe),
+  };
+}
+
+export function buildAnalysisPrompt({ ours, theirs, ourFormation, theirFormation, counters, theirReports, history }: AnalysisInput): string {
   const ourById = new Map(ours.players.map(player => [player.id, player]));
   const theirById = new Map(theirs.players.map(player => [player.id, player]));
   const ourXi = xiPlayers(ourFormation, squadFits(ours.players).get(ourFormation), ourById);
@@ -296,6 +332,7 @@ export function buildAnalysisPrompt({ ours, theirs, ourFormation, theirFormation
       startingXi: describeXi(ourXi),
       bestOfTheRest: describeBench(ours.players, ourXi),
       recentResults: describeMatches(ours.matches.slice(0, 10)),
+      ourTacticsLog: describeHistory(history, theirs.club.id, theirFormation),
     },
     them: {
       club: theirs.club.name,
