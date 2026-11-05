@@ -11,6 +11,8 @@ import type { RateLimit } from '../lib/rateLimit';
 /** Match details asked for at once */
 const CONCURRENCY = 3;
 const HOUR = 3600;
+/** A club's list of played matches is kept 5 minutes, so a match shows soon after it ends */
+const RECENT_MATCHES_CACHE = 300;
 
 // A report can take ~20 MFL requests when none are cached, and MFL blocks the token after ~65 in 10 seconds,
 // so the site scouts at most 3 clubs every 10 seconds, and one visitor 30 every 10 minutes.
@@ -56,7 +58,7 @@ export async function buildScoutReport(clubId: string | number, requested = 10):
     : undefined;
   const squadId: number | undefined = club.squads?.[0]?.id;
   const listed = squadId
-    ? await fetchMflCached<ListedMatch[]>(`/matches?squadId=${squadId}&past=true&onlyCompetitions=true&limit=${limit}`, HOUR)
+    ? await fetchMflCached<ListedMatch[]>(`/matches?squadId=${squadId}&past=true&onlyCompetitions=true&limit=${limit}`, RECENT_MATCHES_CACHE)
     : [];
 
   const kept = await keptFormationResults(listed.map(match => match.id));

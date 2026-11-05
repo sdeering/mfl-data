@@ -10,6 +10,8 @@ import { validSettings, type ClubMatchLog, type TacticSettings, type TacticsHist
  */
 
 const HOUR = 3600;
+/** A club's list of played matches is kept 5 minutes, so a match shows soon after it ends */
+const RECENT_MATCHES_CACHE = 300;
 /** Matches of each kind the history looks back over */
 const LISTED = 40;
 
@@ -95,8 +97,8 @@ export async function buildTacticsHistory(clubId: number, entries?: TacticsEntry
   if (!squadId) return { matches: [], planned: {} };
 
   const [competitive, all] = await Promise.all([
-    fetchMflCached<ListedClubMatch[]>(`/matches?squadId=${squadId}&past=true&onlyCompetitions=true&limit=${LISTED}`, HOUR),
-    fetchMflCached<ListedClubMatch[]>(`/matches?squadId=${squadId}&past=true&limit=${LISTED}`, HOUR),
+    fetchMflCached<ListedClubMatch[]>(`/matches?squadId=${squadId}&past=true&onlyCompetitions=true&limit=${LISTED}`, RECENT_MATCHES_CACHE),
+    fetchMflCached<ListedClubMatch[]>(`/matches?squadId=${squadId}&past=true&limit=${LISTED}`, RECENT_MATCHES_CACHE),
   ]);
   const byId = new Map<number, ListedClubMatch>();
   for (const match of [...competitive, ...all]) if (match.status === 'ENDED' || match.status === undefined) byId.set(match.id, match);

@@ -51,9 +51,9 @@ export class ScoutBusyError extends Error {
 
 class ScoutService {
   private cache = new Map<string, { data: Promise<ScoutReport>; timestamp: number }>();
-  private readonly CACHE_DURATION = 60 * 60 * 1000; // 1 hour
+  private readonly CACHE_DURATION = 10 * 60 * 1000; // 10 minutes, so a match just played shows soon
 
-  /** A club's report from /api/clubs/[clubId]/scout, kept for an hour. Asking twice at once shares one request. */
+  /** A club's report from /api/clubs/[clubId]/scout, kept for 10 minutes. Asking twice at once shares one request. */
   fetchReport(clubId: number, limit = 10): Promise<ScoutReport> {
     const key = `${clubId}_${limit}`;
     const cached = this.cache.get(key);
