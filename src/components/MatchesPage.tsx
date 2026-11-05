@@ -162,7 +162,7 @@ const OpponentPrep: React.FC<{
       </div>
       {selected ? (
         <div className={panelRow}>
-          <CounterPanel name={name} against={against === LIKELY_MIX ? null : against} picks={picks} selected={selected} onSelect={onPick} />
+          <CounterPanel name={name} against={against === LIKELY_MIX ? null : against} picks={picks} fits={ourFits} selected={selected} onSelect={onPick} />
           <MatchupPanel
             name={name}
             formation={selected}

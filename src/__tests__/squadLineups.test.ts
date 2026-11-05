@@ -3,6 +3,7 @@ import {
   FORMATIONS,
   Lineup,
   assignPlayer,
+  assignRows,
   autoFillFromSquad,
   autoFillLineup,
   bestFreeSlot,
@@ -78,6 +79,19 @@ describe('autoFillLineup', () => {
     const { bench, reserves } = autoFillLineup('4-3-3', [...squad, ...more])
     expect(bench).toEqual(ids([keeperB, cbC, stB, ...more.slice(0, 4)]))
     expect(reserves).toEqual(more.slice(4, 9).map(p => p.id))
+  })
+
+  it('fills positions for the best total, not the best player first: a 95 CM who plays RM moves there to free a 94 CM', () => {
+    // 5-3-2: GK, LWB, CB, CB, CB, RWB, LM, CM, RM, ST, ST
+    const both = player(40, ['CM', 'RM'], 95)
+    const cm = player(41, ['CM'], 94)
+    const rm = player(42, ['RM'], 90)
+    const rest = [keeperA, player(43, ['LWB'], 80), cbA, cbB, cbC, player(44, ['RWB'], 80), player(45, ['LM'], 99), stA, stB]
+    const { xi } = autoFillLineup('5-3-2', [...rest, both, cm, rm])
+    const at = (position: string) => xi[FORMATIONS['5-3-2'].findIndex(([p]) => p === position)]
+    expect(positionFit(both, 'RM').rating).toBeGreaterThan(90)
+    expect(at('CM')).toBe(41)
+    expect(at('RM')).toBe(40)
   })
 
   it('leaves out retired players', () => {
@@ -269,5 +283,36 @@ describe('currentSeason', () => {
     const contracted = (id: number, startSeason: number) => ({ ...player(id, ['ST'], 70), activeContract: { startSeason } }) as unknown as MFLPlayer
     expect(currentSeason([contracted(1, 26), contracted(2, 27), player(3, ['CB'], 70)])).toBe(27)
     expect(currentSeason([player(3, ['CB'], 70)])).toBeNull()
+  })
+})
+
+describe('assignRows', () => {
+  // Every way of giving each row its own column, for checking against
+  const brute = (cost: number[][]): number => {
+    const best = (row: number, used: Set<number>): number => {
+      if (row === cost.length) return 0
+      let least = Infinity
+      cost[row].forEach((value, column) => {
+        if (used.has(column)) return
+        used.add(column)
+        least = Math.min(least, value + best(row + 1, used))
+        used.delete(column)
+      })
+      return least
+    }
+    return best(0, new Set())
+  }
+
+  it('finds the least total cost, each column used once', () => {
+    let seed = 7
+    const random = () => (seed = (seed * 16807) % 2147483647) / 2147483647
+    for (let round = 0; round < 40; round++) {
+      const rows = 1 + Math.floor(random() * 5)
+      const columns = rows + Math.floor(random() * 3)
+      const cost = Array.from({ length: rows }, () => Array.from({ length: columns }, () => Math.round(random() * 100)))
+      const assigned = assignRows(cost)
+      expect(new Set(assigned).size).toBe(rows)
+      expect(assigned.reduce((total, column, row) => total + cost[row][column], 0)).toBe(brute(cost))
+    }
   })
 })

@@ -8,6 +8,8 @@ import {
   rankFormations,
   seasonField,
   splitByMatchDay,
+  PPG_PER_OVR,
+  weakPositions,
   squadFits,
   type FormationFit,
   type PlayedMatch,
@@ -133,8 +135,9 @@ describe('rankFormations', () => {
     const fits = new Map<string, FormationFit>([['4-4-2', { formation: '4-4-2', rating: 70, gap: 5, slots: [], alternative: [], outOfPosition: ['LM', 'RM'] }]])
     const picks = rankFormations([{ formation: '4-3-3', probability: 1, timesPlayed: 5 }], fits, [], [], meta)
     const pick = picks.find(p => p.formation === '4-4-2')!
-    expect(pick.strength).toBeCloseTo(-0.5)
-    expect(pick.score).toBeCloseTo(pick.meta - 0.5)
+    // 5 OVR below our best formation, at the measured points a game per OVR
+    expect(pick.strength).toBeCloseTo(-5 * PPG_PER_OVR)
+    expect(pick.score).toBeCloseTo(pick.meta + pick.strength)
     expect(pick.outOfPosition).toEqual(['LM', 'RM'])
   })
 
@@ -146,9 +149,11 @@ describe('rankFormations', () => {
     expect(even.win + even.draw + even.loss).toBeCloseTo(1)
     expect(stronger.win + stronger.draw + stronger.loss).toBeCloseTo(1)
     expect(even.strength).toBeCloseTo(0)
-    expect(stronger.strength).toBeCloseTo(0.4)
+    expect(stronger.strength).toBeCloseTo(4 * PPG_PER_OVR)
     expect(stronger.win).toBeGreaterThan(even.win)
-    expect(stronger.score).toBeCloseTo(even.score + 0.4)
+    // Up to the strength's worth, less where a loss can't get any less likely
+    expect(stronger.score).toBeGreaterThan(even.score)
+    expect(stronger.score).toBeLessThanOrEqual(even.score + 4 * PPG_PER_OVR + 1e-9)
   })
 
   it('nudges a formation by our results with it and by how teams playing it did against the opponent', () => {
@@ -225,5 +230,19 @@ describe('splitByMatchDay', () => {
 
   it('has nothing for no fixtures', () => {
     expect(splitByMatchDay([])).toEqual({ next: [], later: [] })
+  })
+})
+
+describe('weakPositions', () => {
+  it("names the XI's positions rated 6 or more below its average, weakest first", () => {
+    // 4-3-3 (att) for a team of 80s with wingers in the 60s, as an app user's squad
+    const squad = [
+      player(1, ['GK'], 80), player(2, ['LB'], 80), player(3, ['CB'], 80), player(4, ['CB'], 80), player(5, ['RB'], 80),
+      player(6, ['CM'], 80), player(7, ['CAM'], 80), player(8, ['CM'], 80), player(9, ['LW'], 62), player(10, ['ST'], 80), player(11, ['RW'], 64),
+    ]
+    const fit = squadFits(squad).get('4-3-3_attack')
+    expect(weakPositions(fit)).toEqual(['LW 62', 'RW 64'])
+    expect(weakPositions(squadFits(squad).get('4-4-2'))).not.toContain('CB 80')
+    expect(weakPositions(undefined)).toEqual([])
   })
 })

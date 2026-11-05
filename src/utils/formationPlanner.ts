@@ -201,6 +201,19 @@ export const matchResult = (match: Pick<PlayedMatch, 'goalsFor' | 'goalsAgainst'
 const RESULT_POINTS = { W: 3, D: 1, L: 0 };
 const isFormation = (formation: string | null): formation is string => !!formation && formation in FORMATIONS;
 
+/** Rating below the XI's average that marks a position as a weak spot */
+export const WEAK_POSITION_GAP = 6;
+
+/** The XI's positions rated well below its average, weakest first: "LW 62" */
+export function weakPositions(fit: FormationFit | undefined): string[] {
+  if (!fit) return [];
+  return FORMATIONS[fit.formation]
+    .map(([position], index) => ({ position, rating: Math.round(fit.slots[index]?.rating ?? 0) }))
+    .filter(({ rating }) => rating > 0 && rating <= fit.rating - WEAK_POSITION_GAP)
+    .sort((a, b) => a.rating - b.rating)
+    .map(({ position, rating }) => `${position} ${rating}`);
+}
+
 export interface FormationGuess {
   formation: string;
   probability: number;
@@ -287,8 +300,12 @@ export interface FormationPick extends Odds {
   outOfPosition: string[];
 }
 
-/** Points a game one OVR across the XI is worth, roughly */
-const PPG_PER_OVR = 0.1;
+/**
+ * Points a game one OVR across the XI is worth: 0.18 in 1,392 sides' results from our formation_results (Nov 2026)
+ * between XIs within 2 OVR a player of each other, where the choice of formation matters most. 0.1 before, a
+ * guess that let the meta outweigh a formation's weak positions.
+ */
+export const PPG_PER_OVR = 0.18;
 /** Matches of our own the meta counts for, against our form with a formation */
 const OUR_PRIOR_GAMES = 6;
 /** Matches the meta counts for, against how an opponent has done against a formation */

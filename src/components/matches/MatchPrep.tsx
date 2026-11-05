@@ -1,7 +1,7 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { clubsService } from '../../services/clubsService';
 import type { ScoutMatch } from '../../services/scoutService';
-import { matchResult, type FilledSlot, type FormationFit, type FormationGuess, type FormationPick } from '../../utils/formationPlanner';
+import { WEAK_POSITION_GAP, matchResult, weakPositions, type FilledSlot, type FormationFit, type FormationGuess, type FormationPick } from '../../utils/formationPlanner';
 import { FORMATIONS, FORMATION_NAMES, formationLabel } from '../../utils/squadLineups';
 import { placeSpots, type PitchSpot, type PlacedSpot } from '../../utils/pitchSpots';
 import type { MFLPlayer } from '../../types/mflApi';
@@ -327,9 +327,10 @@ export function wdl(pick: FormationPick): [number, number, number] {
 }
 
 /** One of our counters: its win chance, points a game, XI rating and how well the squad fits it */
-const PickCard: React.FC<{ pick: FormationPick; rank: number; on: boolean; onSelect: () => void }> = ({ pick, rank, on, onSelect }) => {
+const PickCard: React.FC<{ pick: FormationPick; fit?: FormationFit; rank: number; on: boolean; onSelect: () => void }> = ({ pick, fit, rank, on, onSelect }) => {
   const [win, draw, loss] = wdl(pick);
   const chip = fitChip(pick);
+  const weak = weakPositions(fit);
   return (
     <button
       type="button"
@@ -370,6 +371,15 @@ const PickCard: React.FC<{ pick: FormationPick; rank: number; on: boolean; onSel
         <span className="h-[22px] px-[9px] rounded-full flex items-center text-[11px] font-bold" style={{ background: chip.background, color: chip.colour }}>
           {chip.label}
         </span>
+        {weak.length > 0 && (
+          <span
+            className="h-[22px] px-[9px] rounded-full flex items-center text-[11px] font-bold"
+            style={{ background: 'rgba(239,68,68,.12)', color: '#f87171' }}
+            title={`Rated ${WEAK_POSITION_GAP}+ below the XI's average of ${fit!.rating.toFixed(1)}`}
+          >
+            Weak: {weak.slice(0, 3).join(', ')}
+          </span>
+        )}
       </span>
     </button>
   );
@@ -388,9 +398,11 @@ export const CounterPanel: React.FC<{
   against: string | null;
   /** Every formation, best first */
   picks: FormationPick[];
+  /** Our best XI in each formation, for its weak spots */
+  fits?: Map<string, FormationFit>;
   selected: string;
   onSelect: (formation: string) => void;
-}> = ({ name, against, picks, selected, onSelect }) => {
+}> = ({ name, against, picks, fits, selected, onSelect }) => {
   const rank = picks.findIndex(pick => pick.formation === selected);
   return (
     <Panel className="p-[22px] flex flex-col gap-3.5">
@@ -403,9 +415,9 @@ export const CounterPanel: React.FC<{
         </span>
       </div>
       {picks.slice(0, SHOWN_PICKS).map((pick, index) => (
-        <PickCard key={pick.formation} pick={pick} rank={index + 1} on={pick.formation === selected} onSelect={() => onSelect(pick.formation)} />
+        <PickCard key={pick.formation} pick={pick} fit={fits?.get(pick.formation)} rank={index + 1} on={pick.formation === selected} onSelect={() => onSelect(pick.formation)} />
       ))}
-      {rank >= SHOWN_PICKS && <PickCard pick={picks[rank]} rank={rank + 1} on onSelect={() => onSelect(selected)} />}
+      {rank >= SHOWN_PICKS && <PickCard pick={picks[rank]} fit={fits?.get(selected)} rank={rank + 1} on onSelect={() => onSelect(selected)} />}
       <label className="flex items-center gap-2.5 flex-wrap text-xs font-semibold text-muted">
         Your formation
         <span className="relative block">

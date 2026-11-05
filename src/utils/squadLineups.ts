@@ -128,9 +128,69 @@ export const lineupPlayerIds = (lineup: Lineup) => [...lineup.xi, ...lineup.benc
 const isGoalkeeper = (player: MFLPlayer) => player.metadata.positions[0] === 'GK';
 
 /**
- * Puts players into the formation's empty positions, best fit first: of every player and position the
- * highest rating is filled, then the next, so each position gets the best player still free for it.
- * `accept` limits which fits count, e.g. none out of position.
+ * Each row's column, every column used at most once, at the least total cost: the Hungarian method.
+ * `cost[row][column]`, with no more rows than columns.
+ */
+export function assignRows(cost: number[][]): number[] {
+  const rows = cost.length;
+  const columns = cost[0]?.length ?? 0;
+  // Potentials and the matching, 1-based with 0 as the start
+  const u = new Array<number>(rows + 1).fill(0);
+  const v = new Array<number>(columns + 1).fill(0);
+  const rowOf = new Array<number>(columns + 1).fill(0);
+  const way = new Array<number>(columns + 1).fill(0);
+  for (let row = 1; row <= rows; row++) {
+    rowOf[0] = row;
+    let column = 0;
+    const least = new Array<number>(columns + 1).fill(Infinity);
+    const used = new Array<boolean>(columns + 1).fill(false);
+    do {
+      used[column] = true;
+      const current = rowOf[column];
+      let delta = Infinity;
+      let next = 0;
+      for (let j = 1; j <= columns; j++) {
+        if (used[j]) continue;
+        const reduced = cost[current - 1][j - 1] - u[current] - v[j];
+        if (reduced < least[j]) {
+          least[j] = reduced;
+          way[j] = column;
+        }
+        if (least[j] < delta) {
+          delta = least[j];
+          next = j;
+        }
+      }
+      for (let j = 0; j <= columns; j++) {
+        if (used[j]) {
+          u[rowOf[j]] += delta;
+          v[j] -= delta;
+        } else least[j] -= delta;
+      }
+      column = next;
+    } while (rowOf[column] !== 0);
+    do {
+      const previous = way[column];
+      rowOf[column] = rowOf[previous];
+      column = previous;
+    } while (column);
+  }
+  const assigned = new Array<number>(rows).fill(-1);
+  for (let j = 1; j <= columns; j++) if (rowOf[j]) assigned[rowOf[j] - 1] = j - 1;
+  return assigned;
+}
+
+/** Cost of leaving a position empty, and of a fit `accept` turns down: worse than any player, and never chosen */
+const EMPTY_COST = 0;
+const REFUSED_COST = 1e6;
+/** Filling a position counts for more than any rating, so as many as can be are filled */
+const FILLED_BONUS = 1000;
+
+/**
+ * Puts players into the formation's empty positions so the ratings add up to the most they can: a 95 CM who is a
+ * 94 at RM goes to RM when that frees a 94 CM, rather than leaving a 90 at RM. As many positions are filled as
+ * can be, and a thousandth of the overall settles ties in favour of the better player. `accept` limits which fits
+ * count, e.g. none out of position.
  */
 function fillPositions(
   formation: string,
@@ -140,24 +200,40 @@ function fillPositions(
 ): (number | null)[] {
   const filled = [...xi];
   const placed = new Set(filled);
-  const pairs: [score: number, id: number, index: number][] = [];
-  for (const player of players) {
-    if (placed.has(player.id)) continue;
-    FORMATIONS[formation].forEach(([position], index) => {
-      if (filled[index] !== null) return;
-      const fit = positionFit(player, position);
-      // A thousandth of the overall settles ties in favour of the better player
-      if (accept(fit)) pairs.push([fit.rating + player.metadata.overall / 1000, player.id, index]);
-    });
-  }
-  pairs.sort((a, b) => b[0] - a[0]);
+  const open = FORMATIONS[formation].map(([position], index) => ({ position, index })).filter(({ index }) => filled[index] === null);
+  const free = players.filter(player => !placed.has(player.id));
+  if (open.length === 0 || free.length === 0) return filled;
 
-  for (const [, id, index] of pairs) {
-    if (filled[index] === null && !placed.has(id)) {
-      filled[index] = id;
-      placed.add(id);
+  const score = new Map<string, number>();
+  for (const player of free) {
+    for (const { position, index } of open) {
+      const fit = positionFit(player, position);
+      if (accept(fit)) score.set(`${player.id}:${index}`, fit.rating + player.metadata.overall / 1000);
     }
   }
+  // Only a position's best few can be in the best XI: with fewer positions than that, one would be free to swap in
+  const candidates = new Set<MFLPlayer>();
+  for (const { index } of open) {
+    free
+      .filter(player => score.has(`${player.id}:${index}`))
+      .sort((a, b) => score.get(`${b.id}:${index}`)! - score.get(`${a.id}:${index}`)!)
+      .slice(0, open.length)
+      .forEach(player => candidates.add(player));
+  }
+  const columns = [...candidates];
+  // One "leave it empty" column per position, so every position has somewhere to go
+  const cost = open.map(({ index }) => [
+    ...columns.map(player => {
+      const value = score.get(`${player.id}:${index}`);
+      return value === undefined ? REFUSED_COST : -(FILLED_BONUS + value);
+    }),
+    ...open.map(() => EMPTY_COST),
+  ]);
+  assignRows(cost).forEach((column, row) => {
+    if (column >= 0 && column < columns.length && cost[row][column] < EMPTY_COST) {
+      filled[open[row].index] = columns[column].id;
+    }
+  });
   return filled;
 }
 
