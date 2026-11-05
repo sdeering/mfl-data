@@ -54,7 +54,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
   const matchId = Number(body?.matchId);
   const settings = body?.settings === null ? null : validSettings(body?.settings);
   if (!walletAddress || !Number.isInteger(matchId) || matchId <= 0 || (body?.settings !== null && !settings)) {
-    return NextResponse.json({ success: false, error: 'Give your wallet, the match and every setting as a step from 1 to 6' }, { status: 400 });
+    return NextResponse.json({ success: false, error: 'Give your wallet, the match and every setting as a step from 1 to 5' }, { status: 400 });
   }
 
   try {

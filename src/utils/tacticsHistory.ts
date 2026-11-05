@@ -79,11 +79,11 @@ export function recordOf(matches: ClubMatchLog[]): Record3 {
 /** A setting's steps in three ranges, as the history groups them */
 export const BANDS = [
   { band: 'low', steps: [1, 2] },
-  { band: 'mid', steps: [3, 4] },
-  { band: 'high', steps: [5, 6] },
+  { band: 'mid', steps: [3] },
+  { band: 'high', steps: [4, 5] },
 ] as const;
 export type Band = (typeof BANDS)[number]['band'];
-export const bandOf = (step: number): Band => (step <= 2 ? 'low' : step <= 4 ? 'mid' : 'high');
+export const bandOf = (step: number): Band => (step <= 2 ? 'low' : step === 3 ? 'mid' : 'high');
 
 export interface SettingEffect {
   key: string;

@@ -27,8 +27,8 @@ export interface MatchAnalysisRequest {
   counters?: RankedCounter[];
 }
 
-/** Steps on each playing style setting, as MFL's Steps view shows them */
-export const TACTIC_STEPS = 6;
+/** Steps on each playing style setting, as MFL's Steps view shows them; the middle one is MFL's default */
+export const TACTIC_STEPS = 5;
 
 export interface TacticSetting {
   key: string;
@@ -266,9 +266,9 @@ export const MFL_TACTICS_GUIDE = [
   "A player's rating at a position is their overall less a familiarity penalty: none at a primary position, -5 fairly familiar, -8 somewhat familiar, -20 unfamiliar. Fit 'natural', 'alt' and 'out' mark these.",
   'Attributes run 0-100: pace, shooting, passing, dribbling, defense, physical (goalkeeping for keepers). Wide players beat full-backs with pace and dribbling; centre-backs stop strikers with defense and physical.',
   "Positions with side 'left' or 'right' are from that team's own point of view: their left-back faces our right winger.",
-  `Besides the formation and XI, the manager sets a playing style: ${TACTIC_SETTINGS.length} settings, each on ${TACTIC_STEPS} steps from 1 (the low end) to ${TACTIC_STEPS} (the high end), listed under playingStyleSettings with what each end means. Flank Preference low favours attacking down our left, high our right.`,
+  `Besides the formation and XI, the manager sets a playing style: ${TACTIC_SETTINGS.length} settings, each on ${TACTIC_STEPS} steps from 1 (the low end) to ${TACTIC_STEPS} (the high end), listed under playingStyleSettings with what each end means. Step 3 is the middle and MFL's default. Flank Preference low favours attacking down our left, high our right.`,
   'Pick a step for every setting to suit this matchup: flank preference, width, crossing and dribbling to aim at their weak flank and use our best wide players; directness and team depth to use or deny pace in behind; pressing, aggressiveness and compactness against their midfield and creators; shooting by our shooters and their keeper; clearances by how good our defenders are on the ball.',
-  'ourTacticsLog, when present, holds the settings we actually used in our own logged matches (league, cup and friendly) with the result and xG, how we did with each setting low (steps 1-2), mid (3-4) and high (5-6), and the logged matches against this opponent and this formation. Weigh it by sample size: a few friendlies are weak evidence, and say so. Let it shape the settings you pick and explain the link in historyNotes.',
+  'ourTacticsLog, when present, holds the settings we actually used in our own logged matches (league, cup and friendly) with the result and xG, how we did with each setting low (steps 1-2), mid (3) and high (4-5), and the logged matches against this opponent and this formation. Weigh it by sample size: a few friendlies are weak evidence, and say so. Let it shape the settings you pick and explain the link in historyNotes.',
   'Only recommend formations, who plays where, swaps from the listed squads and the listed playing style settings. Do not invent other instructions.',
 ];
 

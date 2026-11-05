@@ -59,7 +59,7 @@ const ResultChip: React.FC<{ match: ClubMatchLog }> = ({ match }) => {
   );
 };
 
-/** Every setting as six steps to click, both halves side by side */
+/** Every setting as its steps to click, both halves side by side */
 const SettingsEditor: React.FC<{ settings: TacticSettings; onChange: (settings: TacticSettings) => void }> = ({ settings, onChange }) => (
   <div className="grid gap-3 grid-cols-[repeat(auto-fit,minmax(min(100%,280px),1fr))]">
     {(['in', 'out'] as const).map(group => (
@@ -208,7 +208,7 @@ export const TacticsLogPanel: React.FC<{
   );
 };
 
-const BAND_LABELS: Record<Band, string> = { low: 'Low 1-2', mid: 'Mid 3-4', high: 'High 5-6' };
+const BAND_LABELS: Record<Band, string> = { low: 'Low 1-2', mid: 'Middle 3', high: 'High 4-5' };
 const recordLine = (record: Record3) =>
   `${record.games} logged · ${record.wins}W ${record.draws}D ${record.losses}L · ${record.ppg?.toFixed(2) ?? '–'} pts/game${record.xgDiff !== null ? ` · xG ${signed(record.xgDiff)} a game` : ''}`;
 

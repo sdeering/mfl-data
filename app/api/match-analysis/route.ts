@@ -118,7 +118,7 @@ export async function POST(request: NextRequest) {
   // Logging a match makes a new analysis, so it reads the log as it is
   const entries = await loadTacticsEntries(ourClubId);
   const logVersion = entries.length ? `${entries.length}-${entries.map(entry => entry.updatedAt).sort().at(-1)}` : '0';
-  const cacheKey = `v3:${ourClubId}:${theirClubId}:${ourFormation}:${theirFormation}:${logVersion}`;
+  const cacheKey = `v4:${ourClubId}:${theirClubId}:${ourFormation}:${theirFormation}:${logVersion}`;
   const cached = cache.get(cacheKey);
   if (cached && Date.now() - cached.at < CACHE_MS) return NextResponse.json({ success: true, data: cached.analysis, cached: true });
 

@@ -13,14 +13,14 @@ const match = (goalsFor: number, goalsAgainst: number, settings: TacticSettings 
 })
 
 describe('validSettings', () => {
-  it('takes every setting as a whole step from 1 to 6', () => {
+  it('takes every setting as a whole step from 1 to 5', () => {
     expect(validSettings(allAt(3))).toEqual(allAt(3))
   })
 
   it('refuses a missing setting, a step out of range or not whole, and anything else', () => {
     const { shooting: _shooting, ...missing } = allAt(3)
     expect(validSettings(missing)).toBeNull()
-    expect(validSettings(allAt(3, { shooting: 7 }))).toBeNull()
+    expect(validSettings(allAt(3, { shooting: 6 }))).toBeNull()
     expect(validSettings(allAt(3, { shooting: 2.5 }))).toBeNull()
     expect(validSettings('3')).toBeNull()
   })
@@ -40,16 +40,16 @@ describe('recordOf', () => {
 })
 
 describe('settingEffects', () => {
-  it('groups steps low 1-2, mid 3-4, high 5-6', () => {
-    expect([1, 2, 3, 4, 5, 6].map(bandOf)).toEqual(['low', 'low', 'mid', 'mid', 'high', 'high'])
+  it('groups steps low 1-2, middle 3, high 4-5', () => {
+    expect([1, 2, 3, 4, 5].map(bandOf)).toEqual(['low', 'low', 'mid', 'high', 'high'])
   })
 
   it('picks the band with the most points a game, among those played twice or more', () => {
     const matches = [
       match(2, 0, allAt(3, { flankPreference: 1 })),
       match(1, 0, allAt(3, { flankPreference: 2 })),
-      match(0, 1, allAt(3, { flankPreference: 6 })),
-      match(1, 1, allAt(3, { flankPreference: 5 })),
+      match(0, 1, allAt(3, { flankPreference: 5 })),
+      match(1, 1, allAt(3, { flankPreference: 4 })),
       match(5, 0, allAt(3, { flankPreference: 3 })),
       match(0, 0, null),
     ]
@@ -66,8 +66,8 @@ describe('settingEffects', () => {
     const tie = (lowXg: number) => [
       match(1, 0, allAt(3, { crossing: 1 }), { xGFor: lowXg }),
       match(1, 0, allAt(3, { crossing: 1 }), { xGFor: lowXg }),
-      match(1, 0, allAt(3, { crossing: 6 })),
-      match(1, 0, allAt(3, { crossing: 6 })),
+      match(1, 0, allAt(3, { crossing: 5 })),
+      match(1, 0, allAt(3, { crossing: 5 })),
     ]
     expect(settingEffects(tie(2)).find(effect => effect.key === 'crossing')!.best).toBe('low')
     expect(settingEffects(tie(1)).find(effect => effect.key === 'crossing')!.best).toBeNull()

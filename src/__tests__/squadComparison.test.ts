@@ -115,7 +115,7 @@ describe('summariseReports', () => {
 })
 
 describe('cleanTactics', () => {
-  it("keeps known settings once each, in MFL's order, with whole steps from 1 to 6", () => {
+  it("keeps known settings once each, in MFL's order, with whole steps from 1 to 5", () => {
     const tactics = cleanTactics([
       { key: 'clearances', step: 9, reason: 'Big lump' },
       { key: 'attackingWidth', step: 4.6, reason: 'Go wide' },
@@ -127,7 +127,7 @@ describe('cleanTactics', () => {
     expect(tactics).toEqual([
       { key: 'attackingWidth', step: 5, reason: 'Go wide' },
       { key: 'teamDepth', step: 1, reason: '' },
-      { key: 'clearances', step: 6, reason: 'Big lump' },
+      { key: 'clearances', step: 5, reason: 'Big lump' },
     ])
   })
 
