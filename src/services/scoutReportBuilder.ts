@@ -1,0 +1,111 @@
+import type { MFLPlayer } from '../types/mflApi';
+import { fetchMflCached, keptFormationResults, recordFormationResults, toFormationResult, type FormationResult, type ListedMatch, type MatchDetails } from './formationResults';
+import { MflRateLimitError } from './playerProgressionCache';
+import { MAX_SCOUT_MATCHES, type ScoutMatch, type ScoutReport } from './scoutService';
+import type { RateLimit } from '../lib/rateLimit';
+
+/*
+ * Builds a club's scout report from MFL on the server, for /api/clubs/[clubId]/scout and the AI match analysis.
+ */
+
+/** Match details asked for at once */
+const CONCURRENCY = 3;
+const HOUR = 3600;
+
+// A report can take ~20 MFL requests when none are cached, and MFL blocks the token after ~65 in 10 seconds,
+// so the site scouts at most 3 clubs every 10 seconds, and one visitor 30 every 10 minutes.
+export const SCOUT_LIMITS: RateLimit[] = [
+  { key: 'mfl-scout:10s', limit: 3, windowMs: 10 * 1000 },
+  { key: 'mfl-scout:1m', limit: 12, windowMs: 60 * 1000 },
+];
+
+interface ClubCompetition {
+  type: string;
+  status: string;
+  season?: { name?: string };
+}
+
+/** Runs `task` over every item, a few at a time. */
+async function mapLimited<T, R>(items: T[], limit: number, task: (item: T) => Promise<R>): Promise<R[]> {
+  const results: R[] = new Array(items.length);
+  let next = 0;
+  const worker = async () => {
+    while (next < items.length) {
+      const index = next++;
+      results[index] = await task(items[index]);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+  return results;
+}
+
+/**
+ * A club's squad and its latest competitive matches with the formation each side played. Formations come from our
+ * own formation results when kept already, otherwise from MFL, and each new one is kept, adding to our formation meta.
+ * Throws MflHttpError (404 for no such club) and MflRateLimitError.
+ */
+export async function buildScoutReport(clubId: string | number, requested = 10): Promise<ScoutReport> {
+  const limit = Math.min(Math.max(1, requested), MAX_SCOUT_MATCHES);
+  const [club, players, competitions] = await Promise.all([
+    fetchMflCached<any>(`/clubs/${clubId}`, 24 * HOUR),
+    fetchMflCached<MFLPlayer[]>(`/clubs/${clubId}/players`, HOUR),
+    fetchMflCached<ClubCompetition[]>(`/clubs/${clubId}/competitions`, HOUR).catch(() => []),
+  ]);
+  const league = Array.isArray(competitions)
+    ? competitions.find(competition => competition.type === 'LEAGUE' && competition.status !== 'ENDED')
+    : undefined;
+  const squadId: number | undefined = club.squads?.[0]?.id;
+  const listed = squadId
+    ? await fetchMflCached<ListedMatch[]>(`/matches?squadId=${squadId}&past=true&onlyCompetitions=true&limit=${limit}`, HOUR)
+    : [];
+
+  const kept = await keptFormationResults(listed.map(match => match.id));
+  const fresh: FormationResult[] = [];
+  // The club's starting XI's overalls added up, in each match
+  const fielded: number[] = [];
+  const matches = await mapLimited(listed, CONCURRENCY, async (match): Promise<ScoutMatch> => {
+    let result = kept.get(match.id) ?? null;
+    if (!result) {
+      const details = await fetchMflCached<MatchDetails>(`/matches/${match.id}?withFormations=true`, 168 * HOUR).catch(error => {
+        if (error instanceof MflRateLimitError) throw error;
+        return null;
+      });
+      result = details && toFormationResult(match.id, { ...details, startDate: details.startDate ?? match.startDate });
+      if (result) fresh.push(result);
+    }
+    const home = match.homeSquad.id === squadId;
+    const opponent = home ? match.awaySquad.club : match.homeSquad.club;
+    const ovr = home ? result?.homeOvr : result?.awayOvr;
+    if (ovr) fielded.push(ovr);
+    return {
+      id: match.id,
+      startDate: match.startDate,
+      competition: match.competition?.name ?? '',
+      home,
+      opponent: { clubId: opponent.id, name: home ? match.awayTeamName : match.homeTeamName, logoVersion: opponent.logoVersion },
+      goalsFor: (home ? match.homeScore : match.awayScore) ?? 0,
+      goalsAgainst: (home ? match.awayScore : match.homeScore) ?? 0,
+      formation: (home ? result?.homeFormation : result?.awayFormation) ?? null,
+      opponentFormation: (home ? result?.awayFormation : result?.homeFormation) ?? null,
+    };
+  });
+  await recordFormationResults(fresh);
+
+  const report: ScoutReport = {
+    club: {
+      id: club.id,
+      // A club not founded yet has no name
+      name: club.name || `Club ${club.id}`,
+      founded: club.status !== 'NOT_FOUNDED',
+      division: club.division ?? null,
+      logoVersion: club.logoVersion,
+      city: club.city,
+      country: club.country,
+    },
+    season: league?.season?.name ?? null,
+    players: Array.isArray(players) ? players : [],
+    matches,
+    recentOvr: fielded.length ? Math.round((fielded.reduce((total, ovr) => total + ovr, 0) / fielded.length / 11) * 10) / 10 : null,
+  };
+  return report;
+}

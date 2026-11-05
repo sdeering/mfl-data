@@ -34,6 +34,8 @@ import {
   capsLabel,
   limeButton,
 } from './matches/MatchPrep';
+import { AiAnalysisPanel, SquadComparisonPanel } from './matches/MatchAnalysisPanels';
+import { compareSquads, findWeaknesses, xiPlayers } from '../utils/squadComparison';
 
 /** Matches of ours the tool reads, and of each opponent's */
 const OUR_MATCHES = 15;
@@ -119,6 +121,18 @@ const OpponentPrep: React.FC<{
       : rankFormations(guesses, ourFits, ours.matches, report.matches, meta, likelyRating(guesses) ?? report.recentOvr);
   }, [report, ours, guesses, against, ourFits, meta]);
 
+  // Our XI against theirs in the formations picked, and their weak spots
+  const likeliestFormation = guesses[0]?.formation;
+  const comparedAgainst = against === LIKELY_MIX ? likeliestFormation : against;
+  const comparedOurs = picks.some(item => item.formation === pick) ? pick : picks[0]?.formation;
+  const comparison = useMemo(() => {
+    if (!report || !ours || !comparedOurs || !comparedAgainst) return null;
+    const ourXi = xiPlayers(comparedOurs, ourFits.get(comparedOurs), ourPlayersById);
+    const theirXi = xiPlayers(comparedAgainst, theirFits.get(comparedAgainst), theirPlayersById);
+    if (!ourXi.length || !theirXi.length) return null;
+    return { squads: compareSquads(ourXi, theirXi, ours.players, report.players), weaknesses: findWeaknesses(ourXi, theirXi, report.matches) };
+  }, [report, ours, comparedOurs, comparedAgainst, ourFits, theirFits, ourPlayersById, theirPlayersById]);
+
   if (isLoading) return <Spinner label={`Scouting ${opponent.name}…`} />;
   if (error || !report) {
     return (
@@ -155,7 +169,25 @@ const OpponentPrep: React.FC<{
       ) : (
         <Spinner label="Reading your squad…" />
       )}
-      <RecentResultsPanel name={name} matches={report.matches} ourClubId={ourClubId} />
+      <div className={panelRow}>
+        <RecentResultsPanel name={name} matches={report.matches} ourClubId={ourClubId} />
+        {comparison && selected && (
+          <SquadComparisonPanel name={name} ourFormation={selected} theirFormation={theirFormation} comparison={comparison.squads} weaknesses={comparison.weaknesses} />
+        )}
+      </div>
+      {selected && (
+        <AiAnalysisPanel
+          name={name}
+          request={{
+            ourClubId,
+            theirClubId: report.club.id,
+            ourFormation: selected,
+            theirFormation,
+            counters: picks.slice(0, 5).map(item => ({ formation: item.formation, win: item.win, draw: item.draw, loss: item.loss, points: item.score })),
+          }}
+          onUseFormation={onPick}
+        />
+      )}
     </>
   );
 };

@@ -7,6 +7,8 @@ export interface ScoutMatch extends PlayedMatch {
   startDate: number;
   competition: string;
   opponent: { clubId: number; name: string; logoVersion?: string };
+  /** Whether the club played at home */
+  home?: boolean;
 }
 
 /** What the formation planner needs to know about a club: its squad, and its recent matches with formations. */

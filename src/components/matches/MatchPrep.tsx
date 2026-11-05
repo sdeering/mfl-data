@@ -326,73 +326,108 @@ export function wdl(pick: FormationPick): [number, number, number] {
   return [win, draw, 100 - win - draw];
 }
 
+/** One of our counters: its win chance, points a game, XI rating and how well the squad fits it */
+const PickCard: React.FC<{ pick: FormationPick; rank: number; on: boolean; onSelect: () => void }> = ({ pick, rank, on, onSelect }) => {
+  const [win, draw, loss] = wdl(pick);
+  const chip = fitChip(pick);
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      aria-pressed={on}
+      className={`flex flex-col gap-3 px-[18px] py-4 rounded-[18px] border text-fg text-left cursor-pointer transition-colors hover:border-[#c6f432] ${
+        on ? 'border-[#c6f432] bg-[rgba(198,244,50,.07)]' : 'border-line bg-inset'
+      }`}
+    >
+      <span className="flex items-center gap-3.5 flex-wrap w-full">
+        <span className="min-w-7 h-7 px-1.5 rounded-full grid place-items-center border border-line-2 text-[13px] font-extrabold text-fg-3">{rank}</span>
+        <span className="font-display text-[26px] leading-none font-extrabold" style={{ color: on ? LIME : 'var(--text)' }}>
+          {formationLabel(pick.formation)}
+        </span>
+        {rank === 1 && <span className="h-[22px] px-[9px] rounded-full flex items-center bg-[#c6f432] text-[#0b1406] text-[11px] font-bold">Best pick</span>}
+        {rank > 3 && <span className="h-[22px] px-[9px] rounded-full flex items-center bg-chip text-fg-3 text-[11px] font-bold">Your pick</span>}
+        <span className="flex-1" />
+        <span className="flex flex-col items-end">
+          <span className="font-display text-[28px] leading-none font-extrabold">{win}%</span>
+          <span className="text-[11px] font-semibold text-muted">win chance</span>
+        </span>
+      </span>
+      <span className="flex w-full h-2 rounded-full overflow-hidden gap-0.5" title={`Win ${win}% · Draw ${draw}% · Loss ${loss}%`}>
+        <span style={{ width: `${win}%`, background: '#8ae63a' }} />
+        <span style={{ width: `${draw}%`, background: '#56635c' }} />
+        <span style={{ width: `${loss}%`, background: '#ef4444' }} />
+      </span>
+      <span className="flex items-center gap-3.5 flex-wrap text-xs font-semibold text-muted">
+        <span>
+          W {win}% · D {draw}% · L {loss}%
+        </span>
+        <span>
+          <b className="text-fg">{pick.score.toFixed(2)}</b> pts/game
+        </span>
+        <span>
+          XI avg <b className="text-fg">{pick.xiRating.toFixed(1)}</b>
+        </span>
+        <span className="h-[22px] px-[9px] rounded-full flex items-center text-[11px] font-bold" style={{ background: chip.background, color: chip.colour }}>
+          {chip.label}
+        </span>
+      </span>
+    </button>
+  );
+};
+
+/** Formations shown as cards before the rest are left to the selector */
+const SHOWN_PICKS = 3;
+
+/**
+ * Our best three counters, and a selector for any other formation, ranked the same way. A formation picked from
+ * the selector beyond the top three shows as a card of its own.
+ */
 export const CounterPanel: React.FC<{
   name: string;
   /** The one formation planned against, or null for their likely mix */
   against: string | null;
+  /** Every formation, best first */
   picks: FormationPick[];
   selected: string;
   onSelect: (formation: string) => void;
-}> = ({ name, against, picks, selected, onSelect }) => (
-  <Panel className="p-[22px] flex flex-col gap-3.5">
-    <div className="flex flex-col gap-1">
-      <h2 className={panelTitle}>Your counter vs {name}</h2>
-      <span className="text-[13px] font-medium text-muted">
-        {against
-          ? `Ranked by expected points if they play ${formationLabel(against)}, checked against your squad`
-          : 'Ranked by expected points, weighted by their likely formations and checked against your squad'}
-      </span>
-    </div>
-    {picks.slice(0, 3).map((pick, index) => {
-      const on = pick.formation === selected;
-      const [win, draw, loss] = wdl(pick);
-      const chip = fitChip(pick);
-      return (
-        <button
-          key={pick.formation}
-          type="button"
-          onClick={() => onSelect(pick.formation)}
-          aria-pressed={on}
-          className={`flex flex-col gap-3 px-[18px] py-4 rounded-[18px] border text-fg text-left cursor-pointer transition-colors hover:border-[#c6f432] ${
-            on ? 'border-[#c6f432] bg-[rgba(198,244,50,.07)]' : 'border-line bg-inset'
-          }`}
-        >
-          <span className="flex items-center gap-3.5 flex-wrap w-full">
-            <span className="w-7 h-7 rounded-full grid place-items-center border border-line-2 text-[13px] font-extrabold text-fg-3">{index + 1}</span>
-            <span className="font-display text-[26px] leading-none font-extrabold" style={{ color: on ? LIME : 'var(--text)' }}>
-              {formationLabel(pick.formation)}
-            </span>
-            {index === 0 && <span className="h-[22px] px-[9px] rounded-full flex items-center bg-[#c6f432] text-[#0b1406] text-[11px] font-bold">Best pick</span>}
-            <span className="flex-1" />
-            <span className="flex flex-col items-end">
-              <span className="font-display text-[28px] leading-none font-extrabold">{win}%</span>
-              <span className="text-[11px] font-semibold text-muted">win chance</span>
-            </span>
-          </span>
-          <span className="flex w-full h-2 rounded-full overflow-hidden gap-0.5" title={`Win ${win}% · Draw ${draw}% · Loss ${loss}%`}>
-            <span style={{ width: `${win}%`, background: '#8ae63a' }} />
-            <span style={{ width: `${draw}%`, background: '#56635c' }} />
-            <span style={{ width: `${loss}%`, background: '#ef4444' }} />
-          </span>
-          <span className="flex items-center gap-3.5 flex-wrap text-xs font-semibold text-muted">
-            <span>
-              W {win}% · D {draw}% · L {loss}%
-            </span>
-            <span>
-              <b className="text-fg">{pick.score.toFixed(2)}</b> pts/game
-            </span>
-            <span>
-              XI avg <b className="text-fg">{pick.xiRating.toFixed(1)}</b>
-            </span>
-            <span className="h-[22px] px-[9px] rounded-full flex items-center text-[11px] font-bold" style={{ background: chip.background, color: chip.colour }}>
-              {chip.label}
-            </span>
-          </span>
-        </button>
-      );
-    })}
-  </Panel>
-);
+}> = ({ name, against, picks, selected, onSelect }) => {
+  const rank = picks.findIndex(pick => pick.formation === selected);
+  return (
+    <Panel className="p-[22px] flex flex-col gap-3.5">
+      <div className="flex flex-col gap-1">
+        <h2 className={panelTitle}>Your counter vs {name}</h2>
+        <span className="text-[13px] font-medium text-muted">
+          {against
+            ? `Ranked by expected points if they play ${formationLabel(against)}, checked against your squad`
+            : 'Ranked by expected points, weighted by their likely formations and checked against your squad'}
+        </span>
+      </div>
+      {picks.slice(0, SHOWN_PICKS).map((pick, index) => (
+        <PickCard key={pick.formation} pick={pick} rank={index + 1} on={pick.formation === selected} onSelect={() => onSelect(pick.formation)} />
+      ))}
+      {rank >= SHOWN_PICKS && <PickCard pick={picks[rank]} rank={rank + 1} on onSelect={() => onSelect(selected)} />}
+      <label className="flex items-center gap-2.5 flex-wrap text-xs font-semibold text-muted">
+        Your formation
+        <span className="relative block">
+          <select
+            value={selected}
+            onChange={event => onSelect(event.target.value)}
+            className="appearance-none h-8 pl-3 pr-8 rounded-lg border border-line-2 bg-field text-fg text-xs font-bold cursor-pointer outline-none"
+          >
+            {picks.map((pick, index) => (
+              <option key={pick.formation} value={pick.formation}>
+                {index + 1}. {formationLabel(pick.formation)} · {wdl(pick)[0]}% win
+              </option>
+            ))}
+          </select>
+          <svg className="absolute right-2.5 top-2.5 pointer-events-none stroke-muted" width="12" height="12" viewBox="0 0 24 24" fill="none" strokeWidth={2.4} aria-hidden="true">
+            <path d="m6 9 6 6 6-6" />
+          </svg>
+        </span>
+      </label>
+    </Panel>
+  );
+};
 
 const PITCH_LINE = 'rgba(255,255,255,.45)';
 // Formations stand up the pitch with our goal at the bottom; the matchup lays it sideways, us attacking left to right
@@ -585,7 +620,7 @@ export const MatchupPanel: React.FC<{
 };
 
 export const RecentResultsPanel: React.FC<{ name: string; matches: ScoutMatch[]; ourClubId: number }> = ({ name, matches, ourClubId }) => (
-  <Panel className="w-[calc((100%-22px)/2)] min-w-[min(100%,560px)] p-[22px] flex flex-col gap-1">
+  <Panel className="p-[22px] flex flex-col gap-1">
     <h2 className={`${panelTitle} mb-2.5`}>{name} · Recent results</h2>
     {matches.length === 0 && <p className="m-0 text-sm font-medium text-muted">No competitive matches yet.</p>}
     <div className="overflow-x-auto">
