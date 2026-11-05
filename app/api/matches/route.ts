@@ -64,8 +64,8 @@ export async function GET(request: NextRequest) {
           ...getMflAuthHeaders(),
         },
         signal: controller.signal,
-        // Cache for 6 hours (21600 seconds)
-        next: { revalidate: 21600 },
+        // Fixtures change as matches are played, so upcoming and live lists are kept for 5 minutes, past ones for 6 hours
+        next: { revalidate: upcoming === 'true' || live === 'true' ? 300 : 21600 },
       });
       
       clearTimeout(timeoutId);

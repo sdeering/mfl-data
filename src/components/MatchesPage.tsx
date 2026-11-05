@@ -38,8 +38,8 @@ import {
 /** Matches of ours the tool reads, and of each opponent's */
 const OUR_MATCHES = 15;
 const THEIR_MATCHES = 10;
-/** Upcoming opponents it can show, beyond the next match day's */
-const MAX_UPCOMING = 6;
+/** Upcoming opponents it can show, the next match day's included */
+const MAX_UPCOMING = 5;
 
 /** A club to prepare for: one we play next, or one scouted by its ID. */
 interface Opponent {
@@ -228,7 +228,11 @@ const MatchesPage: React.FC = () => {
   // The clubs we play next in competitions, soonest first
   const fixtures = useMemo(() => {
     const next: (Opponent & { startDate: number })[] = [];
-    const planned = upcomingMatches.filter(match => match.type !== 'FRIENDLY' && match.status !== 'LIVE' && match.status !== 'ENDED');
+    // Leave out a match once it kicks off, even if a cached list still has it as planned, so the next one shows
+    const now = Date.now();
+    const planned = upcomingMatches.filter(
+      match => match.type !== 'FRIENDLY' && match.status !== 'LIVE' && match.status !== 'ENDED' && match.startDate > now,
+    );
     for (const match of planned.sort((a, b) => a.startDate - b.startDate)) {
       const home = match.homeSquad?.club?.id === clubId;
       const opponent = home ? match.awaySquad?.club : match.homeSquad?.club;
@@ -356,7 +360,7 @@ const MatchesPage: React.FC = () => {
               <span className={capsLabel}>Next opponents</span>
               {later.length > 0 && (
                 <button type="button" onClick={() => setShowLater(!showLater)} className={`text-xs font-semibold cursor-pointer ${linkClass}`}>
-                  {showLater ? 'Next match day only' : `Show ${later.length} more`}
+                  {showLater ? 'Next match day only' : 'Show more'}
                 </button>
               )}
             </div>
