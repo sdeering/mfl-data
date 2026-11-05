@@ -1,6 +1,7 @@
 import type { MFLPlayer } from '../types/mflApi';
 import { squadFits, type PlayedMatch } from '../utils/formationPlanner';
 import { compareSquads, describeFormation, findWeaknesses, xiPlayers, type XiPlayer } from '../utils/squadComparison';
+import { CAPTAIN_OVR, captainOptions, describeBonus } from '../utils/captain';
 import { FORMATIONS, FORMATION_NAMES, formationLabel } from '../utils/squadLineups';
 import type { ScoutMatch, ScoutReport } from './scoutService';
 import { recordOf, settingEffects, similarMatches, type TacticsHistory } from '../utils/tacticsHistory';
@@ -65,6 +66,8 @@ export interface TacticPick {
 export interface MatchAnalysis {
   summary: string;
   formation: { pick: string; reason: string };
+  /** Who to captain, missing from analyses made before captains were weighed */
+  captain?: { player: string; reason: string };
   attack: { title: string; detail: string }[];
   defend: { title: string; detail: string }[];
   matchups: { ours: string; theirs: string; edge: 'ours' | 'theirs' | 'even'; note: string }[];
@@ -88,6 +91,15 @@ export const ANALYSIS_SCHEMA = {
         reason: { type: 'STRING' },
       },
       required: ['pick', 'reason'],
+    },
+    captain: {
+      type: 'OBJECT',
+      description: 'Who to captain in our XI, from us.captainOptions',
+      properties: {
+        player: { type: 'STRING', description: 'Our player as "POS Name"' },
+        reason: { type: 'STRING', description: 'Why, weighing the XI rating gain against the team bonus this matchup needs' },
+      },
+      required: ['player', 'reason'],
     },
     attack: {
       type: 'ARRAY',
@@ -142,7 +154,7 @@ export const ANALYSIS_SCHEMA = {
       items: { type: 'OBJECT', properties: { title: { type: 'STRING' }, detail: { type: 'STRING' } }, required: ['title', 'detail'] },
     },
   },
-  required: ['summary', 'formation', 'attack', 'defend', 'matchups', 'lineup', 'styleSummary', 'tactics', 'historyNotes'],
+  required: ['summary', 'formation', 'captain', 'attack', 'defend', 'matchups', 'lineup', 'styleSummary', 'tactics', 'historyNotes'],
 } as const;
 
 /** A player's line in a match report from MFL's /matches/{id}/report */
@@ -269,7 +281,8 @@ export const MFL_TACTICS_GUIDE = [
   `Besides the formation and XI, the manager sets a playing style: ${TACTIC_SETTINGS.length} settings, each on ${TACTIC_STEPS} steps from 1 (the low end) to ${TACTIC_STEPS} (the high end), listed under playingStyleSettings with what each end means. Step 3 is the middle and MFL's default. Flank Preference low favours attacking down our left, high our right.`,
   'Pick a step for every setting to suit this matchup: flank preference, width, crossing and dribbling to aim at their weak flank and use our best wide players; directness and team depth to use or deny pace in behind; pressing, aggressiveness and compactness against their midfield and creators; shooting by our shooters and their keeper; clearances by how good our defenders are on the ball.',
   'ourTacticsLog, when present, holds the settings we actually used in our own logged matches (league, cup and friendly) with the result and xG, how we did with each setting low (steps 1-2), mid (3) and high (4-5), and the logged matches against this opponent and this formation. Weigh it by sample size: a few friendlies are weak evidence, and say so. Let it shape the settings you pick and explain the link in historyNotes.',
-  'Only recommend formations, who plays where, swaps from the listed squads and the listed playing style settings. Do not invent other instructions.',
+  `The captain plays at +${CAPTAIN_OVR} OVR, and the whole XI gets a bonus by the captain's position: goalkeeper +2 DEF; defender +2 DEF, +1 PHY; midfielder +2 PAS, +1 DRI; forward +2 SHO, +1 PAC. us.captainOptions lists our best choices with how much each lifts the XI's average rating; them.likelyCaptain is theirs. Pick ours weighing that lift against what the matchup needs, e.g. a defender's DEF bonus against a dangerous attack, or a forward's SHO bonus against a weak keeper.`,
+  'Only recommend formations, who plays where, swaps from the listed squads, the captain and the listed playing style settings. Do not invent other instructions.',
 ];
 
 export interface AnalysisInput {
@@ -312,8 +325,22 @@ function describeHistory(history: TacticsHistory | null | undefined, theirClubId
 export function buildAnalysisPrompt({ ours, theirs, ourFormation, theirFormation, counters, theirReports, history }: AnalysisInput): string {
   const ourById = new Map(ours.players.map(player => [player.id, player]));
   const theirById = new Map(theirs.players.map(player => [player.id, player]));
-  const ourXi = xiPlayers(ourFormation, squadFits(ours.players).get(ourFormation), ourById);
-  const theirXi = xiPlayers(theirFormation, squadFits(theirs.players).get(theirFormation), theirById);
+  const ourFit = squadFits(ours.players).get(ourFormation);
+  const theirFit = squadFits(theirs.players).get(theirFormation);
+  const ourXi = xiPlayers(ourFormation, ourFit, ourById);
+  const theirXi = xiPlayers(theirFormation, theirFit, theirById);
+  const nameOf = (byId: Map<number, MFLPlayer>, id: number) => byId.get(id)?.metadata.lastName ?? `Player ${id}`;
+  const captainOptionsOf = (fit: typeof ourFit, byId: Map<number, MFLPlayer>) =>
+    fit
+      ? captainOptions(fit.formation, fit.slots.map(slot => slot.playerId), byId)
+          .slice(0, 5)
+          .map(option => ({
+            player: `${option.position} ${nameOf(byId, option.playerId)}`,
+            teamBonus: describeBonus(option.line),
+            xiRatingWithThem: Math.round(option.rating * 10) / 10,
+            gain: Math.round(option.gain * 100) / 100,
+          }))
+      : [];
   const played: PlayedMatch[] = theirs.matches;
 
   const data = {
@@ -330,6 +357,7 @@ export function buildAnalysisPrompt({ ours, theirs, ourFormation, theirFormation
       club: ours.club.name,
       plannedFormation: formationLabel(ourFormation),
       startingXi: describeXi(ourXi),
+      captainOptions: captainOptionsOf(ourFit, ourById),
       bestOfTheRest: describeBench(ours.players, ourXi),
       recentResults: describeMatches(ours.matches.slice(0, 10)),
       ourTacticsLog: describeHistory(history, theirs.club.id, theirFormation),
@@ -338,12 +366,13 @@ export function buildAnalysisPrompt({ ours, theirs, ourFormation, theirFormation
       club: theirs.club.name,
       expectedFormation: formationLabel(theirFormation),
       likelyXi: describeXi(theirXi),
+      likelyCaptain: captainOptionsOf(theirFit, theirById)[0] ?? null,
       bestOfTheRest: describeBench(theirs.players, theirXi),
       recentResults: describeMatches(theirs.matches),
       recentMatchStats: summariseReports(theirReports, theirById),
     },
     plannerCounters: counters.map(counter => ({ ...counter, formation: formationLabel(counter.formation), key: counter.formation })),
-    squadComparison: compareSquads(ourXi, theirXi, ours.players, theirs.players),
+    squadComparison: compareSquads(ourXi, theirXi, ours.players, theirs.players, { ours: ourFit?.rating ?? null, theirs: theirFit?.rating ?? null }),
     weakSpotsFound: findWeaknesses(ourXi, theirXi, played),
   };
 

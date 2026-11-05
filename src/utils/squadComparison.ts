@@ -95,7 +95,14 @@ export interface SquadComparison {
 const LINE_LABELS: Record<Line, string> = { GK: 'Goalkeeper', DEF: 'Defence', MID: 'Midfield', ATT: 'Attack' };
 
 /** Our XI and squad against theirs: overall strength, each line of the XI, and the outfield XI's attributes. */
-export function compareSquads(ourXi: XiPlayer[], theirXi: XiPlayer[], ourPlayers: MFLPlayer[], theirPlayers: MFLPlayer[]): SquadComparison {
+export function compareSquads(
+  ourXi: XiPlayer[],
+  theirXi: XiPlayer[],
+  ourPlayers: MFLPlayer[],
+  theirPlayers: MFLPlayer[],
+  /** Each XI's average with its best captain, when known */
+  withCaptain?: { ours: number | null; theirs: number | null },
+): SquadComparison {
   const ourOveralls = overalls(ourPlayers);
   const theirOveralls = overalls(theirPlayers);
   const xiIds = (xi: XiPlayer[]) => new Set(xi.map(player => player.id));
@@ -110,6 +117,9 @@ export function compareSquads(ourXi: XiPlayer[], theirXi: XiPlayer[], ourPlayers
   return {
     overall: [
       { label: 'Starting XI', ours: round1(average(ourXi.map(p => p.rating))), theirs: round1(average(theirXi.map(p => p.rating))), hint: 'Average rating at their positions' },
+      ...(withCaptain
+        ? [{ label: 'With captain', ours: round1(withCaptain.ours), theirs: round1(withCaptain.theirs), hint: "The XI's average with its best captain: +2 for them, and the team bonus for their position" }]
+        : []),
       {
         label: 'Matchday 18',
         ours: round1(average(ourOveralls.slice(0, MATCHDAY_SQUAD))),

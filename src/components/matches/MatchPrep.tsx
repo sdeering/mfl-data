@@ -3,6 +3,7 @@ import { clubsService } from '../../services/clubsService';
 import type { ScoutMatch } from '../../services/scoutService';
 import { WEAK_POSITION_GAP, matchResult, weakPositions, type FilledSlot, type FormationFit, type FormationGuess, type FormationPick } from '../../utils/formationPlanner';
 import { FORMATIONS, FORMATION_NAMES, formationLabel } from '../../utils/squadLineups';
+import { CAPTAIN_OVR, describeBonus } from '../../utils/captain';
 import { placeSpots, type PitchSpot, type PlacedSpot } from '../../utils/pitchSpots';
 import type { MFLPlayer } from '../../types/mflApi';
 import { ClearButton, Panel } from '../ui';
@@ -327,10 +328,18 @@ export function wdl(pick: FormationPick): [number, number, number] {
 }
 
 /** One of our counters: its win chance, points a game, XI rating and how well the squad fits it */
-const PickCard: React.FC<{ pick: FormationPick; fit?: FormationFit; rank: number; on: boolean; onSelect: () => void }> = ({ pick, fit, rank, on, onSelect }) => {
+const PickCard: React.FC<{
+  pick: FormationPick;
+  fit?: FormationFit;
+  playersById?: Map<number, MFLPlayer>;
+  rank: number;
+  on: boolean;
+  onSelect: () => void;
+}> = ({ pick, fit, playersById, rank, on, onSelect }) => {
   const [win, draw, loss] = wdl(pick);
   const chip = fitChip(pick);
   const weak = weakPositions(fit);
+  const captain = fit?.captain ? playersById?.get(fit.captain.playerId) : undefined;
   return (
     <button
       type="button"
@@ -371,6 +380,15 @@ const PickCard: React.FC<{ pick: FormationPick; fit?: FormationFit; rank: number
         <span className="h-[22px] px-[9px] rounded-full flex items-center text-[11px] font-bold" style={{ background: chip.background, color: chip.colour }}>
           {chip.label}
         </span>
+        {captain && fit?.captain && (
+          <span
+            className="h-[22px] px-[9px] rounded-full flex items-center gap-1 text-[11px] font-bold bg-chip text-fg-3"
+            title={`Best captain: ${captain.metadata.firstName} ${captain.metadata.lastName} at ${fit.captain.position}. +${CAPTAIN_OVR} for them and ${describeBonus(fit.captain.line)} for the XI lift its average by ${fit.captain.gain.toFixed(1)}`}
+          >
+            <span className="w-[14px] h-[14px] rounded-full grid place-items-center bg-[#c6f432] text-[#0b1406] text-[9px] font-extrabold">C</span>
+            {captain.metadata.lastName} +{fit.captain.gain.toFixed(1)}
+          </span>
+        )}
         {weak.length > 0 && (
           <span
             className="h-[22px] px-[9px] rounded-full flex items-center text-[11px] font-bold"
@@ -398,11 +416,12 @@ export const CounterPanel: React.FC<{
   against: string | null;
   /** Every formation, best first */
   picks: FormationPick[];
-  /** Our best XI in each formation, for its weak spots */
+  /** Our best XI in each formation, for its weak spots and captain */
   fits?: Map<string, FormationFit>;
+  playersById?: Map<number, MFLPlayer>;
   selected: string;
   onSelect: (formation: string) => void;
-}> = ({ name, against, picks, fits, selected, onSelect }) => {
+}> = ({ name, against, picks, fits, playersById, selected, onSelect }) => {
   const rank = picks.findIndex(pick => pick.formation === selected);
   return (
     <Panel className="p-[22px] flex flex-col gap-3.5">
@@ -415,9 +434,17 @@ export const CounterPanel: React.FC<{
         </span>
       </div>
       {picks.slice(0, SHOWN_PICKS).map((pick, index) => (
-        <PickCard key={pick.formation} pick={pick} fit={fits?.get(pick.formation)} rank={index + 1} on={pick.formation === selected} onSelect={() => onSelect(pick.formation)} />
+        <PickCard
+          key={pick.formation}
+          pick={pick}
+          fit={fits?.get(pick.formation)}
+          playersById={playersById}
+          rank={index + 1}
+          on={pick.formation === selected}
+          onSelect={() => onSelect(pick.formation)}
+        />
       ))}
-      {rank >= SHOWN_PICKS && <PickCard pick={picks[rank]} fit={fits?.get(selected)} rank={rank + 1} on onSelect={() => onSelect(selected)} />}
+      {rank >= SHOWN_PICKS && <PickCard pick={picks[rank]} fit={fits?.get(selected)} playersById={playersById} rank={rank + 1} on onSelect={() => onSelect(selected)} />}
       <label className="flex items-center gap-2.5 flex-wrap text-xs font-semibold text-muted">
         Your formation
         <span className="relative block">
@@ -454,6 +481,7 @@ interface MatchupSpot {
   slot: FilledSlot | undefined;
   playersById: Map<number, MFLPlayer>;
   ours: boolean;
+  captain: boolean;
 }
 
 /**
@@ -466,7 +494,7 @@ const PitchPlayer: React.FC<
     ringRef: (element: HTMLSpanElement | null) => void;
     tagRef: (element: HTMLSpanElement | null) => void;
   }
-> = ({ position, left, top, slot, playersById, ours, tagAbove, ringRef, tagRef }) => {
+> = ({ position, left, top, slot, playersById, ours, captain, tagAbove, ringRef, tagRef }) => {
   const player = slot?.playerId ? playersById.get(slot.playerId) : undefined;
   const rating = player && Math.round(slot!.rating);
   return (
@@ -487,6 +515,14 @@ const PitchPlayer: React.FC<
       }}
     >
       {position}
+      {captain && (
+        <span
+          className="absolute -top-1.5 -right-1.5 w-3 h-3 sm:w-3.5 sm:h-3.5 rounded-full grid place-items-center bg-[#c6f432] text-[#0b1406] text-[7px] sm:text-[8px] font-extrabold"
+          title="Captain"
+        >
+          C
+        </span>
+      )}
       {/* On a phone the pitch is too narrow for 22 names, so it shows ratings alone */}
       {(player || ours) && (
         <span
@@ -527,6 +563,7 @@ export const MatchupPanel: React.FC<{
       slot: theirFit?.slots[index],
       playersById: theirPlayersById,
       ours: false,
+      captain: !!theirFit?.captain && theirFit.slots[index]?.playerId === theirFit.captain.playerId,
     })),
     ...FORMATIONS[formation].map(([position, across, down], index) => ({
       position,
@@ -535,6 +572,7 @@ export const MatchupPanel: React.FC<{
       slot: fit?.slots[index],
       playersById,
       ours: true,
+      captain: !!fit?.captain && fit.slots[index]?.playerId === fit.captain.playerId,
     })),
   ];
 

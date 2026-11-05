@@ -300,6 +300,14 @@ export const AiAnalysisPanel: React.FC<{
                 <span className={capsLabel}>Play</span>
                 <span className="font-display text-2xl leading-none font-extrabold text-accent-ink">{formationLabel(analysis.formation.pick)}</span>
                 <span className="text-[13px] font-medium text-muted">{analysis.formation.reason}</span>
+                {analysis.captain && (
+                  <span className="flex items-start gap-2 pt-1.5 text-[13px] font-medium text-muted">
+                    <span className="mt-px w-[18px] h-[18px] flex-none rounded-full grid place-items-center bg-[#c6f432] text-[#0b1406] text-[10px] font-extrabold">C</span>
+                    <span>
+                      <b className="text-fg">{analysis.captain.player}</b> · {analysis.captain.reason}
+                    </span>
+                  </span>
+                )}
               </span>
               {analysis.formation.pick !== request.ourFormation && (
                 <button

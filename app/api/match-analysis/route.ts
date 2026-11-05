@@ -91,6 +91,7 @@ async function askGemini(prompt: string): Promise<MatchAnalysis> {
   return {
     summary: analysis.summary,
     formation: isFormation(analysis.formation?.pick) ? analysis.formation : { pick: '', reason: analysis.formation?.reason ?? '' },
+    captain: analysis.captain?.player ? { player: String(analysis.captain.player), reason: String(analysis.captain.reason ?? '') } : undefined,
     attack: analysis.attack ?? [],
     defend: analysis.defend ?? [],
     matchups: analysis.matchups ?? [],
@@ -118,7 +119,7 @@ export async function POST(request: NextRequest) {
   // Logging a match makes a new analysis, so it reads the log as it is
   const entries = await loadTacticsEntries(ourClubId);
   const logVersion = entries.length ? `${entries.length}-${entries.map(entry => entry.updatedAt).sort().at(-1)}` : '0';
-  const cacheKey = `v4:${ourClubId}:${theirClubId}:${ourFormation}:${theirFormation}:${logVersion}`;
+  const cacheKey = `v5:${ourClubId}:${theirClubId}:${ourFormation}:${theirFormation}:${logVersion}`;
   const cached = cache.get(cacheKey);
   if (cached && Date.now() - cached.at < CACHE_MS) return NextResponse.json({ success: true, data: cached.analysis, cached: true });
 

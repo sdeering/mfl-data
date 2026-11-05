@@ -138,7 +138,8 @@ const OpponentPrep: React.FC<{
     const ourXi = xiPlayers(comparedOurs, ourFits.get(comparedOurs), ourPlayersById);
     const theirXi = xiPlayers(comparedAgainst, theirFits.get(comparedAgainst), theirPlayersById);
     if (!ourXi.length || !theirXi.length) return null;
-    return { squads: compareSquads(ourXi, theirXi, ours.players, report.players), weaknesses: findWeaknesses(ourXi, theirXi, report.matches) };
+    const withCaptain = { ours: ourFits.get(comparedOurs)?.rating ?? null, theirs: theirFits.get(comparedAgainst)?.rating ?? null };
+    return { squads: compareSquads(ourXi, theirXi, ours.players, report.players, withCaptain), weaknesses: findWeaknesses(ourXi, theirXi, report.matches) };
   }, [report, ours, comparedOurs, comparedAgainst, ourFits, theirFits, ourPlayersById, theirPlayersById]);
 
   if (isLoading) return <Spinner label={`Scouting ${opponent.name}…`} />;
@@ -162,7 +163,7 @@ const OpponentPrep: React.FC<{
       </div>
       {selected ? (
         <div className={panelRow}>
-          <CounterPanel name={name} against={against === LIKELY_MIX ? null : against} picks={picks} fits={ourFits} selected={selected} onSelect={onPick} />
+          <CounterPanel name={name} against={against === LIKELY_MIX ? null : against} picks={picks} fits={ourFits} playersById={ourPlayersById} selected={selected} onSelect={onPick} />
           <MatchupPanel
             name={name}
             formation={selected}
@@ -327,7 +328,13 @@ const MatchesPage: React.FC = () => {
 
   const openSquad = (opponentName: string, formation: string) => {
     if (!walletAddress || !ours) return;
-    addDraftLineup(walletAddress, { name: `vs ${opponentName}`, formation, ...autoFillLineup(formation, ours.players), captain: null });
+    // The same XI the planner rated, with its best captain
+    addDraftLineup(walletAddress, {
+      name: `vs ${opponentName}`,
+      formation,
+      ...autoFillLineup(formation, ours.players),
+      captain: ourFits.get(formation)?.captain?.playerId ?? null,
+    });
     router.push('/squad-builder');
   };
 

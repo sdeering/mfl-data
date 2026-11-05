@@ -1,5 +1,6 @@
 import type { MFLPlayer } from '../types/mflApi';
 import { FORMATIONS, FORMATION_NAMES, XI_SIZE, autoFillLineup, positionFit, type FitKind } from './squadLineups';
+import { captainOptions, type CaptainOption } from './captain';
 import metaSnapshot from '../data/formationMeta.json';
 
 /*
@@ -151,8 +152,12 @@ export interface FilledSlot {
 
 export interface FormationFit {
   formation: string;
-  /** Average rating of the best XI the squad makes in it */
+  /** Average rating of the best XI the squad makes in it, with its best captain */
   rating: number;
+  /** The same without a captain */
+  ratingWithoutCaptain: number;
+  /** The captain who lifts that XI most, by their rating boost and the team bonus for their position */
+  captain: CaptainOption | null;
   /** How far that is below the squad's best formation, 0 for the best */
   gap: number;
   /** That XI, position by position in the formation's order */
@@ -175,9 +180,13 @@ export function squadFits(players: MFLPlayer[]): Map<string, FormationFit> {
       return player ? { playerId: player.id, ...positionFit(player, position) } : { playerId: null, rating: 0, kind: 'out' as const };
     });
     const positions = (kind: FitKind) => FORMATIONS[formation].filter((_, index) => slots[index].kind === kind).map(([position]) => position);
+    const ratingWithoutCaptain = sum(slots.map(slot => slot.rating)) / XI_SIZE;
+    const captain = captainOptions(formation, xi, byId)[0] ?? null;
     return {
       formation,
-      rating: sum(slots.map(slot => slot.rating)) / XI_SIZE,
+      rating: captain?.rating ?? ratingWithoutCaptain,
+      ratingWithoutCaptain,
+      captain,
       slots,
       alternative: positions('alt'),
       outOfPosition: positions('out'),
