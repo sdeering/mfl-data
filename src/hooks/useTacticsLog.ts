@@ -1,12 +1,16 @@
 import { useCallback, useEffect, useState } from 'react';
-import type { TacticSettings, TacticsHistory } from '../utils/tacticsHistory';
+import type { PlayerSettings, TacticSettings, TacticsHistory } from '../utils/tacticsHistory';
 
 export interface TacticsLogState {
   history: TacticsHistory | null;
   error: string | null;
   isLoading: boolean;
-  /** Keeps the settings for a match, or with null forgets them; throws with the reason when it can't */
-  save: (matchId: number, settings: TacticSettings | null) => Promise<void>;
+  /** Keeps the settings and individual instructions for a match, or with null forgets them; throws with the reason when it can't */
+  save: (matchId: number, settings: TacticSettings | null, players?: PlayerSettings) => Promise<void>;
+  /** Reads the log again, e.g. once the AI's advice for a match is kept */
+  refresh: () => void;
+  /** The wallet saving to it, when the club owner's is connected */
+  walletAddress: string | null;
 }
 
 /** Histories already loaded this visit, by club */
@@ -43,12 +47,12 @@ export function useTacticsLog(clubId: number | null, walletAddress: string | nul
   }, [clubId, reload]);
 
   const save = useCallback(
-    async (matchId: number, settings: TacticSettings | null) => {
+    async (matchId: number, settings: TacticSettings | null, players: PlayerSettings = {}) => {
       if (!clubId || !walletAddress) throw new Error('Connect the club owner’s wallet to log tactics');
       const response = await fetch(`/api/clubs/${clubId}/tactics`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ walletAddress, matchId, settings }),
+        body: JSON.stringify({ walletAddress, matchId, settings, players: settings ? players : {} }),
       });
       const result = await response.json().catch(() => ({}));
       if (!response.ok || !result.success) throw new Error(result.error || `HTTP ${response.status}`);
@@ -57,11 +61,21 @@ export function useTacticsLog(clubId: number | null, walletAddress: string | nul
         if (!current) return current;
         const played = current.matches.some(match => match.matchId === matchId);
         const planned = { ...current.planned };
+        const plannedPlayers = { ...current.plannedPlayers };
         if (!played) {
-          if (settings) planned[matchId] = settings;
-          else delete planned[matchId];
+          if (settings) {
+            planned[matchId] = settings;
+            plannedPlayers[matchId] = players;
+          } else {
+            delete planned[matchId];
+            delete plannedPlayers[matchId];
+          }
         }
-        const next = { matches: current.matches.map(match => (match.matchId === matchId ? { ...match, settings } : match)), planned };
+        const next = {
+          matches: current.matches.map(match => (match.matchId === matchId ? { ...match, settings, players: settings ? players : null } : match)),
+          planned,
+          plannedPlayers,
+        };
         loaded.set(clubId, next);
         return next;
       });
@@ -70,5 +84,7 @@ export function useTacticsLog(clubId: number | null, walletAddress: string | nul
     [clubId, walletAddress, history],
   );
 
-  return { history, error, isLoading, save };
+  const refresh = useCallback(() => setReload(count => count + 1), []);
+
+  return { history, error, isLoading, save, refresh, walletAddress };
 }

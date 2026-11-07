@@ -1,8 +1,16 @@
 import React, { useState } from 'react';
-import { TACTIC_SETTINGS, TACTIC_STEPS, type TacticPick } from '../../services/matchAnalysis';
+import { PLAYER_ONLY_SETTINGS, PLAYER_SETTINGS, TACTIC_SETTINGS, TACTIC_STEPS, type TacticPick } from '../../services/matchAnalysis';
+import type { MFLPlayer } from '../../types/mflApi';
 import {
   BANDS,
+  MAX_LOGGED_PLAYERS,
+  adviceAgreement,
+  adviceRecord,
   bandOf,
+  FOLLOWED_SHARE,
+  followedAdvice,
+  playerSettingEffects,
+  type PlayerSettings,
   loggedMatches,
   recordOf,
   settingEffects,
@@ -24,7 +32,14 @@ import { capsLabel, limeButton, panelTitle } from './MatchPrep';
 
 export const IN_COLOUR = '#facc15';
 export const OUT_COLOUR = '#3b8bf0';
-const colourOf = (key: string) => (TACTIC_SETTINGS.find(setting => setting.key === key)?.group === 'in' ? IN_COLOUR : OUT_COLOUR);
+const colourOf = (key: string) => (PLAYER_SETTINGS.concat(TACTIC_SETTINGS).find(setting => setting.key === key)?.group === 'in' ? IN_COLOUR : OUT_COLOUR);
+const labelOf = (key: string) => PLAYER_SETTINGS.concat(TACTIC_SETTINGS).find(setting => setting.key === key)?.label ?? key;
+const playerName = (playersById: Map<number, MFLPlayer> | undefined, id: number | string) => {
+  const player = playersById?.get(Number(id));
+  return player ? `${player.metadata.firstName.charAt(0)}. ${player.metadata.lastName}` : `Player ${id}`;
+};
+/** Players with instructions set, as the log keeps them: those left all on TEAM dropped */
+const setOnly = (players: PlayerSettings): PlayerSettings => Object.fromEntries(Object.entries(players).filter(([, own]) => Object.keys(own).length));
 const DEFAULT_STEP = 3;
 const RESULT_CHIPS = { W: ['#8ae63a', '#0d1a05'], D: ['#3a4640', '#dfe7e1'], L: ['#ef4444', '#ffffff'] } as const;
 const TYPE_LABELS: Record<string, string> = { LEAGUE: 'League', CUP: 'Cup', FRIENDLY: 'Friendly' };
@@ -55,6 +70,29 @@ const ResultChip: React.FC<{ match: ClubMatchLog }> = ({ match }) => {
   return (
     <span className="h-[22px] min-w-[42px] px-2 rounded-full grid place-items-center text-[11px] font-extrabold" style={{ background: RESULT_CHIPS[result][0], color: RESULT_CHIPS[result][1] }}>
       {match.goalsFor}-{match.goalsAgainst}
+    </span>
+  );
+};
+
+/** How a logged match compares with what the AI advised for it */
+const AdviceChip: React.FC<{ match: ClubMatchLog }> = ({ match }) => {
+  if (!match.advice) return null;
+  if (!match.settings || !match.advice.settings) {
+    return (
+      <span className="h-[20px] px-1.5 rounded-md grid place-items-center bg-chip text-[10px] font-extrabold text-fg-3" title="The AI's advice for this match is kept: log what you used to compare">
+        AI
+      </span>
+    );
+  }
+  const { same, total } = adviceAgreement(match.settings, match.advice.settings);
+  const followed = followedAdvice(match);
+  return (
+    <span
+      className="h-[20px] px-1.5 rounded-md grid place-items-center text-[10px] font-extrabold"
+      style={followed ? { background: 'rgba(198,244,50,.14)', color: '#c6f432' } : { background: 'var(--chip)', color: 'var(--muted)' }}
+      title={`${same} of ${total} team settings as the AI advised${followed ? ': followed' : ''}`}
+    >
+      AI {same}/{total}
     </span>
   );
 };
@@ -92,6 +130,110 @@ const SettingsEditor: React.FC<{ settings: TacticSettings; onChange: (settings: 
   </div>
 );
 
+/** One player's individual instructions to click: TEAM follows the team's step, a step sets theirs */
+const PlayerEditor: React.FC<{ own: TacticSettings; advised?: TacticSettings; onChange: (own: TacticSettings) => void }> = ({ own, advised, onChange }) => (
+  <div className="flex flex-col gap-1.5">
+    {PLAYER_SETTINGS.map(setting => {
+      const step = own[setting.key];
+      const colour = colourOf(setting.key);
+      const clear = () => {
+        const { [setting.key]: _cleared, ...rest } = own;
+        onChange(rest);
+      };
+      return (
+        <div key={setting.key} className="grid grid-cols-[minmax(0,1fr)_46px_100px] items-center gap-2" title={advised?.[setting.key] ? `AI advised ${advised[setting.key]}` : undefined}>
+          <span className={`text-xs truncate ${step ? 'font-bold' : 'font-semibold text-muted'}`}>
+            {setting.label}
+            {advised?.[setting.key] !== undefined && <span className="ml-1 text-[10px] font-bold text-accent-ink">AI {advised[setting.key]}</span>}
+          </span>
+          <button
+            type="button"
+            onClick={clear}
+            aria-pressed={!step}
+            className={`h-5 rounded-md text-[10px] font-extrabold cursor-pointer ${!step ? 'border border-[#c6f432] text-accent-ink' : 'border border-line-2 text-muted-3 hover:text-fg'}`}
+          >
+            {PLAYER_ONLY_SETTINGS.has(setting.key) ? 'MID' : 'TEAM'}
+          </button>
+          <span className="flex gap-[3px]" role="radiogroup" aria-label={setting.label}>
+            {Array.from({ length: TACTIC_STEPS }, (_, index) => (
+              <button
+                key={index}
+                type="button"
+                role="radio"
+                aria-checked={step === index + 1}
+                title={`${setting.label}: ${index + 1}${index === 0 ? ` (${setting.low})` : index === TACTIC_STEPS - 1 ? ` (${setting.high})` : ''}`}
+                onClick={() => onChange({ ...own, [setting.key]: index + 1 })}
+                className="flex-1 h-2.5 rounded-full border-0 p-0 cursor-pointer hover:opacity-80"
+                style={{ background: step && index < step ? colour : 'var(--line)' }}
+              />
+            ))}
+          </span>
+        </div>
+      );
+    })}
+  </div>
+);
+
+/** Individual instructions for a match: a card per player, players added from the squad */
+const PlayersEditor: React.FC<{
+  players: PlayerSettings;
+  advised?: PlayerSettings;
+  playersById?: Map<number, MFLPlayer>;
+  onChange: (players: PlayerSettings) => void;
+}> = ({ players, advised, playersById, onChange }) => {
+  const ids = Object.keys(players);
+  const squad = [...(playersById?.values() ?? [])].filter(player => !ids.includes(String(player.id))).sort((a, b) => b.metadata.overall - a.metadata.overall);
+  return (
+    <div className="flex flex-col gap-2.5">
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <span className="flex flex-col">
+          <span className={capsLabel}>Player instructions</span>
+          <span className="text-[11px] font-medium text-muted-3">Only what you set differently from the team. Players left all on TEAM aren&apos;t kept.</span>
+        </span>
+        {ids.length < MAX_LOGGED_PLAYERS && squad.length > 0 && (
+          <select
+            value=""
+            onChange={event => event.target.value && onChange({ ...players, [event.target.value]: {} })}
+            aria-label="Add a player"
+            className="h-8 px-2.5 rounded-lg border border-line-2 bg-field text-fg text-xs font-bold cursor-pointer outline-none"
+          >
+            <option value="">+ Add player</option>
+            {squad.map(player => (
+              <option key={player.id} value={player.id}>
+                {player.metadata.positions[0]} {player.metadata.lastName} ({player.metadata.overall})
+              </option>
+            ))}
+          </select>
+        )}
+      </div>
+      {ids.length > 0 && (
+        <div className="grid gap-2.5 grid-cols-[repeat(auto-fill,minmax(min(100%,270px),1fr))]">
+          {ids.map(id => (
+            <div key={id} className="flex flex-col gap-2 px-3 py-2.5 rounded-xl bg-panel border border-line">
+              <span className="flex items-center justify-between gap-2">
+                <span className="text-[13px] font-bold truncate">
+                  {playersById?.get(Number(id))?.metadata.positions[0] ?? ''} {playerName(playersById, id)}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const { [id]: _removed, ...rest } = players;
+                    onChange(rest);
+                  }}
+                  className="text-[11px] font-bold text-muted-3 cursor-pointer bg-transparent border-0 p-0 hover:text-[#ef4444]"
+                >
+                  Remove
+                </button>
+              </span>
+              <PlayerEditor own={players[id]} advised={advised?.[id]} onChange={own => onChange({ ...players, [id]: own })} />
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
 /** Rows shown before "Show all" */
 const SHOWN_ROWS = 8;
 
@@ -105,9 +247,11 @@ export const TacticsLogPanel: React.FC<{
   isLoading: boolean;
   error: string | null;
   canEdit: boolean;
-  onSave: (matchId: number, settings: TacticSettings | null) => Promise<void>;
-}> = ({ clubName, history, isLoading, error, canEdit, onSave }) => {
-  const [editing, setEditing] = useState<{ matchId: number; settings: TacticSettings } | null>(null);
+  onSave: (matchId: number, settings: TacticSettings | null, players?: PlayerSettings) => Promise<void>;
+  /** Our squad, for naming players and adding them to individual instructions */
+  playersById?: Map<number, MFLPlayer>;
+}> = ({ clubName, history, isLoading, error, canEdit, onSave, playersById }) => {
+  const [editing, setEditing] = useState<{ matchId: number; settings: TacticSettings; players: PlayerSettings } | null>(null);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
   const [showAll, setShowAll] = useState(false);
@@ -116,10 +260,11 @@ export const TacticsLogPanel: React.FC<{
 
   const startEditing = (match: ClubMatchLog) => {
     // The settings logged for it, or for the latest match before it that has some
-    const before = matches.slice(matches.indexOf(match) + 1).find(item => item.settings)?.settings;
-    const latest = matches.find(item => item.settings)?.settings;
-    const start = match.settings ?? before ?? latest ?? Object.fromEntries(TACTIC_SETTINGS.map(setting => [setting.key, DEFAULT_STEP]));
-    setEditing({ matchId: match.matchId, settings: { ...start } });
+    const previous = matches.slice(matches.indexOf(match) + 1).find(item => item.settings) ?? matches.find(item => item.settings);
+    const start = match.settings ?? previous?.settings ?? Object.fromEntries(TACTIC_SETTINGS.map(setting => [setting.key, DEFAULT_STEP]));
+    // Individual instructions carry over the same way, so a friendly can change just one
+    const players = match.settings ? match.players ?? {} : previous?.players ?? {};
+    setEditing({ matchId: match.matchId, settings: { ...start }, players: JSON.parse(JSON.stringify(players)) });
     setSaveError('');
   };
   const save = async (settings: TacticSettings | null) => {
@@ -127,7 +272,7 @@ export const TacticsLogPanel: React.FC<{
     setSaving(true);
     setSaveError('');
     try {
-      await onSave(editing.matchId, settings);
+      await onSave(editing.matchId, settings, setOnly(editing.players));
       setEditing(null);
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : 'Could not save');
@@ -162,7 +307,24 @@ export const TacticsLogPanel: React.FC<{
                 <span className="font-bold truncate">{match.opponent.name}</span>
                 <ResultChip match={match} />
                 <span className="flex items-center gap-2 justify-end min-w-[96px]">
-                  {match.settings ? <SettingsStrip settings={match.settings} /> : <span className="text-[11px] font-semibold text-muted-3">Not logged</span>}
+                  <AdviceChip match={match} />
+                  {match.settings ? (
+                    <>
+                      <SettingsStrip settings={match.settings} />
+                      {Object.keys(match.players ?? {}).length > 0 && (
+                        <span
+                          className="text-[10px] font-bold text-muted-3"
+                          title={Object.entries(match.players!)
+                            .map(([id, own]) => `${playerName(playersById, id)}: ${Object.entries(own).map(([key, step]) => `${labelOf(key)} ${step}`).join(', ')}`)
+                            .join('\n')}
+                        >
+                          +{Object.keys(match.players!).length}P
+                        </span>
+                      )}
+                    </>
+                  ) : (
+                    <span className="text-[11px] font-semibold text-muted-3">Not logged</span>
+                  )}
                   {canEdit && (
                     <button
                       type="button"
@@ -176,7 +338,38 @@ export const TacticsLogPanel: React.FC<{
               </div>
               {open && editing && (
                 <div className="flex flex-col gap-3 px-3.5 py-3 rounded-xl bg-inset border border-line">
+                  {match.advice && (
+                    <div className="flex items-center gap-2.5 flex-wrap px-3 py-2 rounded-lg bg-panel border border-line text-xs font-semibold text-muted">
+                      <span className={capsLabel}>AI advised</span>
+                      <span>
+                        {formationLabel(match.advice.formation)}
+                        {match.advice.aim !== 'win' ? ` · aim ${match.advice.aim === 'notLose' ? 'not lose' : match.advice.aim}` : ''}
+                      </span>
+                      {match.advice.settings && <SettingsStrip settings={match.advice.settings} />}
+                      {Object.keys(match.advice.players).length > 0 && <span>{Object.keys(match.advice.players).length} player instructions</span>}
+                      <span className="flex-1" />
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setEditing({
+                            ...editing,
+                            settings: match.advice!.settings ? { ...match.advice!.settings } : editing.settings,
+                            players: JSON.parse(JSON.stringify(match.advice!.players)),
+                          })
+                        }
+                        className="h-7 px-2.5 rounded-[9px] border border-line-2 text-xs font-bold text-fg-3 cursor-pointer hover:border-[#c6f432] hover:text-[#c6f432]"
+                      >
+                        Use AI advice
+                      </button>
+                    </div>
+                  )}
                   <SettingsEditor settings={editing.settings} onChange={settings => setEditing({ ...editing, settings })} />
+                  <PlayersEditor
+                    players={editing.players}
+                    advised={match.advice?.players}
+                    playersById={playersById}
+                    onChange={players => setEditing({ ...editing, players })}
+                  />
                   <div className="flex items-center gap-2 flex-wrap">
                     <button type="button" onClick={() => save(editing.settings)} disabled={saving} className={limeButton}>
                       {saving ? 'Saving…' : 'Save'}
@@ -246,7 +439,8 @@ export const WhatWorkedSection: React.FC<{
   opponentFormation: string;
   tactics?: TacticPick[];
   notes?: { title: string; detail: string }[];
-}> = ({ history, opponentClubId, opponentName, opponentFormation, tactics, notes }) => {
+  playersById?: Map<number, MFLPlayer>;
+}> = ({ history, opponentClubId, opponentName, opponentFormation, tactics, notes, playersById }) => {
   const logged = loggedMatches(history);
   const header = (
     <span className={capsLabel} id="what-worked">
@@ -267,11 +461,20 @@ export const WhatWorkedSection: React.FC<{
   const effects = settingEffects(logged);
   const picked = new Map((tactics ?? []).map(pick => [pick.key, bandOf(pick.step)]));
   const { sameOpponent, sameFormation } = similarMatches(logged, opponentClubId, opponentFormation);
+  const advice = adviceRecord(logged);
+  const tried = playerSettingEffects(logged).slice(0, 10);
   return (
     <div className="flex flex-col gap-3.5">
       <div className="flex flex-col gap-1">
         {header}
         <span className="text-[13px] font-medium text-muted">{recordLine(recordOf(logged))}</span>
+        {advice && (
+          <span className="text-[13px] font-medium text-muted">
+            <b className="text-accent-ink">Following the AI</b> ({Math.round(100 * FOLLOWED_SHARE)}%+ of settings as advised): {advice.followed.games ? recordLine(advice.followed) : 'not yet'}
+            <br />
+            <b className="text-fg-3">Not following it</b>: {advice.ignored.games ? recordLine(advice.ignored) : 'not yet'}
+          </span>
+        )}
       </div>
       {notes && notes.length > 0 && (
         <div className="flex flex-col gap-2">
@@ -332,6 +535,36 @@ export const WhatWorkedSection: React.FC<{
       <span className="text-[11px] font-medium text-muted-3">
         Points a game and games played with each setting. Highlighted: the best band with {2}+ games.{tactics?.length ? ' Outlined: the band of the step recommended above.' : ''}
       </span>
+      {tried.length > 0 && (
+        <div className="flex flex-col gap-1">
+          <span className={capsLabel}>Player instructions tried</span>
+          {tried.map(effect => (
+            <div key={`${effect.playerId}-${effect.key}`} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2.5 py-1 border-t border-divider text-xs">
+              <span className="flex items-center gap-1.5 font-bold truncate">
+                <span className="w-1.5 h-1.5 rounded-full flex-none" style={{ background: colourOf(effect.key) }} />
+                {playerName(playersById, effect.playerId)} · {labelOf(effect.key)}
+              </span>
+              <span className="flex items-center gap-1.5 flex-wrap justify-end">
+                {effect.bySteps.map(({ step, record }) => (
+                  <span
+                    key={step}
+                    className="h-6 px-2 rounded-md flex items-center gap-1 bg-chip font-semibold text-fg-3"
+                    title={`Set to ${step}: ${record.wins}W ${record.draws}D ${record.losses}L${record.xgDiff !== null ? ` · xG ${signed(record.xgDiff)} a game` : ''}`}
+                  >
+                    <b className="text-fg">{step}</b> {record.ppg!.toFixed(1)} pts<span className="text-muted-3">· {record.games}</span>
+                  </span>
+                ))}
+                <span
+                  className="h-6 px-2 rounded-md flex items-center gap-1 font-semibold text-muted-3"
+                  title="The other logged matches: on the team's setting, or not playing"
+                >
+                  without {effect.team.games ? `${effect.team.ppg!.toFixed(1)} pts · ${effect.team.games}` : '–'}
+                </span>
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
       <div className="grid gap-4 grid-cols-[repeat(auto-fit,minmax(min(100%,320px),1fr))]">
         <PastMatches title={`Against ${opponentName}`} matches={sameOpponent} />
         <PastMatches title={`Against ${formationLabel(opponentFormation)}`} matches={sameFormation} />

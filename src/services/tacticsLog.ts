@@ -2,7 +2,15 @@ import { executeRaw } from '../lib/db-helpers';
 import { MflHttpError, fetchMflCached, keptFormationResults, toFormationResult, type MatchDetails } from './formationResults';
 import { MflRateLimitError } from './playerProgressionCache';
 import type { MatchReport } from './matchAnalysis';
-import { validSettings, type ClubMatchLog, type TacticSettings, type TacticsHistory } from '../utils/tacticsHistory';
+import {
+  validPlayerSettings,
+  validSettings,
+  type ClubMatchLog,
+  type PlayerSettings,
+  type StoredAdvice,
+  type TacticSettings,
+  type TacticsHistory,
+} from '../utils/tacticsHistory';
 
 /*
  * A club's tactics log on the server: the settings kept in club_tactics, joined with the club's played matches
@@ -32,32 +40,80 @@ interface ListedClubMatch {
 export interface TacticsEntry {
   matchId: number;
   settings: TacticSettings;
+  players: PlayerSettings;
   updatedAt: string;
 }
+
+const parse = (text: unknown): unknown => {
+  try {
+    return typeof text === 'string' ? JSON.parse(text) : null;
+  } catch {
+    return null;
+  }
+};
 
 /** The settings logged for a club, by match. Empty without a database. */
 export async function loadTacticsEntries(clubId: number): Promise<TacticsEntry[]> {
   if (!process.env.TURSO_DATABASE_URL) return [];
-  const { data, error } = await executeRaw('SELECT match_id, settings, updated_at FROM club_tactics WHERE club_id = ?', [clubId]);
+  const { data, error } = await executeRaw('SELECT match_id, settings, player_settings, updated_at FROM club_tactics WHERE club_id = ?', [clubId]);
   if (error || !data) return [];
   return data.flatMap(row => {
-    let settings: TacticSettings | null = null;
-    try {
-      settings = validSettings(JSON.parse(row.settings));
-    } catch {
-      settings = null;
-    }
-    return settings ? [{ matchId: Number(row.match_id), settings, updatedAt: String(row.updated_at) }] : [];
+    const settings = validSettings(parse(row.settings));
+    const players = validPlayerSettings(parse(row.player_settings)) ?? {};
+    return settings ? [{ matchId: Number(row.match_id), settings, players, updatedAt: String(row.updated_at) }] : [];
   });
 }
 
-/** Keeps the settings used in a match, or with null forgets them. */
-export async function saveTacticsEntry(clubId: number, matchId: number, settings: TacticSettings | null, walletAddress: string): Promise<void> {
+/** What the AI advised for a club's matches, by match. Empty without a database. */
+export async function loadAdvice(clubId: number): Promise<Map<number, StoredAdvice>> {
+  if (!process.env.TURSO_DATABASE_URL) return new Map();
+  const { data, error } = await executeRaw('SELECT match_id, advice, created_at FROM club_match_advice WHERE club_id = ?', [clubId]);
+  if (error || !data) return new Map();
+  return new Map(
+    data.flatMap(row => {
+      const advice = parse(row.advice) as Omit<StoredAdvice, 'createdAt'> | null;
+      if (!advice || typeof advice.formation !== 'string') return [];
+      return [
+        [
+          Number(row.match_id),
+          {
+            formation: advice.formation,
+            aim: String(advice.aim ?? 'win'),
+            captain: advice.captain ?? null,
+            settings: validSettings(advice.settings),
+            players: validPlayerSettings(advice.players) ?? {},
+            createdAt: String(row.created_at),
+          },
+        ] as const,
+      ];
+    }),
+  );
+}
+
+/** Keeps the latest advice for a club's match */
+export async function saveAdvice(clubId: number, matchId: number, advice: Omit<StoredAdvice, 'createdAt'>, walletAddress: string): Promise<void> {
+  const { error } = await executeRaw(
+    `INSERT INTO club_match_advice (club_id, match_id, advice, wallet_address, created_at) VALUES (?, ?, ?, ?, datetime('now'))
+     ON CONFLICT (club_id, match_id) DO UPDATE SET advice = excluded.advice, wallet_address = excluded.wallet_address, created_at = excluded.created_at`,
+    [clubId, matchId, JSON.stringify(advice), walletAddress],
+  );
+  if (error) throw new Error(error.message);
+}
+
+/** Keeps the settings and individual instructions used in a match, or with null forgets them. */
+export async function saveTacticsEntry(
+  clubId: number,
+  matchId: number,
+  settings: TacticSettings | null,
+  players: PlayerSettings,
+  walletAddress: string,
+): Promise<void> {
   const { error } = settings
     ? await executeRaw(
-        `INSERT INTO club_tactics (club_id, match_id, settings, wallet_address, updated_at) VALUES (?, ?, ?, ?, datetime('now'))
-         ON CONFLICT (club_id, match_id) DO UPDATE SET settings = excluded.settings, wallet_address = excluded.wallet_address, updated_at = excluded.updated_at`,
-        [clubId, matchId, JSON.stringify(settings), walletAddress],
+        `INSERT INTO club_tactics (club_id, match_id, settings, player_settings, wallet_address, updated_at) VALUES (?, ?, ?, ?, ?, datetime('now'))
+         ON CONFLICT (club_id, match_id) DO UPDATE SET settings = excluded.settings, player_settings = excluded.player_settings,
+           wallet_address = excluded.wallet_address, updated_at = excluded.updated_at`,
+        [clubId, matchId, JSON.stringify(settings), JSON.stringify(players), walletAddress],
       )
     : await executeRaw('DELETE FROM club_tactics WHERE club_id = ? AND match_id = ?', [clubId, matchId]);
   if (error) throw new Error(error.message);
@@ -92,7 +148,7 @@ const xgOf = (report: MatchReport | null, home: boolean) => {
  * the two listings, and those are kept for a week.
  */
 export async function buildTacticsHistory(clubId: number, entries?: TacticsEntry[]): Promise<TacticsHistory> {
-  const logged = entries ?? (await loadTacticsEntries(clubId));
+  const [logged, advice] = await Promise.all([entries ?? loadTacticsEntries(clubId), loadAdvice(clubId)]);
   const { squadId } = await clubOwnership(clubId);
   if (!squadId) return { matches: [], planned: {} };
 
@@ -104,6 +160,7 @@ export async function buildTacticsHistory(clubId: number, entries?: TacticsEntry
   for (const match of [...competitive, ...all]) if (match.status === 'ENDED' || match.status === undefined) byId.set(match.id, match);
   const played = [...byId.values()].sort((a, b) => b.startDate - a.startDate);
   const settingsById = new Map(logged.map(entry => [entry.matchId, entry.settings]));
+  const playersById = new Map(logged.map(entry => [entry.matchId, entry.players]));
   const kept = await keptFormationResults(played.filter(match => settingsById.has(match.id)).map(match => match.id));
 
   const matches: ClubMatchLog[] = [];
@@ -142,9 +199,15 @@ export async function buildTacticsHistory(clubId: number, entries?: TacticsEntry
       ...formations,
       ...xg,
       settings,
+      players: settings ? playersById.get(match.id) ?? {} : null,
+      advice: advice.get(match.id) ?? null,
     });
   }
   const playedIds = new Set(played.map(match => match.id));
-  const planned = Object.fromEntries(logged.filter(entry => !playedIds.has(entry.matchId)).map(entry => [entry.matchId, entry.settings]));
-  return { matches, planned };
+  const ahead = logged.filter(entry => !playedIds.has(entry.matchId));
+  return {
+    matches,
+    planned: Object.fromEntries(ahead.map(entry => [entry.matchId, entry.settings])),
+    plannedPlayers: Object.fromEntries(ahead.map(entry => [entry.matchId, entry.players])),
+  };
 }

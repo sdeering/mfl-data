@@ -3,7 +3,9 @@ import { MflHttpError, fetchMflCached, mflBlockedFor } from '@/src/services/form
 import type { ScoutMatch } from '@/src/services/scoutService';
 import { MflRateLimitError } from '@/src/services/playerProgressionCache';
 import { SCOUT_LIMITS, buildScoutReport } from '@/src/services/scoutReportBuilder';
-import { buildTacticsHistory, loadTacticsEntries } from '@/src/services/tacticsLog';
+import { buildTacticsHistory, clubOwnership, clubPlaysIn, loadTacticsEntries, saveAdvice } from '@/src/services/tacticsLog';
+import { adviceFrom } from '@/src/utils/tacticsHistory';
+import type { Outcome } from '@/src/utils/formationPlanner';
 import {
   ANALYSIS_SCHEMA,
   buildAnalysisPrompt,
@@ -110,7 +112,25 @@ async function askGemini(prompt: string): Promise<MatchAnalysis> {
 }
 
 /**
- * POST /api/match-analysis { ourClubId, theirClubId, ourFormation, theirFormation, counters?, aim? }
+ * Keeps the analysis as the advice for our club's fixture when the wallet asking owns the club and the club plays
+ * in the match, so the tactics log can set what we used against what was advised. Whether it was kept.
+ */
+async function rememberAdvice(clubId: number, matchId: unknown, wallet: unknown, analysis: MatchAnalysis, aim: Outcome): Promise<boolean> {
+  if (!process.env.TURSO_DATABASE_URL || !isId(matchId) || typeof wallet !== 'string' || !wallet) return false;
+  try {
+    const { squadId, owner } = await clubOwnership(clubId);
+    if (!squadId || !owner || owner.toLowerCase() !== wallet.trim().toLowerCase()) return false;
+    if (!(await clubPlaysIn(squadId, matchId))) return false;
+    await saveAdvice(clubId, matchId, adviceFrom(analysis, aim), wallet.trim().toLowerCase());
+    return true;
+  } catch (error) {
+    console.error(`[API] Could not keep the advice for club ${clubId}, match ${matchId}:`, error);
+    return false;
+  }
+}
+
+/**
+ * POST /api/match-analysis { ourClubId, theirClubId, ourFormation, theirFormation, counters?, aim?, matchId?, walletAddress? }
  * An AI scouting report on the opponent for the Match Prep Tool: both squads, their form and their latest match
  * stats go to Gemini, which finds edges to play on. Kept for 6 hours per matchup.
  */
@@ -127,9 +147,12 @@ export async function POST(request: NextRequest) {
   // Logging a match makes a new analysis, so it reads the log as it is
   const entries = await loadTacticsEntries(ourClubId);
   const logVersion = entries.length ? `${entries.length}-${entries.map(entry => entry.updatedAt).sort().at(-1)}` : '0';
-  const cacheKey = `v8:${ourClubId}:${theirClubId}:${ourFormation}:${theirFormation}:${aim}:${logVersion}`;
+  const cacheKey = `v9:${ourClubId}:${theirClubId}:${ourFormation}:${theirFormation}:${aim}:${logVersion}`;
   const cached = cache.get(cacheKey);
-  if (cached && Date.now() - cached.at < CACHE_MS) return NextResponse.json({ success: true, data: cached.analysis, cached: true });
+  if (cached && Date.now() - cached.at < CACHE_MS) {
+    const adviceSaved = await rememberAdvice(ourClubId, body.matchId, body.walletAddress, cached.analysis, aim);
+    return NextResponse.json({ success: true, data: cached.analysis, cached: true, adviceSaved });
+  }
 
   const busy = (seconds: number, what = 'MFL is busy right now') =>
     NextResponse.json({ success: false, error: `${what}. Try again in ${describeWait(seconds)}.` }, { status: 429, headers: { 'Retry-After': String(seconds) } });
@@ -156,7 +179,8 @@ export async function POST(request: NextRequest) {
     analysis.players = cleanPlayerInstructions(analysis.players, new Set(ourXi?.slots.flatMap(slot => (slot.playerId === null ? [] : [slot.playerId])) ?? []));
     cache.set(cacheKey, { analysis, at: Date.now() });
     if (cache.size > 300) cache.delete(cache.keys().next().value!);
-    return NextResponse.json({ success: true, data: analysis });
+    const adviceSaved = await rememberAdvice(ourClubId, body.matchId, body.walletAddress, analysis, aim);
+    return NextResponse.json({ success: true, data: analysis, adviceSaved });
   } catch (error) {
     if (error instanceof MflRateLimitError) return busy(error.retryAfterSeconds);
     const status = error instanceof MflHttpError ? error.status : 500;

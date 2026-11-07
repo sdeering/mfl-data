@@ -263,8 +263,20 @@ CREATE TABLE IF NOT EXISTS club_tactics (
   club_id INTEGER NOT NULL,
   match_id INTEGER NOT NULL,
   settings TEXT NOT NULL,
+  -- Individual instructions: JSON of player ID to setting key to step, only the settings set for each player
+  player_settings TEXT,
   wallet_address TEXT NOT NULL,
   updated_at TEXT DEFAULT (datetime('now')),
+  PRIMARY KEY (club_id, match_id)
+);
+
+-- What the AI match analysis advised for one of a club's matches, kept when its owner asked before the match
+CREATE TABLE IF NOT EXISTS club_match_advice (
+  club_id INTEGER NOT NULL,
+  match_id INTEGER NOT NULL,
+  advice TEXT NOT NULL,
+  wallet_address TEXT NOT NULL,
+  created_at TEXT DEFAULT (datetime('now')),
   PRIMARY KEY (club_id, match_id)
 );
 
@@ -327,6 +339,16 @@ export async function initializeSchema(): Promise<void> {
     const info = await db.execute('PRAGMA table_info(squads)')
     if (info.rows.length > 0 && !info.rows.some((r: any) => r.name === 'sort_order')) {
       await db.execute('ALTER TABLE squads ADD COLUMN sort_order INTEGER')
+    }
+  } catch {
+    // Table doesn't exist yet — it is created with the column below
+  }
+
+  // Tactics logged before individual instructions have no player_settings column yet
+  try {
+    const info = await db.execute('PRAGMA table_info(club_tactics)')
+    if (info.rows.length > 0 && !info.rows.some((r: any) => r.name === 'player_settings')) {
+      await db.execute('ALTER TABLE club_tactics ADD COLUMN player_settings TEXT')
     }
   } catch {
     // Table doesn't exist yet — it is created with the column below

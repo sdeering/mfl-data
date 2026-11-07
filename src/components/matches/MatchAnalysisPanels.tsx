@@ -14,7 +14,7 @@ import type { MFLPlayer } from '../../types/mflApi';
 import type { ComparisonRow, SquadComparison, Weakness } from '../../utils/squadComparison';
 import { formationLabel } from '../../utils/squadLineups';
 import { Panel } from '../ui';
-import type { TacticSettings, TacticsHistory } from '../../utils/tacticsHistory';
+import { adviceFrom, type PlayerSettings, type TacticSettings, type TacticsHistory } from '../../utils/tacticsHistory';
 import { WhatWorkedSection } from './TacticsLog';
 import { capsLabel, limeButton, panelTitle } from './MatchPrep';
 
@@ -165,26 +165,33 @@ interface SaveTarget {
   matchId: number;
   when: string;
   saved: TacticSettings | null;
-  onSave: (matchId: number, settings: TacticSettings) => Promise<void>;
+  savedPlayers: PlayerSettings | null;
+  onSave: (matchId: number, settings: TacticSettings, players: PlayerSettings) => Promise<void>;
 }
 
 const sameSettings = (a: TacticSettings | null, b: TacticSettings | null) =>
   !!a && !!b && TACTIC_SETTINGS.every(setting => a[setting.key] === b[setting.key]);
+const samePlayers = (a: PlayerSettings | null, b: PlayerSettings) => JSON.stringify(a ?? {}) === JSON.stringify(b);
 
-const MatchSettings: React.FC<{ summary?: string; tactics: TacticPick[]; target?: SaveTarget }> = ({ summary, tactics, target }) => {
+const MatchSettings: React.FC<{ summary?: string; tactics: TacticPick[]; players: PlayerSettings; target?: SaveTarget }> = ({
+  summary,
+  tactics,
+  players,
+  target,
+}) => {
   const picks = new Map(tactics.map(pick => [pick.key, pick]));
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
   // Only a full set of settings can be logged
   const settings: TacticSettings | null =
     picks.size === TACTIC_SETTINGS.length ? Object.fromEntries(TACTIC_SETTINGS.map(setting => [setting.key, picks.get(setting.key)!.step])) : null;
-  const saved = !!target && sameSettings(target.saved, settings);
+  const saved = !!target && sameSettings(target.saved, settings) && samePlayers(target.savedPlayers, players);
   const save = async () => {
     if (!target || !settings) return;
     setSaving(true);
     setSaveError('');
     try {
-      await target.onSave(target.matchId, settings);
+      await target.onSave(target.matchId, settings, players);
     } catch (error) {
       setSaveError(error instanceof Error ? error.message : 'Could not save');
     } finally {
@@ -202,7 +209,7 @@ const MatchSettings: React.FC<{ summary?: string; tactics: TacticPick[]; target?
               type="button"
               onClick={save}
               disabled={saving || saved}
-              title="Log these settings for the match, so the tactics log has them once it's played"
+              title="Log these settings and the player instructions below for the match, so the tactics log has them once it's played"
               className="h-8 px-3 rounded-lg border border-line-2 text-xs font-bold text-fg-3 cursor-pointer hover:border-[#c6f432] hover:text-[#c6f432] disabled:cursor-default disabled:hover:border-line-2 disabled:hover:text-fg-3"
             >
               {saved ? `Logged for ${target.when}` : saving ? 'Saving…' : `Log for ${target.when}`}
@@ -363,10 +370,12 @@ export const AiAnalysisPanel: React.FC<{
   history: TacticsHistory | null;
   /** The fixture against them, when we play them next, and saving settings to it when the owner is connected */
   fixture?: { matchId: number; when: string };
-  onSaveSettings?: (matchId: number, settings: TacticSettings) => Promise<void>;
+  onSaveSettings?: (matchId: number, settings: TacticSettings, players?: PlayerSettings) => Promise<void>;
   /** Our squad, for the stats of the players the analysis gives instructions to */
   playersById?: Map<number, MFLPlayer>;
-}> = ({ name, request, onUseFormation, history, fixture, onSaveSettings, playersById }) => {
+  /** Called when the server kept the analysis as the advice for the fixture */
+  onAdviceSaved?: () => void;
+}> = ({ name, request, onUseFormation, history, fixture, onSaveSettings, playersById, onAdviceSaved }) => {
   const key = keyOf(request);
   const [state, setState] = useState<AnalysisState>(() => {
     const known = analyses.get(key);
@@ -374,6 +383,8 @@ export const AiAnalysisPanel: React.FC<{
   });
   // The matchup the analysis shown was made for, which stays up when the formations change until asked again
   const [shownFor, setShownFor] = useState<MatchAnalysisRequest | null>(() => (analyses.has(key) ? request : null));
+  // The fixture the analysis shown was kept as advice for
+  const [keptFor, setKeptFor] = useState<string | null>(null);
 
   useEffect(() => {
     const known = analyses.get(key);
@@ -393,6 +404,8 @@ export const AiAnalysisPanel: React.FC<{
       analyses.set(key, result.data);
       setState({ status: 'done', analysis: result.data });
       setShownFor(request);
+      setKeptFor(result.adviceSaved && fixture ? fixture.when : null);
+      if (result.adviceSaved) onAdviceSaved?.();
     } catch (error) {
       setState({ status: 'error', error: error instanceof Error ? error.message : 'The analysis failed' });
     }
@@ -492,15 +505,26 @@ export const AiAnalysisPanel: React.FC<{
             <MatchSettings
               summary={analysis.styleSummary}
               tactics={analysis.tactics}
+              players={adviceFrom(analysis, request.aim ?? 'win').players}
               target={
-                fixture && onSaveSettings ? { ...fixture, saved: history?.planned[fixture.matchId] ?? null, onSave: onSaveSettings } : undefined
+                fixture && onSaveSettings
+                  ? {
+                      ...fixture,
+                      saved: history?.planned[fixture.matchId] ?? null,
+                      savedPlayers: history?.plannedPlayers?.[fixture.matchId] ?? null,
+                      onSave: onSaveSettings,
+                    }
+                  : undefined
               }
             />
           )}
           {analysis.players && analysis.players.length > 0 && (
             <PlayerInstructions instructions={analysis.players} tactics={analysis.tactics ?? []} playersById={playersById} />
           )}
-          <span className="text-[11px] font-medium text-muted-3">AI generated from MFL data. It can be wrong, so check it against the numbers above.</span>
+          <span className="text-[11px] font-medium text-muted-3">
+            AI generated from MFL data. It can be wrong, so check it against the numbers above.
+            {keptFor && !stale && ` Kept as the advice for ${keptFor}: log what you used after the match to compare.`}
+          </span>
         </div>
       )}
       {history && (
@@ -512,6 +536,7 @@ export const AiAnalysisPanel: React.FC<{
             opponentFormation={request.theirFormation}
             tactics={stale ? undefined : analysis?.tactics}
             notes={stale ? undefined : analysis?.historyNotes}
+            playersById={playersById}
           />
         </div>
       )}

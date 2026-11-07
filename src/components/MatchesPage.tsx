@@ -210,6 +210,9 @@ const OpponentPrep: React.FC<{
             ourFormation: selected,
             theirFormation,
             aim: outcome,
+            // So the advice is kept for the fixture when the owner asks
+            matchId: opponent.matchId,
+            walletAddress: canLog ? (tactics.walletAddress ?? undefined) : undefined,
             counters: picks.slice(0, 5).map(item => ({
               formation: item.formation,
               win: item.win,
@@ -225,6 +228,7 @@ const OpponentPrep: React.FC<{
           fixture={opponent.matchId && opponent.day ? { matchId: opponent.matchId, when: opponent.day } : undefined}
           onSaveSettings={canLog ? tactics.save : undefined}
           playersById={ourPlayersById}
+          onAdviceSaved={tactics.refresh}
         />
       )}
     </>
@@ -547,6 +551,7 @@ const MatchesPage: React.FC = () => {
             error={tactics.error}
             canEdit={canLog}
             onSave={tactics.save}
+            playersById={ourPlayersById}
           />
 
           <p className="m-0 text-[11px] font-medium text-muted-3">

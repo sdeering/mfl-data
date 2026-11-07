@@ -4,7 +4,16 @@ import { compareSquads, describeFormation, findWeaknesses, xiPlayers, type XiPla
 import { CAPTAIN_OVR, captainOptions, describeBonus } from '../utils/captain';
 import { FORMATIONS, FORMATION_NAMES, formationLabel } from '../utils/squadLineups';
 import type { ScoutMatch, ScoutReport } from './scoutService';
-import { recordOf, settingEffects, similarMatches, type TacticsHistory } from '../utils/tacticsHistory';
+import {
+  adviceAgreement,
+  adviceRecord,
+  playerSettingEffects,
+  recordOf,
+  settingEffects,
+  similarMatches,
+  type PlayerSettings,
+  type TacticsHistory,
+} from '../utils/tacticsHistory';
 
 /*
  * The AI match analysis on the Matches page: what the page asks for, what comes back, and the prompt the server
@@ -31,6 +40,9 @@ export interface MatchAnalysisRequest {
   counters?: RankedCounter[];
   /** What we want from the match, 'win' when missing */
   aim?: Outcome;
+  /** The fixture it's for, and the connected wallet: when that owns our club, the advice is kept for the match */
+  matchId?: number;
+  walletAddress?: string;
 }
 
 /** What each aim asks of the analysis */
@@ -359,6 +371,7 @@ export const MFL_TACTICS_GUIDE = [
   `Besides the formation and XI, the manager sets a playing style: ${TACTIC_SETTINGS.length} settings, each on ${TACTIC_STEPS} steps from 1 (the low end) to ${TACTIC_STEPS} (the high end), listed under playingStyleSettings with what each end means. Step 3 is the middle and MFL's default. Flank Preference low favours attacking down our left, high our right.`,
   'Pick a step for every setting to suit this matchup: flank preference, width, crossing and dribbling to aim at their weak flank and use our best wide players; directness and team depth to use or deny pace in behind; pressing, aggressiveness and compactness against their midfield and creators; shooting by our shooters and their keeper; clearances by how good our defenders are on the ball.',
   'ourTacticsLog, when present, holds the settings we actually used in our own logged matches (league, cup and friendly) with the result and xG, how we did with each setting low (steps 1-2), mid (3) and high (4-5), and the logged matches against this opponent and this formation. Weigh it by sample size: a few friendlies are weak evidence, and say so. Let it shape the settings you pick and explain the link in historyNotes.',
+  "ourTacticsLog also holds the individual instructions we used (playerInstructions, by player name) and our record with each one tried (playerInstructionResults, by step, against the logged matches without it), and, where you advised us before a match, that advice and how closely we followed it (adviceFollowed: team settings set as advised) with our record when we followed it and when we didn't (followingAdvice). Learn from it: keep what worked, change advice that we followed and lost with, and test instructions we haven't tried enough, saying so in historyNotes.",
   `The captain plays at +${CAPTAIN_OVR} OVR, and the whole XI gets a bonus by the captain's position: goalkeeper +2 DEF; defender +2 DEF, +1 PHY; midfielder +2 PAS, +1 DRI; forward +2 SHO, +1 PAC. us.captainOptions lists our best choices with how much each lifts the XI's average rating; them.likelyCaptain is theirs. Pick ours weighing that lift against what the matchup needs, e.g. a defender's DEF bonus against a dangerous attack, or a forward's SHO bonus against a weak keeper.`,
   `Each player can also take individual instructions (playerSettings) that override the team's step for them alone, or follow it ("TEAM"). Passing Risk and Position Freedom exist only per player and start at step 3. In players, pick 2 to ${MAX_PLAYER_INSTRUCTIONS} key players from us.startingXi (those in the key matchups, our playmaker and our best attacker, a defender facing their danger man) and give each only the settings that should differ from your team step, e.g. a winger who beats his full-back on pace and dribbling dribbles more, a creative midfielder with high passing takes more passing risk, a slow centre-back clears more and presses less.`,
   'Only recommend formations, who plays where, swaps from the listed squads, the captain, the listed playing style settings and individual instructions. Do not invent other instructions.',
@@ -378,9 +391,12 @@ export interface AnalysisInput {
 
 /** The prompt for one analysis: the guide, both squads and XIs, their form, the planner's numbers and our weak-spot finds */
 /** Our logged matches, for the prompt: each with its settings, and the record by setting band */
-function describeHistory(history: TacticsHistory | null | undefined, theirClubId: number, theirFormation: string) {
+function describeHistory(history: TacticsHistory | null | undefined, theirClubId: number, theirFormation: string, ourById: Map<number, MFLPlayer>) {
   const logged = (history?.matches ?? []).filter(match => match.settings).slice(0, 30);
   if (!logged.length) return null;
+  const nameOf = (id: number | string) => ourById.get(Number(id))?.metadata.lastName ?? `Player ${id} (left the squad)`;
+  const named = (players: PlayerSettings | null | undefined) =>
+    Object.entries(players ?? {}).map(([id, settings]) => ({ player: nameOf(id), settings }));
   const describe = (match: (typeof logged)[number]) => ({
     date: new Date(match.startDate).toISOString().slice(0, 10),
     type: match.type,
@@ -391,10 +407,29 @@ function describeHistory(history: TacticsHistory | null | undefined, theirClubId
     xGFor: match.xGFor,
     xGAgainst: match.xGAgainst,
     settings: match.settings,
+    playerInstructions: named(match.players),
+    ...(match.advice
+      ? {
+          advised: {
+            formation: formationLabel(match.advice.formation),
+            aim: match.advice.aim,
+            settings: match.advice.settings,
+            playerInstructions: named(match.advice.players),
+            ...(match.advice.settings && match.settings ? { adviceFollowed: adviceAgreement(match.settings, match.advice.settings) } : {}),
+          },
+        }
+      : {}),
   });
   const similar = similarMatches(logged, theirClubId, theirFormation);
   return {
     overall: recordOf(logged),
+    followingAdvice: adviceRecord(logged),
+    playerInstructionResults: playerSettingEffects(logged).map(effect => ({
+      player: nameOf(effect.playerId),
+      setting: effect.key,
+      bySteps: effect.bySteps,
+      withoutIt: effect.team,
+    })),
     bySetting: settingEffects(logged).map(effect => ({ setting: effect.key, ...effect.bands, bestBand: effect.best })),
     againstThisOpponent: similar.sameOpponent.map(describe),
     againstThisFormation: similar.sameFormation.map(describe),
@@ -449,7 +484,7 @@ export function buildAnalysisPrompt({ ours, theirs, ourFormation, theirFormation
       captainOptions: captainOptionsOf(ourFit, ourById),
       bestOfTheRest: describeBench(ours.players, ourXi),
       recentResults: describeMatches(ours.matches.slice(0, 10)),
-      ourTacticsLog: describeHistory(history, theirs.club.id, theirFormation),
+      ourTacticsLog: describeHistory(history, theirs.club.id, theirFormation, ourById),
     },
     them: {
       club: theirs.club.name,
