@@ -68,6 +68,42 @@ export const TACTIC_SETTINGS: TacticSetting[] = [
   { key: 'clearances', label: 'Clearances', group: 'out', low: 'Play out of defence', high: 'Clear the ball often' },
 ];
 
+const teamSetting = (key: string) => TACTIC_SETTINGS.find(setting => setting.key === key)!;
+
+/**
+ * MFL's Individual Instructions: per player, each overrides the team's step (or follows it, "TEAM"). Passing Risk
+ * and Position Freedom exist only per player.
+ */
+export const PLAYER_SETTINGS: TacticSetting[] = [
+  teamSetting('directness'),
+  teamSetting('shooting'),
+  teamSetting('crossing'),
+  teamSetting('dribbling'),
+  teamSetting('attackTendency'),
+  { key: 'passingRisk', label: 'Passing Risk', group: 'in', low: 'Conservative', high: 'Risky' },
+  { key: 'positionFreedom', label: 'Position Freedom', group: 'in', low: 'Low', high: 'High' },
+  teamSetting('triggerPress'),
+  teamSetting('aggressiveness'),
+  teamSetting('clearances'),
+];
+
+/** Player settings with no team step to follow, which start in the middle */
+export const PLAYER_ONLY_SETTINGS = new Set(['passingRisk', 'positionFreedom']);
+
+/** Most key players the analysis gives instructions for */
+export const MAX_PLAYER_INSTRUCTIONS = 4;
+
+export interface PlayerInstruction {
+  playerId: number;
+  /** Their position in our XI, e.g. LM */
+  position: string;
+  name: string;
+  /** Their role in the plan */
+  reason: string;
+  /** Only the settings to change from the team's step; the rest stay on TEAM */
+  settings: TacticPick[];
+}
+
 export interface TacticPick {
   key: string;
   /** 1 to TACTIC_STEPS */
@@ -89,6 +125,8 @@ export interface MatchAnalysis {
   tactics?: TacticPick[];
   /** What our logged matches say, empty when none are logged */
   historyNotes?: { title: string; detail: string }[];
+  /** Individual instructions for our key players; missing from analyses made before them */
+  players?: PlayerInstruction[];
 }
 
 /** Gemini's response schema for a MatchAnalysis */
@@ -160,13 +198,40 @@ export const ANALYSIS_SCHEMA = {
         required: ['key', 'step', 'reason'],
       },
     },
+    players: {
+      type: 'ARRAY',
+      description: `Individual instructions for 2 to ${MAX_PLAYER_INSTRUCTIONS} of our key players in the XI, most important first`,
+      items: {
+        type: 'OBJECT',
+        properties: {
+          playerId: { type: 'INTEGER', description: 'The id of our player, from us.startingXi' },
+          position: { type: 'STRING', description: 'Their position in our XI, e.g. "LM"' },
+          name: { type: 'STRING', description: 'Their name as in us.startingXi' },
+          reason: { type: 'STRING', description: 'One or two sentences: their job in this match and who they face, citing attributes' },
+          settings: {
+            type: 'ARRAY',
+            description: "Only the settings to set differently from the team's step for this player, 1 to 5 of them; the rest stay on TEAM",
+            items: {
+              type: 'OBJECT',
+              properties: {
+                key: { type: 'STRING', enum: PLAYER_SETTINGS.map(setting => setting.key) },
+                step: { type: 'INTEGER', description: `1 is the low end of the setting, ${TACTIC_STEPS} the high end` },
+                reason: { type: 'STRING', description: 'One short sentence tied to the data' },
+              },
+              required: ['key', 'step', 'reason'],
+            },
+          },
+        },
+        required: ['playerId', 'position', 'name', 'reason', 'settings'],
+      },
+    },
     historyNotes: {
       type: 'ARRAY',
       description: 'What our logged matches (ourTacticsLog) say about the settings to use here, citing results and xG; empty if none are logged',
       items: { type: 'OBJECT', properties: { title: { type: 'STRING' }, detail: { type: 'STRING' } }, required: ['title', 'detail'] },
     },
   },
-  required: ['summary', 'formation', 'captain', 'attack', 'defend', 'matchups', 'lineup', 'styleSummary', 'tactics', 'historyNotes'],
+  required: ['summary', 'formation', 'captain', 'attack', 'defend', 'matchups', 'lineup', 'styleSummary', 'tactics', 'players', 'historyNotes'],
 } as const;
 
 /** A player's line in a match report from MFL's /matches/{id}/report */
@@ -248,8 +313,9 @@ export function summariseReports(reports: SideReport[], playersById: Map<number,
   };
 }
 
-const describeXi = (xi: XiPlayer[]) =>
+const describeXi = (xi: XiPlayer[], withIds = false) =>
   xi.map(player => ({
+    ...(withIds ? { id: player.id } : {}),
     position: player.position,
     name: player.name,
     ratingHere: player.rating,
@@ -294,7 +360,8 @@ export const MFL_TACTICS_GUIDE = [
   'Pick a step for every setting to suit this matchup: flank preference, width, crossing and dribbling to aim at their weak flank and use our best wide players; directness and team depth to use or deny pace in behind; pressing, aggressiveness and compactness against their midfield and creators; shooting by our shooters and their keeper; clearances by how good our defenders are on the ball.',
   'ourTacticsLog, when present, holds the settings we actually used in our own logged matches (league, cup and friendly) with the result and xG, how we did with each setting low (steps 1-2), mid (3) and high (4-5), and the logged matches against this opponent and this formation. Weigh it by sample size: a few friendlies are weak evidence, and say so. Let it shape the settings you pick and explain the link in historyNotes.',
   `The captain plays at +${CAPTAIN_OVR} OVR, and the whole XI gets a bonus by the captain's position: goalkeeper +2 DEF; defender +2 DEF, +1 PHY; midfielder +2 PAS, +1 DRI; forward +2 SHO, +1 PAC. us.captainOptions lists our best choices with how much each lifts the XI's average rating; them.likelyCaptain is theirs. Pick ours weighing that lift against what the matchup needs, e.g. a defender's DEF bonus against a dangerous attack, or a forward's SHO bonus against a weak keeper.`,
-  'Only recommend formations, who plays where, swaps from the listed squads, the captain and the listed playing style settings. Do not invent other instructions.',
+  `Each player can also take individual instructions (playerSettings) that override the team's step for them alone, or follow it ("TEAM"). Passing Risk and Position Freedom exist only per player and start at step 3. In players, pick 2 to ${MAX_PLAYER_INSTRUCTIONS} key players from us.startingXi (those in the key matchups, our playmaker and our best attacker, a defender facing their danger man) and give each only the settings that should differ from your team step, e.g. a winger who beats his full-back on pace and dribbling dribbles more, a creative midfielder with high passing takes more passing risk, a slow centre-back clears more and presses less.`,
+  'Only recommend formations, who plays where, swaps from the listed squads, the captain, the listed playing style settings and individual instructions. Do not invent other instructions.',
 ];
 
 export interface AnalysisInput {
@@ -365,12 +432,20 @@ export function buildAnalysisPrompt({ ours, theirs, ourFormation, theirFormation
       lowEnd: low,
       highEnd: high,
     })),
+    playerSettings: PLAYER_SETTINGS.map(({ key, label, group, low, high }) => ({
+      key,
+      label,
+      phase: group === 'in' ? 'in possession' : 'out of possession',
+      lowEnd: low,
+      highEnd: high,
+      ...(PLAYER_ONLY_SETTINGS.has(key) ? { playerOnly: true } : {}),
+    })),
     formations: Object.keys(FORMATIONS).map(formation => ({ key: formation, positions: describeFormation(formation) })),
     us: {
       club: ours.club.name,
       aim,
       plannedFormation: formationLabel(ourFormation),
-      startingXi: describeXi(ourXi),
+      startingXi: describeXi(ourXi, true),
       captainOptions: captainOptionsOf(ourFit, ourById),
       bestOfTheRest: describeBench(ours.players, ourXi),
       recentResults: describeMatches(ours.matches.slice(0, 10)),
@@ -402,14 +477,30 @@ export function buildAnalysisPrompt({ ours, theirs, ourFormation, theirFormation
 }
 
 /** The model's settings cut to the known ones, each once, its step a whole number from 1 to TACTIC_STEPS, in MFL's order */
-export function cleanTactics(value: unknown): TacticPick[] {
+export function cleanTactics(value: unknown, settings: TacticSetting[] = TACTIC_SETTINGS): TacticPick[] {
   if (!Array.isArray(value)) return [];
   const byKey = new Map<string, TacticPick>();
   for (const item of value) {
-    if (!item || typeof item.key !== 'string' || byKey.has(item.key) || !TACTIC_SETTINGS.some(setting => setting.key === item.key)) continue;
+    if (!item || typeof item.key !== 'string' || byKey.has(item.key) || !settings.some(setting => setting.key === item.key)) continue;
     const step = Math.round(Number(item.step));
     if (!Number.isFinite(step)) continue;
     byKey.set(item.key, { key: item.key, step: Math.min(TACTIC_STEPS, Math.max(1, step)), reason: String(item.reason ?? '') });
   }
-  return TACTIC_SETTINGS.flatMap(setting => byKey.get(setting.key) ?? []);
+  return settings.flatMap(setting => byKey.get(setting.key) ?? []);
+}
+
+/** The model's player instructions cut to players in `xiIds`, each once, with known settings only */
+export function cleanPlayerInstructions(value: unknown, xiIds: Set<number>): PlayerInstruction[] {
+  if (!Array.isArray(value)) return [];
+  const seen = new Set<number>();
+  const instructions: PlayerInstruction[] = [];
+  for (const item of value) {
+    const playerId = Number(item?.playerId);
+    if (!xiIds.has(playerId) || seen.has(playerId)) continue;
+    const settings = cleanTactics(item.settings, PLAYER_SETTINGS);
+    if (!settings.length) continue;
+    seen.add(playerId);
+    instructions.push({ playerId, position: String(item.position ?? ''), name: String(item.name ?? ''), reason: String(item.reason ?? ''), settings });
+  }
+  return instructions.slice(0, MAX_PLAYER_INSTRUCTIONS);
 }

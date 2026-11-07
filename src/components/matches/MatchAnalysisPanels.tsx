@@ -1,5 +1,16 @@
 import React, { useEffect, useState } from 'react';
-import { TACTIC_SETTINGS, TACTIC_STEPS, type MatchAnalysis, type MatchAnalysisRequest, type TacticPick, type TacticSetting } from '../../services/matchAnalysis';
+import {
+  PLAYER_ONLY_SETTINGS,
+  PLAYER_SETTINGS,
+  TACTIC_SETTINGS,
+  TACTIC_STEPS,
+  type MatchAnalysis,
+  type MatchAnalysisRequest,
+  type PlayerInstruction,
+  type TacticPick,
+  type TacticSetting,
+} from '../../services/matchAnalysis';
+import type { MFLPlayer } from '../../types/mflApi';
 import type { ComparisonRow, SquadComparison, Weakness } from '../../utils/squadComparison';
 import { formationLabel } from '../../utils/squadLineups';
 import { Panel } from '../ui';
@@ -221,6 +232,125 @@ const MatchSettings: React.FC<{ summary?: string; tactics: TacticPick[]; target?
   );
 };
 
+const ATTRIBUTES = [
+  ['PAC', 'pace'],
+  ['SHO', 'shooting'],
+  ['PAS', 'passing'],
+  ['DRI', 'dribbling'],
+  ['DEF', 'defense'],
+  ['PHY', 'physical'],
+] as const;
+
+/** A player setting as MFL's Individual Instructions draw it: following the team's step (TEAM), or set for them */
+const PlayerSettingRow: React.FC<{ setting: TacticSetting; own?: TacticPick; teamStep?: number; colour: string }> = ({ setting, own, teamStep, colour }) => {
+  const playerOnly = PLAYER_ONLY_SETTINGS.has(setting.key);
+  // A setting left alone follows the team, or for a player-only one sits in the middle
+  const step = own?.step ?? teamStep ?? Math.ceil(TACTIC_STEPS / 2);
+  const describe = own
+    ? `${setting.label}: set to ${step} of ${TACTIC_STEPS} (${step <= 2 ? setting.low : step >= 4 ? setting.high : 'middle'})`
+    : playerOnly
+      ? `${setting.label}: leave on ${step}`
+      : `${setting.label}: leave on TEAM${teamStep ? ` (${teamStep} of ${TACTIC_STEPS})` : ''}`;
+  return (
+    <div className="flex flex-col gap-1" title={describe}>
+      <span className="grid grid-cols-[minmax(0,1fr)_44px_92px] items-center gap-2">
+        <span className={`text-xs truncate ${own ? 'font-bold text-fg' : 'font-semibold text-muted'}`}>{setting.label}</span>
+        {own ? (
+          <span className="h-5 rounded-md grid place-items-center text-[10px] font-extrabold" style={{ background: colour, color: '#0b1406' }}>
+            SET {step}
+          </span>
+        ) : playerOnly ? (
+          // No TEAM option in MFL for these: they stay on the middle step
+          <span className="text-[10px] font-bold text-center text-muted-3">–</span>
+        ) : (
+          <span className="h-5 rounded-md grid place-items-center border border-[#c6f432] text-[10px] font-extrabold text-accent-ink">TEAM</span>
+        )}
+        <span className="flex gap-[3px]" aria-label={describe}>
+          {Array.from({ length: TACTIC_STEPS }, (_, index) => (
+            <span
+              key={index}
+              className="flex-1 h-1.5 rounded-full"
+              style={{ background: index < step ? colour : 'var(--line)', opacity: index < step && !own ? 0.35 : 1 }}
+            />
+          ))}
+        </span>
+      </span>
+      {own?.reason && <span className="text-[11px] font-medium text-muted leading-snug">{own.reason}</span>}
+    </div>
+  );
+};
+
+/** One key player's individual instructions, laid out like MFL's screen: their stats, then each setting */
+const PlayerInstructionCard: React.FC<{ instruction: PlayerInstruction; player?: MFLPlayer; teamSteps: Map<string, number> }> = ({
+  instruction,
+  player,
+  teamSteps,
+}) => {
+  const own = new Map(instruction.settings.map(pick => [pick.key, pick]));
+  const m = player?.metadata;
+  return (
+    <div className="flex flex-col gap-3 px-4 py-3.5 rounded-2xl bg-inset border border-line">
+      <div className="flex items-start gap-3">
+        <span className="h-6 px-2 rounded-md grid place-items-center bg-chip text-[11px] font-extrabold text-fg-3">{instruction.position}</span>
+        <span className="flex-1 min-w-0 flex flex-col">
+          <span className="text-[15px] font-bold truncate">{m ? `${m.firstName.charAt(0)}. ${m.lastName}` : instruction.name}</span>
+          {m && (
+            <span className="text-[11px] font-semibold text-muted-3 truncate">
+              {m.positions.join(', ')} · {m.age}y/o
+            </span>
+          )}
+        </span>
+        {m && <span className="font-display text-[28px] leading-none font-extrabold">{m.overall}</span>}
+      </div>
+      {m && (
+        <div className="grid grid-cols-6 gap-1 px-2 py-2 rounded-xl bg-panel border border-line text-center">
+          {ATTRIBUTES.map(([label, attribute]) => (
+            <span key={label} className="flex flex-col">
+              <span className="text-[10px] font-bold text-muted-3">{label}</span>
+              <span className="text-sm font-extrabold">{m[attribute]}</span>
+            </span>
+          ))}
+        </div>
+      )}
+      <span className="text-xs font-medium text-muted leading-snug">{instruction.reason}</span>
+      {SETTING_GROUPS.map(({ group, title, colour }) => (
+        <div key={group} className="flex flex-col gap-2">
+          <span className="text-[10px] font-extrabold tracking-[0.08em] uppercase" style={{ color: colour }}>
+            {title}
+          </span>
+          {PLAYER_SETTINGS.filter(setting => setting.group === group).map(setting => (
+            <PlayerSettingRow key={setting.key} setting={setting} own={own.get(setting.key)} teamStep={teamSteps.get(setting.key)} colour={colour} />
+          ))}
+        </div>
+      ))}
+    </div>
+  );
+};
+
+/** Individual instructions for the analysis's key players, side by side */
+const PlayerInstructions: React.FC<{ instructions: PlayerInstruction[]; tactics: TacticPick[]; playersById?: Map<number, MFLPlayer> }> = ({
+  instructions,
+  tactics,
+  playersById,
+}) => {
+  const teamSteps = new Map(tactics.map(pick => [pick.key, pick.step]));
+  return (
+    <div className="flex flex-col gap-2.5">
+      <span className="flex flex-col gap-0.5">
+        <span className={capsLabel}>Player instructions</span>
+        <span className="text-xs font-medium text-muted">
+          Set in MFL under each player&apos;s Individual Instructions. TEAM follows the match settings above; SET overrides them for that player.
+        </span>
+      </span>
+      <div className="grid gap-3 grid-cols-[repeat(auto-fill,minmax(min(100%,290px),1fr))]">
+        {instructions.map(instruction => (
+          <PlayerInstructionCard key={instruction.playerId} instruction={instruction} player={playersById?.get(instruction.playerId)} teamSteps={teamSteps} />
+        ))}
+      </div>
+    </div>
+  );
+};
+
 /**
  * Gemini's read of the matchup, asked for at a click: both squads, their form and their latest match stats go to
  * /api/match-analysis. It suggests a formation, which a click plays.
@@ -234,7 +364,9 @@ export const AiAnalysisPanel: React.FC<{
   /** The fixture against them, when we play them next, and saving settings to it when the owner is connected */
   fixture?: { matchId: number; when: string };
   onSaveSettings?: (matchId: number, settings: TacticSettings) => Promise<void>;
-}> = ({ name, request, onUseFormation, history, fixture, onSaveSettings }) => {
+  /** Our squad, for the stats of the players the analysis gives instructions to */
+  playersById?: Map<number, MFLPlayer>;
+}> = ({ name, request, onUseFormation, history, fixture, onSaveSettings, playersById }) => {
   const key = keyOf(request);
   const [state, setState] = useState<AnalysisState>(() => {
     const known = analyses.get(key);
@@ -364,6 +496,9 @@ export const AiAnalysisPanel: React.FC<{
                 fixture && onSaveSettings ? { ...fixture, saved: history?.planned[fixture.matchId] ?? null, onSave: onSaveSettings } : undefined
               }
             />
+          )}
+          {analysis.players && analysis.players.length > 0 && (
+            <PlayerInstructions instructions={analysis.players} tactics={analysis.tactics ?? []} playersById={playersById} />
           )}
           <span className="text-[11px] font-medium text-muted-3">AI generated from MFL data. It can be wrong, so check it against the numbers above.</span>
         </div>

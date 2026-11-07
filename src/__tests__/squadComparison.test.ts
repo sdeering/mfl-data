@@ -1,7 +1,7 @@
 import type { MFLPlayer } from '../types/mflApi'
 import { squadFits } from '../utils/formationPlanner'
 import { compareSquads, findWeaknesses, xiPlayers, type XiPlayer } from '../utils/squadComparison'
-import { cleanTactics, summariseReports, TACTIC_SETTINGS, type ReportPlayerStats } from '../services/matchAnalysis'
+import { cleanPlayerInstructions, cleanTactics, summariseReports, TACTIC_SETTINGS, type ReportPlayerStats } from '../services/matchAnalysis'
 
 // Every outfield attribute the same unless given, so a player rates their overall at their primary position
 const player = (id: number, positions: string[], overall: number, attributes: Partial<Record<string, number>> = {}): MFLPlayer => {
@@ -111,6 +111,28 @@ describe('summariseReports', () => {
     )
     expect(summary.players[0]).toMatchObject({ name: 'Player P7', games: 2, avgMatchRating: 6, dribbledPast: 5, passAccuracy: 80 })
     expect(summary.matches[0]).toEqual({ matchId: 1, shotsFor: 2, xGFor: 0.4, shotsAgainst: 5, xGAgainst: 1.2 })
+  })
+})
+
+describe('cleanPlayerInstructions', () => {
+  it('keeps XI players once each, with player settings only, up to four', () => {
+    const instructions = cleanPlayerInstructions(
+      [
+        { playerId: 7, position: 'LM', name: 'Pavlović', reason: 'Beats his full-back', settings: [{ key: 'dribbling', step: 5, reason: 'x' }, { key: 'passingRisk', step: 4.4, reason: 'y' }, { key: 'teamDepth', step: 2, reason: 'team only' }] },
+        { playerId: 7, position: 'LM', name: 'Pavlović', reason: 'Again', settings: [{ key: 'shooting', step: 2, reason: '' }] },
+        { playerId: 99, position: 'ST', name: 'Not ours', reason: '', settings: [{ key: 'shooting', step: 5, reason: '' }] },
+        { playerId: 8, position: 'CB', name: 'No settings', reason: '', settings: [] },
+        ...[1, 2, 3, 4].map(id => ({ playerId: id, position: 'CM', name: `P${id}`, reason: '', settings: [{ key: 'clearances', step: 9, reason: '' }] })),
+      ],
+      new Set([1, 2, 3, 4, 7, 8]),
+    )
+    expect(instructions.map(item => item.playerId)).toEqual([7, 1, 2, 3])
+    expect(instructions[0].settings).toEqual([
+      { key: 'dribbling', step: 5, reason: 'x' },
+      { key: 'passingRisk', step: 4, reason: 'y' },
+    ])
+    expect(instructions[1].settings[0].step).toBe(5)
+    expect(cleanPlayerInstructions(null, new Set([1]))).toEqual([])
   })
 })
 

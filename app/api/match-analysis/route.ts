@@ -7,6 +7,7 @@ import { buildTacticsHistory, loadTacticsEntries } from '@/src/services/tacticsL
 import {
   ANALYSIS_SCHEMA,
   buildAnalysisPrompt,
+  cleanPlayerInstructions,
   cleanTactics,
   type MatchAnalysis,
   type MatchAnalysisRequest,
@@ -16,7 +17,7 @@ import {
 } from '@/src/services/matchAnalysis';
 import { describeWait, takeRateLimits, visitorKey, type RateLimit } from '@/src/lib/rateLimit';
 import { FORMATIONS } from '@/src/utils/squadLineups';
-import { isOutcome } from '@/src/utils/formationPlanner';
+import { isOutcome, squadFits } from '@/src/utils/formationPlanner';
 
 export const maxDuration = 90;
 
@@ -103,6 +104,8 @@ async function askGemini(prompt: string): Promise<MatchAnalysis> {
     styleSummary: typeof analysis.styleSummary === 'string' ? analysis.styleSummary : '',
     tactics: cleanTactics(analysis.tactics),
     historyNotes: Array.isArray(analysis.historyNotes) ? analysis.historyNotes.filter(note => note?.title && note?.detail) : [],
+    // Checked against our XI once it's known
+    players: Array.isArray(analysis.players) ? analysis.players : [],
   };
 }
 
@@ -124,7 +127,7 @@ export async function POST(request: NextRequest) {
   // Logging a match makes a new analysis, so it reads the log as it is
   const entries = await loadTacticsEntries(ourClubId);
   const logVersion = entries.length ? `${entries.length}-${entries.map(entry => entry.updatedAt).sort().at(-1)}` : '0';
-  const cacheKey = `v7:${ourClubId}:${theirClubId}:${ourFormation}:${theirFormation}:${aim}:${logVersion}`;
+  const cacheKey = `v8:${ourClubId}:${theirClubId}:${ourFormation}:${theirFormation}:${aim}:${logVersion}`;
   const cached = cache.get(cacheKey);
   if (cached && Date.now() - cached.at < CACHE_MS) return NextResponse.json({ success: true, data: cached.analysis, cached: true });
 
@@ -148,6 +151,9 @@ export async function POST(request: NextRequest) {
 
     const prompt = buildAnalysisPrompt({ ours, theirs, ourFormation, theirFormation, counters: readCounters(body.counters), aim, theirReports: reports, history });
     const analysis = await askGemini(prompt);
+    // Only players in the XI we're planning, as the page shows their stats
+    const ourXi = squadFits(ours.players).get(ourFormation);
+    analysis.players = cleanPlayerInstructions(analysis.players, new Set(ourXi?.slots.flatMap(slot => (slot.playerId === null ? [] : [slot.playerId])) ?? []));
     cache.set(cacheKey, { analysis, at: Date.now() });
     if (cache.size > 300) cache.delete(cache.keys().next().value!);
     return NextResponse.json({ success: true, data: analysis });

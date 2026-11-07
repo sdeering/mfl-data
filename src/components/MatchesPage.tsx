@@ -224,6 +224,7 @@ const OpponentPrep: React.FC<{
           history={tactics.history}
           fixture={opponent.matchId && opponent.day ? { matchId: opponent.matchId, when: opponent.day } : undefined}
           onSaveSettings={canLog ? tactics.save : undefined}
+          playersById={ourPlayersById}
         />
       )}
     </>
