@@ -45,6 +45,16 @@ describe('captainOptions', () => {
     expect(new Set(midfield.map(option => option.rating.toFixed(6))).size).toBe(1)
   })
 
+  it('caps boosted attributes at 99, so a player at 98 or 99 is never rated 0', () => {
+    // Centre-backs at 98: a defender's +2 DEF would take them to 100
+    const elite = xi442.map((p, index) => (FORMATIONS['4-4-2'][index][0] === 'CB' ? player(p.id, ['CB'], 98) : p))
+    const eliteById = new Map(elite.map(p => [p.id, p]))
+    const options = captainOptions('4-4-2', ids, eliteById)
+    for (const option of options) expect(option.gain).toBeGreaterThan(0)
+    const fit = squadFits(elite).get('4-4-2')!
+    expect(fit.rating).toBeGreaterThanOrEqual(fit.ratingWithoutCaptain)
+  })
+
   it('leaves out empty positions', () => {
     expect(captainOptions('4-4-2', [...ids.slice(0, 10), null], byId)).toHaveLength(10)
   })

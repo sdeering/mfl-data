@@ -26,10 +26,15 @@ export const describeBonus = (line: Line) =>
     .map(([attribute, value]) => `+${value} ${attribute.slice(0, 3).toUpperCase()}`)
     .join(', ');
 
+/** Attributes top out at 99: the position calculator rates a player 0 past it */
+const MAX_ATTRIBUTE = 99;
+
 /** The player with the line's bonus added to their attributes */
 function boosted(player: MFLPlayer, line: Line): MFLPlayer {
   const metadata = { ...player.metadata };
-  for (const [attribute, value] of Object.entries(CAPTAIN_BONUS[line]) as [BoostedAttribute, number][]) metadata[attribute] += value;
+  for (const [attribute, value] of Object.entries(CAPTAIN_BONUS[line]) as [BoostedAttribute, number][]) {
+    metadata[attribute] = Math.min(MAX_ATTRIBUTE, metadata[attribute] + value);
+  }
   return { ...player, metadata };
 }
 
