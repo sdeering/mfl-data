@@ -416,12 +416,24 @@ export function rankFormations(
 }
 
 /**
- * Upcoming fixtures split into the next match day's (usually one, two when a league and a cup match fall on the
- * same day) and the ones after it. Days are the viewer's own calendar days. Fixtures come soonest first.
+ * Upcoming fixtures split into those to show first and the ones after them, up to `max` in all. First come the
+ * next match day's (usually one, two when a league and a cup match fall on the same day) and the next match in
+ * each other competition, so a cup tie a few days off isn't hidden behind the league games before it. Days are
+ * the viewer's own calendar days. Fixtures come soonest first, and so do both lists.
  */
-export function splitByMatchDay<T extends { startDate: number }>(fixtures: T[]): { next: T[]; later: T[] } {
+export function splitByMatchDay<T extends { startDate: number; competition?: string }>(
+  fixtures: T[],
+  max = Infinity,
+): { next: T[]; later: T[] } {
   if (fixtures.length === 0) return { next: [], later: [] };
   const day = (fixture: T) => new Date(fixture.startDate).toDateString();
   const nextDay = day(fixtures[0]);
-  return { next: fixtures.filter(fixture => day(fixture) === nextDay), later: fixtures.filter(fixture => day(fixture) !== nextDay) };
+  const competitions = new Set<string | undefined>();
+  const next = fixtures.filter(fixture => {
+    const firstOfCompetition = !competitions.has(fixture.competition);
+    competitions.add(fixture.competition);
+    return day(fixture) === nextDay || firstOfCompetition;
+  });
+  const later = fixtures.filter(fixture => !next.includes(fixture)).slice(0, Math.max(0, max - next.length));
+  return { next, later };
 }

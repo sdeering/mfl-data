@@ -274,7 +274,7 @@ const MatchesPage: React.FC = () => {
 
   // The clubs we play next in competitions, soonest first
   const fixtures = useMemo(() => {
-    const next: (Opponent & { startDate: number })[] = [];
+    const next: (Opponent & { startDate: number; competition: string })[] = [];
     // Leave out a match once it kicks off, even if a cached list still has it as planned, so the next one shows
     const now = Date.now();
     const planned = upcomingMatches.filter(
@@ -293,16 +293,17 @@ const MatchesPage: React.FC = () => {
         matchId: match.id,
         day,
         startDate: match.startDate,
+        competition: match.competition?.type ?? match.type,
       });
-      if (next.length === MAX_UPCOMING) break;
     }
     return next;
   }, [upcomingMatches, clubId]);
 
-  // The next match day's opponents (usually one, two on a league and cup day), more at a click, then those scouted
-  const { next, later } = splitByMatchDay(fixtures);
+  // The next match day's opponents and the next in each other competition (a league and a cup), more at a click,
+  // then those scouted
+  const { next, later } = splitByMatchDay(fixtures, MAX_UPCOMING);
   const opponents: Opponent[] = [
-    ...(showLater ? fixtures : next),
+    ...(showLater ? fixtures.filter(fixture => next.includes(fixture) || later.includes(fixture)) : next),
     ...scouted.filter(id => !fixtures.some(fixture => fixture.clubId === id)).map(id => ({ clubId: id, name: `Club ${id}`, when: `Scouted · Club ID ${id}`, scouted: true })),
   ];
   const selected = opponents.find(opponent => opponent.clubId === selectedId) ?? opponents[0];
@@ -420,7 +421,7 @@ const MatchesPage: React.FC = () => {
               <span className={capsLabel}>Next opponents</span>
               {later.length > 0 && (
                 <button type="button" onClick={() => setShowLater(!showLater)} className={`text-xs font-semibold cursor-pointer ${linkClass}`}>
-                  {showLater ? 'Next match day only' : 'Show more'}
+                  {showLater ? 'Show fewer' : 'Show more'}
                 </button>
               )}
             </div>

@@ -228,6 +228,18 @@ describe('splitByMatchDay', () => {
     expect(splitByMatchDay([league, cup, nextLeague])).toEqual({ next: [league, cup], later: [nextLeague] })
   })
 
+  it('also shows the next match in every other competition, and keeps later ones up to the limit', () => {
+    const fixture = (day: number, competition: string) => ({ startDate: new Date(2026, 10, day, 18).getTime(), competition })
+    const today = fixture(7, 'LEAGUE')
+    const tomorrow = fixture(8, 'LEAGUE')
+    const cup = fixture(10, 'CUP')
+    const league = fixture(10, 'LEAGUE')
+    const nextCup = fixture(11, 'CUP')
+    const fixtures = [today, tomorrow, cup, league, nextCup]
+    expect(splitByMatchDay(fixtures, 4)).toEqual({ next: [today, cup], later: [tomorrow, league] })
+    expect(splitByMatchDay(fixtures).later).toEqual([tomorrow, league, nextCup])
+  })
+
   it('has nothing for no fixtures', () => {
     expect(splitByMatchDay([])).toEqual({ next: [], later: [] })
   })
