@@ -258,7 +258,7 @@ CREATE TABLE IF NOT EXISTS formation_results (
   created_at TEXT DEFAULT (datetime('now'))
 );
 
--- The playing style settings a club's manager used, or plans to use, in a match: JSON of setting key to step (1-6)
+-- The playing style settings a club's manager used, or plans to use, in a match: JSON of setting key to step (1-5)
 CREATE TABLE IF NOT EXISTS club_tactics (
   club_id INTEGER NOT NULL,
   match_id INTEGER NOT NULL,

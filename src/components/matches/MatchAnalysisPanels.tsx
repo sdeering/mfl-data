@@ -95,7 +95,8 @@ type AnalysisState = { status: 'idle' } | { status: 'loading' } | { status: 'don
 
 /** Analyses already asked for this visit, by matchup, so going back to one doesn't ask again */
 const analyses = new Map<string, MatchAnalysis>();
-const keyOf = (request: MatchAnalysisRequest) => `${request.ourClubId}:${request.theirClubId}:${request.ourFormation}:${request.theirFormation}`;
+const keyOf = (request: MatchAnalysisRequest) =>
+  `${request.ourClubId}:${request.theirClubId}:${request.ourFormation}:${request.theirFormation}:${request.aim ?? 'win'}`;
 
 const EDGE_CHIPS = {
   ours: { label: 'Your edge', colour: '#8ae63a', background: 'rgba(138,230,58,.12)' },

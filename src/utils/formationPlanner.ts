@@ -32,6 +32,8 @@ export interface FormationMeta {
   averagePpg: number;
   /** Chances of a win, draw and loss across every match */
   averageOdds: Odds;
+  /** Goals a side scores a game across every match */
+  averageGoals: number;
   /** Games across all the formations, every match counted from both sides */
   totalGames: number;
   /** Matches behind it */
@@ -84,6 +86,7 @@ export function buildFormationMeta(snapshot: MetaSnapshot = BUNDLED_META): Forma
     (total, tally) => ({ ...total, wins: total.wins + tally.wins, draws: total.draws + tally.draws, losses: total.losses + tally.losses }),
     emptyTally(),
   );
+  const totalGoals = sum(all.map(tally => tally.goalsFor));
   return {
     source: snapshot.source,
     engine: snapshot.engine,
@@ -93,6 +96,7 @@ export function buildFormationMeta(snapshot: MetaSnapshot = BUNDLED_META): Forma
     overall,
     averagePpg: totalGames ? sum(all.map(points)) / totalGames : 1.4,
     averageOdds: totalGames ? oddsOf(everything) : { win: 0.37, draw: 0.26, loss: 0.37 },
+    averageGoals: totalGames && totalGoals ? totalGoals / totalGames : 1.6,
     totalGames,
     matches: Math.round(totalGames / 2),
   };
@@ -133,6 +137,33 @@ export function metaOdds(meta: FormationMeta, formation: string, opponentFormati
   const baseline = { win: (ours.win + theirs.loss) / 2, draw: (ours.draw + theirs.draw) / 2, loss: (ours.loss + theirs.win) / 2 };
   const weigh = (count: number, base: number) => (count + META_PRIOR_GAMES * base) / (games(cell) + META_PRIOR_GAMES);
   return { win: weigh(cell.wins, baseline.win), draw: weigh(cell.draws, baseline.draw), loss: weigh(cell.losses, baseline.loss) };
+}
+
+/** Goals a side can expect to score and let in a game */
+export interface Goals {
+  for: number;
+  against: number;
+}
+
+const goalsOf = (meta: FormationMeta, formation: string): Goals => {
+  const tally = meta.overall.get(formation);
+  return tally && games(tally) && tally.goalsFor + tally.goalsAgainst > 0
+    ? { for: tally.goalsFor / games(tally), against: tally.goalsAgainst / games(tally) }
+    : { for: meta.averageGoals, against: meta.averageGoals };
+};
+
+/** Goals `formation` can expect to score and let in against `opponentFormation`, pulled toward the two's usual like metaOdds */
+export function metaGoals(meta: FormationMeta, formation: string, opponentFormation: string): Goals {
+  const cell = meta.cells.get(`${formation}|${opponentFormation}`) ?? emptyTally();
+  const ours = goalsOf(meta, formation);
+  const theirs = goalsOf(meta, opponentFormation);
+  // A cell from a source without goals counts as none seen
+  const seen = cell.goalsFor + cell.goalsAgainst > 0 ? games(cell) : 0;
+  const weigh = (count: number, base: number) => (seen ? count : 0) + META_PRIOR_GAMES * base;
+  return {
+    for: weigh(cell.goalsFor, (ours.for + theirs.against) / 2) / (seen + META_PRIOR_GAMES),
+    against: weigh(cell.goalsAgainst, (ours.against + theirs.for) / 2) / (seen + META_PRIOR_GAMES),
+  };
 }
 
 /** Points a game `formation` can expect against `opponentFormation`, from the meta. */
@@ -305,6 +336,9 @@ export interface FormationPick extends Odds {
   theirGames: number;
   /** All of the above added up: expected points a game */
   score: number;
+  /** Goals we can expect to score and let in: the meta's, moved by how strong our XI is */
+  goalsFor: number;
+  goalsAgainst: number;
   alternative: string[];
   outOfPosition: string[];
 }
@@ -315,6 +349,8 @@ export interface FormationPick extends Odds {
  * guess that let the meta outweigh a formation's weak positions.
  */
 export const PPG_PER_OVR = 0.18;
+/** Goals a game one OVR across the XI is worth, scored and let in: 0.16 in 1,462 sides' results, measured as above */
+export const GOALS_PER_OVR = 0.16;
 /** Matches of our own the meta counts for, against our form with a formation */
 const OUR_PRIOR_GAMES = 6;
 /** Matches the meta counts for, against how an opponent has done against a formation */
@@ -396,8 +432,16 @@ export function rankFormations(
     const fit = ourFits.get(formation);
     const ourForm = beatTheMeta(ours, formation, OUR_PRIOR_GAMES, meta);
     const theirRecord = beatTheMeta(againstThem, formation, THEIR_PRIOR_GAMES, meta);
-    const strength = fit && theirRating !== null ? PPG_PER_OVR * (fit.rating - theirRating) : -PPG_PER_OVR * (fit?.gap ?? 0);
+    const ovrGap = fit && theirRating !== null ? fit.rating - theirRating : -(fit?.gap ?? 0);
+    const strength = PPG_PER_OVR * ovrGap;
     const odds = shiftOdds(metaOddsAgainst, strength + ourForm.value + theirRecord.value);
+    const goals = opposition.reduce(
+      (total, guess) => {
+        const expected = metaGoals(meta, formation, guess.formation);
+        return { for: total.for + guess.probability * expected.for, against: total.against + guess.probability * expected.against };
+      },
+      { for: 0, against: 0 },
+    );
     return {
       formation,
       ...odds,
@@ -409,10 +453,33 @@ export function rankFormations(
       theirRecord: theirRecord.value,
       theirGames: theirRecord.games,
       score: oddsPoints(odds),
+      goalsFor: Math.max(0.1, goals.for + GOALS_PER_OVR * ovrGap),
+      goalsAgainst: Math.max(0.1, goals.against - GOALS_PER_OVR * ovrGap),
       alternative: fit?.alternative ?? [],
       outOfPosition: fit?.outOfPosition ?? [],
     };
   }).sort((a, b) => b.score - a.score);
+}
+
+/** What a club wants from a match: the most points, the most goals, or above all not to lose */
+export type Outcome = 'win' | 'smash' | 'notLose';
+
+export const OUTCOMES: { key: Outcome; label: string; hint: string }[] = [
+  { key: 'win', label: 'Win', hint: 'The most expected points' },
+  { key: 'smash', label: 'Smash', hint: 'The most goals scored' },
+  { key: 'notLose', label: 'Not lose', hint: 'The lowest chance of losing: a draw will do' },
+];
+
+export const isOutcome = (value: unknown): value is Outcome => OUTCOMES.some(outcome => outcome.key === value);
+
+/** Picks ranked for what the club wants, ties going to expected points */
+export function rankForOutcome(picks: FormationPick[], outcome: Outcome): FormationPick[] {
+  const by: Record<Outcome, (pick: FormationPick) => number> = {
+    win: pick => pick.score,
+    smash: pick => pick.goalsFor,
+    notLose: pick => -pick.loss,
+  };
+  return [...picks].sort((a, b) => by[outcome](b) - by[outcome](a) || b.score - a.score);
 }
 
 /**

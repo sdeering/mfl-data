@@ -1,5 +1,5 @@
 import type { MFLPlayer } from '../types/mflApi';
-import { squadFits, type PlayedMatch } from '../utils/formationPlanner';
+import { squadFits, type Outcome, type PlayedMatch } from '../utils/formationPlanner';
 import { compareSquads, describeFormation, findWeaknesses, xiPlayers, type XiPlayer } from '../utils/squadComparison';
 import { CAPTAIN_OVR, captainOptions, describeBonus } from '../utils/captain';
 import { FORMATIONS, FORMATION_NAMES, formationLabel } from '../utils/squadLineups';
@@ -18,6 +18,9 @@ export interface RankedCounter {
   draw: number;
   loss: number;
   points: number;
+  /** Goals expected for and against, missing from requests made before aims */
+  goalsFor?: number;
+  goalsAgainst?: number;
 }
 
 export interface MatchAnalysisRequest {
@@ -26,7 +29,16 @@ export interface MatchAnalysisRequest {
   ourFormation: string;
   theirFormation: string;
   counters?: RankedCounter[];
+  /** What we want from the match, 'win' when missing */
+  aim?: Outcome;
 }
+
+/** What each aim asks of the analysis */
+export const AIM_BRIEFS: Record<Outcome, string> = {
+  win: 'Our aim is to win: pick what gives us the most expected points.',
+  smash: 'Our aim is to smash them: score as many goals as we can, accepting more risk at the back. Favour the formation, captain and playing style that create the most chances, and say what we risk.',
+  notLose: 'Our aim is not to lose: a draw is a good result. Pick what gives us the lowest chance of losing, even at the cost of goals and winning chances: a solid shape, a captain who strengthens the defence and a playing style that keeps us compact and denies their strengths. Say how we can still nick a goal.',
+};
 
 /** Steps on each playing style setting, as MFL's Steps view shows them; the middle one is MFL's default */
 export const TACTIC_STEPS = 5;
@@ -291,6 +303,7 @@ export interface AnalysisInput {
   ourFormation: string;
   theirFormation: string;
   counters: RankedCounter[];
+  aim?: Outcome;
   theirReports: SideReport[];
   /** Our tactics log, when any matches are logged */
   history?: TacticsHistory | null;
@@ -322,7 +335,7 @@ function describeHistory(history: TacticsHistory | null | undefined, theirClubId
   };
 }
 
-export function buildAnalysisPrompt({ ours, theirs, ourFormation, theirFormation, counters, theirReports, history }: AnalysisInput): string {
+export function buildAnalysisPrompt({ ours, theirs, ourFormation, theirFormation, counters, aim = 'win', theirReports, history }: AnalysisInput): string {
   const ourById = new Map(ours.players.map(player => [player.id, player]));
   const theirById = new Map(theirs.players.map(player => [player.id, player]));
   const ourFit = squadFits(ours.players).get(ourFormation);
@@ -355,6 +368,7 @@ export function buildAnalysisPrompt({ ours, theirs, ourFormation, theirFormation
     formations: Object.keys(FORMATIONS).map(formation => ({ key: formation, positions: describeFormation(formation) })),
     us: {
       club: ours.club.name,
+      aim,
       plannedFormation: formationLabel(ourFormation),
       startingXi: describeXi(ourXi),
       captainOptions: captainOptionsOf(ourFit, ourById),
@@ -379,6 +393,7 @@ export function buildAnalysisPrompt({ ours, theirs, ourFormation, theirFormation
   return [
     `You are an analyst for an MFL (Metaverse Football League) club, ${ours.club.name}, preparing to play ${theirs.club.name}.`,
     `Study the data below: both squads, the XI each side is expected to field (their XI is the best their squad makes in their expected formation, so it may differ on the day), their recent results with formations, per-player stats from their last ${theirReports.length} matches, the planner's ranked counter formations from the formation meta, and the weak spots our rules found.`,
+    `${AIM_BRIEFS[aim]} plannerCounters are ranked for this aim. Every recommendation (formation, captain, lineup changes, playing style) must serve it.`,
     'Find concrete edges: flanks to attack, individual duels we win, their tendencies by formation, and anything in their match stats (who gets dribbled past, who creates, xG against).',
     'Be specific and cite numbers and player names from the data. Keep each detail to one or two sentences. Name formations by their label, e.g. "4-3-3 (att)", except formation.pick, which must be a key.',
     '',

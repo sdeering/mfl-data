@@ -16,6 +16,7 @@ import {
 } from '@/src/services/matchAnalysis';
 import { describeWait, takeRateLimits, visitorKey, type RateLimit } from '@/src/lib/rateLimit';
 import { FORMATIONS } from '@/src/utils/squadLineups';
+import { isOutcome } from '@/src/utils/formationPlanner';
 
 export const maxDuration = 90;
 
@@ -51,6 +52,9 @@ function readCounters(value: unknown): RankedCounter[] {
       draw: share(counter.draw),
       loss: share(counter.loss),
       points: Math.min(3, Math.max(0, Number(counter.points) || 0)),
+      ...(Number.isFinite(Number(counter.goalsFor)) && counter.goalsFor !== undefined
+        ? { goalsFor: Math.min(10, Math.max(0, Number(counter.goalsFor))), goalsAgainst: Math.min(10, Math.max(0, Number(counter.goalsAgainst) || 0)) }
+        : {}),
     }));
 }
 
@@ -103,7 +107,7 @@ async function askGemini(prompt: string): Promise<MatchAnalysis> {
 }
 
 /**
- * POST /api/match-analysis { ourClubId, theirClubId, ourFormation, theirFormation, counters? }
+ * POST /api/match-analysis { ourClubId, theirClubId, ourFormation, theirFormation, counters?, aim? }
  * An AI scouting report on the opponent for the Match Prep Tool: both squads, their form and their latest match
  * stats go to Gemini, which finds edges to play on. Kept for 6 hours per matchup.
  */
@@ -116,10 +120,11 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ success: false, error: "AI analysis isn't set up on this site yet" }, { status: 503 });
   }
   const { ourClubId, theirClubId, ourFormation, theirFormation } = body;
+  const aim = isOutcome(body.aim) ? body.aim : 'win';
   // Logging a match makes a new analysis, so it reads the log as it is
   const entries = await loadTacticsEntries(ourClubId);
   const logVersion = entries.length ? `${entries.length}-${entries.map(entry => entry.updatedAt).sort().at(-1)}` : '0';
-  const cacheKey = `v5:${ourClubId}:${theirClubId}:${ourFormation}:${theirFormation}:${logVersion}`;
+  const cacheKey = `v6:${ourClubId}:${theirClubId}:${ourFormation}:${theirFormation}:${aim}:${logVersion}`;
   const cached = cache.get(cacheKey);
   if (cached && Date.now() - cached.at < CACHE_MS) return NextResponse.json({ success: true, data: cached.analysis, cached: true });
 
@@ -141,7 +146,7 @@ export async function POST(request: NextRequest) {
     // Our log only costs MFL requests when there is one
     const history = entries.length ? await buildTacticsHistory(ourClubId, entries) : null;
 
-    const prompt = buildAnalysisPrompt({ ours, theirs, ourFormation, theirFormation, counters: readCounters(body.counters), theirReports: reports, history });
+    const prompt = buildAnalysisPrompt({ ours, theirs, ourFormation, theirFormation, counters: readCounters(body.counters), aim, theirReports: reports, history });
     const analysis = await askGemini(prompt);
     cache.set(cacheKey, { analysis, at: Date.now() });
     if (cache.size > 300) cache.delete(cache.keys().next().value!);

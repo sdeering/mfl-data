@@ -8,6 +8,11 @@ import {
   rankFormations,
   seasonField,
   splitByMatchDay,
+  GOALS_PER_OVR,
+  isOutcome,
+  metaGoals,
+  rankForOutcome,
+  type Outcome,
   PPG_PER_OVR,
   weakPositions,
   squadFits,
@@ -179,6 +184,46 @@ describe('rankFormations', () => {
     const pick = rankFormations(opposition, evenFits, alwaysWinning, [], meta).find(p => p.formation === '4-1-4-1')!
     expect(pick.ourGames).toBe(10)
     expect(pick.ourForm).toBeCloseTo(0)
+  })
+})
+
+describe('goals and outcomes', () => {
+  // 4-4-2 and 4-3-3 even on results, but 4-3-3 games are open and 4-4-2 ones tight
+  const goalsMeta = buildFormationMeta({
+    source: 'test', engine: '1.0', maxOvrDifference: 22, fetchedAt: '2026-11-07',
+    rows: [
+      ['4-4-2', '5-3-2', 300, 500, 200, 800, 600],
+      ['4-3-3', '5-3-2', 400, 100, 500, 2600, 2700],
+      ['5-3-2', '4-4-2', 200, 500, 300, 600, 800],
+      ['5-3-2', '4-3-3', 500, 100, 400, 2700, 2600],
+    ],
+  })
+  const opposition = [{ formation: '5-3-2', probability: 1, timesPlayed: 5 }]
+
+  it('expects goals from the meta, pulled toward the usual for few games', () => {
+    expect(goalsMeta.averageGoals).toBeCloseTo((800 + 2600 + 600 + 2700) / 4000)
+    const tight = metaGoals(goalsMeta, '4-4-2', '5-3-2')
+    expect(tight.for).toBeLessThan(1.6)
+    expect(tight.for).toBeGreaterThan(0.7)
+    expect(metaGoals(goalsMeta, '4-3-3', '5-3-2').for).toBeGreaterThan(2)
+  })
+
+  it('moves goals by how much stronger our XI is', () => {
+    const fits = new Map<string, FormationFit>([['4-4-2', { formation: '4-4-2', rating: 85, gap: 0, slots: [], alternative: [], outOfPosition: [] } as unknown as FormationFit]])
+    const even = rankFormations(opposition, fits, [], [], goalsMeta, 85).find(p => p.formation === '4-4-2')!
+    const stronger = rankFormations(opposition, fits, [], [], goalsMeta, 83).find(p => p.formation === '4-4-2')!
+    expect(stronger.goalsFor - even.goalsFor).toBeCloseTo(2 * GOALS_PER_OVR)
+    expect(even.goalsAgainst - stronger.goalsAgainst).toBeCloseTo(2 * GOALS_PER_OVR)
+  })
+
+  it('ranks for the most points, the most goals, or the fewest losses', () => {
+    const picks = rankFormations(opposition, new Map(), [], [], goalsMeta)
+    const top = (outcome: Outcome) => rankForOutcome(picks, outcome)[0].formation
+    expect(top('smash')).toBe('4-3-3')
+    expect(top('notLose')).toBe('4-4-2')
+    expect(rankForOutcome(picks, 'win').map(p => p.formation)).toEqual(picks.map(p => p.formation))
+    expect(isOutcome('notLose')).toBe(true)
+    expect(isOutcome('draw')).toBe(false)
   })
 })
 

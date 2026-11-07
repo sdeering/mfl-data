@@ -14,6 +14,9 @@ import {
   predictFormations,
   rankFormations,
   splitByMatchDay,
+  rankForOutcome,
+  isOutcome,
+  type Outcome,
   squadFits,
   type FormationFit,
   type FormationMeta,
@@ -44,6 +47,8 @@ const OUR_MATCHES = 15;
 const THEIR_MATCHES = 10;
 /** Upcoming opponents it can show, the next match day's included */
 const MAX_UPCOMING = 5;
+/** localStorage key for each of our clubs' aim: win, smash or not lose */
+const AIMS_KEY = 'mfldata.matchAims';
 
 /** A club to prepare for: one we play next, or one scouted by its ID. */
 interface Opponent {
@@ -113,13 +118,16 @@ const OpponentPrep: React.FC<{
   tactics: TacticsLogState;
   /** Whether the connected wallet owns our club, so it can log tactics */
   canLog: boolean;
-}> = ({ opponent, ourClubId, ours, ourFits, ourPlayersById, meta, pick, onPick, against: picked, onAgainst, onOpenSquad, tactics, canLog }) => {
+  /** What our club wants from its matches: win, smash or not lose */
+  outcome: Outcome;
+  onOutcome: (outcome: Outcome) => void;
+}> = ({ opponent, ourClubId, ours, ourFits, ourPlayersById, meta, pick, onPick, against: picked, onAgainst, onOpenSquad, tactics, canLog, outcome, onOutcome }) => {
   const { report, error, isLoading } = useScoutReport(opponent.clubId, THEIR_MATCHES);
   const theirFits = useMemo(() => squadFits(report?.players ?? []), [report]);
   const theirPlayersById = useMemo(() => new Map((report?.players ?? []).map(player => [player.id, player])), [report]);
   const guesses = useMemo(() => (report ? predictFormations(report.matches, theirFits, meta) : []), [report, theirFits, meta]);
   const against = picked ?? guesses[0]?.formation ?? LIKELY_MIX;
-  const picks = useMemo(() => {
+  const ranked = useMemo(() => {
     if (!report || !ours) return [];
     const guess = guesses.find(item => item.formation === against);
     // Their strength: their XI in the formation, or the XI their squad will likely field, or without a squad now,
@@ -128,6 +136,8 @@ const OpponentPrep: React.FC<{
       ? rankFormations([{ ...guess, probability: 1 }], ourFits, ours.matches, report.matches, meta, guess.fit?.rating ?? report.recentOvr)
       : rankFormations(guesses, ourFits, ours.matches, report.matches, meta, likelyRating(guesses) ?? report.recentOvr);
   }, [report, ours, guesses, against, ourFits, meta]);
+  // Best first for what we want from the match
+  const picks = useMemo(() => rankForOutcome(ranked, outcome), [ranked, outcome]);
 
   // Our XI against theirs in the formations picked, and their weak spots
   const likeliestFormation = guesses[0]?.formation;
@@ -163,7 +173,14 @@ const OpponentPrep: React.FC<{
       </div>
       {selected ? (
         <div className={panelRow}>
-          <CounterPanel name={name} against={against === LIKELY_MIX ? null : against} picks={picks} fits={ourFits} playersById={ourPlayersById} selected={selected} onSelect={onPick} />
+          <CounterPanel name={name} against={against === LIKELY_MIX ? null : against} picks={picks}
+            fits={ourFits}
+            playersById={ourPlayersById}
+            outcome={outcome}
+            onOutcome={onOutcome}
+            selected={selected}
+            onSelect={onPick}
+          />
           <MatchupPanel
             name={name}
             formation={selected}
@@ -192,7 +209,16 @@ const OpponentPrep: React.FC<{
             theirClubId: report.club.id,
             ourFormation: selected,
             theirFormation,
-            counters: picks.slice(0, 5).map(item => ({ formation: item.formation, win: item.win, draw: item.draw, loss: item.loss, points: item.score })),
+            aim: outcome,
+            counters: picks.slice(0, 5).map(item => ({
+              formation: item.formation,
+              win: item.win,
+              draw: item.draw,
+              loss: item.loss,
+              points: item.score,
+              goalsFor: item.goalsFor,
+              goalsAgainst: item.goalsAgainst,
+            })),
           }}
           onUseFormation={onPick}
           history={tactics.history}
@@ -224,6 +250,28 @@ const MatchesPage: React.FC = () => {
   // formation, by club ID
   const [picks, setPicks] = useState<Record<number, string>>({});
   const [plannedAgainst, setPlannedAgainst] = useState<Record<number, string>>({});
+  // What each of our clubs wants from its matches, remembered in this browser
+  const [aims, setAims] = useState<Record<number, Outcome>>({});
+  useEffect(() => {
+    try {
+      const saved = JSON.parse(window.localStorage.getItem(AIMS_KEY) ?? '{}');
+      if (saved && typeof saved === 'object') {
+        setAims(Object.fromEntries(Object.entries(saved).filter(([, aim]) => isOutcome(aim))) as Record<number, Outcome>);
+      }
+    } catch {
+      // No storage, or a bad entry: every club aims to win
+    }
+  }, []);
+  const setAim = (club: number, aim: Outcome) =>
+    setAims(current => {
+      const next = { ...current, [club]: aim };
+      try {
+        window.localStorage.setItem(AIMS_KEY, JSON.stringify(next));
+      } catch {
+        // Kept for this visit only
+      }
+      return next;
+    });
   const planAgainst = (opponentId: number, against: string) => {
     setPlannedAgainst(current => ({ ...current, [opponentId]: against }));
     // Show the best counter to it rather than one picked against something else
@@ -479,6 +527,15 @@ const MatchesPage: React.FC = () => {
               onOpenSquad={openSquad}
               tactics={tactics}
               canLog={canLog}
+              outcome={aims[clubId] ?? 'win'}
+              onOutcome={aim => {
+                setAim(clubId, aim);
+                // The best pick for the new aim, unless one is picked again
+                setPicks(current => {
+                  const { [selected.clubId]: _dropped, ...rest } = current;
+                  return rest;
+                });
+              }}
             />
           )}
 

@@ -1,7 +1,17 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { clubsService } from '../../services/clubsService';
 import type { ScoutMatch } from '../../services/scoutService';
-import { WEAK_POSITION_GAP, matchResult, weakPositions, type FilledSlot, type FormationFit, type FormationGuess, type FormationPick } from '../../utils/formationPlanner';
+import {
+  OUTCOMES,
+  WEAK_POSITION_GAP,
+  matchResult,
+  weakPositions,
+  type FilledSlot,
+  type FormationFit,
+  type FormationGuess,
+  type FormationPick,
+  type Outcome,
+} from '../../utils/formationPlanner';
 import { FORMATIONS, FORMATION_NAMES, formationLabel } from '../../utils/squadLineups';
 import { CAPTAIN_OVR, describeBonus } from '../../utils/captain';
 import { placeSpots, type PitchSpot, type PlacedSpot } from '../../utils/pitchSpots';
@@ -102,32 +112,42 @@ export const OpponentCard: React.FC<{
       type="button"
       onClick={onSelect}
       aria-pressed={selected}
-      className={`flex-1 min-w-0 flex items-center gap-3.5 pl-4 ${onRemove ? 'pr-12' : 'pr-4'} py-3.5 rounded-[18px] border text-fg text-left cursor-pointer transition-colors hover:border-[#c6f432] ${
+      className={`flex-1 min-w-0 flex flex-col gap-3 pl-4 ${onRemove ? 'pr-12' : 'pr-4'} py-3.5 rounded-[18px] border text-fg text-left cursor-pointer transition-colors hover:border-[#c6f432] ${
         selected ? 'border-[#c6f432] bg-[rgba(198,244,50,.07)]' : 'border-line bg-panel/92'
       }`}
     >
-      <ClubLogo key={`${clubId}-${logoVersion}`} clubId={clubId} name={name} logoVersion={logoVersion} />
-      <span className="flex-1 min-w-0 flex flex-col gap-[5px]">
-        <span className="flex items-center gap-2 min-w-0">
-          <span className="text-base font-bold truncate">{name}</span>
-          {division !== undefined && <DivisionChip division={division} />}
-        </span>
-        <span className="text-xs font-medium text-muted">
-          {error ? <span className="text-[#f87171]">{error}</span> : <>{when} · OVR {ovr !== null ? ovr.toFixed(1) : isLoading ? '…' : '–'}</>}
+      <span className="flex items-center gap-3 w-full min-w-0">
+        <ClubLogo key={`${clubId}-${logoVersion}`} clubId={clubId} name={name} logoVersion={logoVersion} />
+        <span className="flex-1 min-w-0 flex flex-col gap-1">
+          <span className="flex items-center gap-2 min-w-0">
+            <span className="text-base font-bold truncate" title={name}>
+              {name}
+            </span>
+            {division !== undefined && <DivisionChip division={division} />}
+          </span>
+          <span className="text-xs font-medium text-muted truncate" title={error ?? when}>
+            {error ? <span className="text-[#f87171]">{error}</span> : when}
+          </span>
         </span>
       </span>
-      {likely && (
-        <span className="flex flex-col items-end gap-0.5">
-          <span className="flex items-center gap-[5px]">
-            <span className="text-[11px] font-semibold text-accent-ink">{percent(likely.probability)}</span>
-            <span className="text-[10px] font-bold tracking-[0.08em] uppercase text-muted-3">Likely</span>
-          </span>
-          <span className="font-display text-base font-extrabold whitespace-nowrap">{formationLabel(likely.formation)}</span>
+      {/* Their strength and likely formation along the bottom, so the name and fixture keep the full width */}
+      <span className="flex items-center justify-between gap-2 w-full pt-2.5 border-t border-line text-xs font-semibold text-muted whitespace-nowrap">
+        <span>
+          OVR <b className="text-fg">{ovr !== null ? ovr.toFixed(1) : isLoading ? '…' : '–'}</b>
         </span>
-      )}
+        {likely ? (
+          <span className="flex items-center gap-1.5 min-w-0">
+            <span className="text-[10px] font-bold tracking-[0.08em] uppercase text-muted-3">Likely</span>
+            <span className="font-display text-sm font-extrabold text-fg truncate">{formationLabel(likely.formation)}</span>
+            <span className="text-accent-ink">{percent(likely.probability)}</span>
+          </span>
+        ) : (
+          isLoading && <span className="text-muted-3">Scouting…</span>
+        )}
+      </span>
     </button>
     {onRemove && (
-      <span className="absolute right-2.5 top-1/2 -translate-y-1/2">
+      <span className="absolute right-2.5 top-3.5">
         <ClearButton onClear={onRemove} label={`Remove ${name}`} />
       </span>
     )}
@@ -332,11 +352,13 @@ const PickCard: React.FC<{
   pick: FormationPick;
   fit?: FormationFit;
   playersById?: Map<number, MFLPlayer>;
+  outcome: Outcome;
   rank: number;
   on: boolean;
   onSelect: () => void;
-}> = ({ pick, fit, playersById, rank, on, onSelect }) => {
+}> = ({ pick, fit, playersById, outcome, rank, on, onSelect }) => {
   const [win, draw, loss] = wdl(pick);
+  const headline = headlineFor(pick, outcome);
   const chip = fitChip(pick);
   const weak = weakPositions(fit);
   const captain = fit?.captain ? playersById?.get(fit.captain.playerId) : undefined;
@@ -358,8 +380,8 @@ const PickCard: React.FC<{
         {rank > 3 && <span className="h-[22px] px-[9px] rounded-full flex items-center bg-chip text-fg-3 text-[11px] font-bold">Your pick</span>}
         <span className="flex-1" />
         <span className="flex flex-col items-end">
-          <span className="font-display text-[28px] leading-none font-extrabold">{win}%</span>
-          <span className="text-[11px] font-semibold text-muted">win chance</span>
+          <span className="font-display text-[28px] leading-none font-extrabold">{headline.value}</span>
+          <span className="text-[11px] font-semibold text-muted">{headline.label}</span>
         </span>
       </span>
       <span className="flex w-full h-2 rounded-full overflow-hidden gap-0.5" title={`Win ${win}% · Draw ${draw}% · Loss ${loss}%`}>
@@ -373,6 +395,9 @@ const PickCard: React.FC<{
         </span>
         <span>
           <b className="text-fg">{pick.score.toFixed(2)}</b> pts/game
+        </span>
+        <span title="Goals expected for and against">
+          Goals <b className="text-fg">{pick.goalsFor.toFixed(1)}</b>–<b className="text-fg">{pick.goalsAgainst.toFixed(1)}</b>
         </span>
         <span>
           XI avg <b className="text-fg">{pick.xiRating.toFixed(1)}</b>
@@ -406,6 +431,20 @@ const PickCard: React.FC<{
 /** Formations shown as cards before the rest are left to the selector */
 const SHOWN_PICKS = 3;
 
+/** A pick's number for the aim, as its card leads with it */
+function headlineFor(pick: FormationPick, outcome: Outcome): { value: string; label: string; short: string } {
+  const [win, , loss] = wdl(pick);
+  if (outcome === 'smash') return { value: pick.goalsFor.toFixed(2), label: 'goals expected', short: `${pick.goalsFor.toFixed(1)} goals` };
+  if (outcome === 'notLose') return { value: `${100 - loss}%`, label: 'unbeaten chance', short: `${100 - loss}% unbeaten` };
+  return { value: `${win}%`, label: 'win chance', short: `${win}% win` };
+}
+
+const RANKED_BY: Record<Outcome, string> = {
+  win: 'expected points',
+  smash: 'expected goals scored',
+  notLose: 'the lowest chance of losing',
+};
+
 /**
  * Our best three counters, and a selector for any other formation, ranked the same way. A formation picked from
  * the selector beyond the top three shows as a card of its own.
@@ -419,9 +458,12 @@ export const CounterPanel: React.FC<{
   /** Our best XI in each formation, for its weak spots and captain */
   fits?: Map<string, FormationFit>;
   playersById?: Map<number, MFLPlayer>;
+  /** What we want from the match, which the picks are ranked for */
+  outcome: Outcome;
+  onOutcome: (outcome: Outcome) => void;
   selected: string;
   onSelect: (formation: string) => void;
-}> = ({ name, against, picks, fits, playersById, selected, onSelect }) => {
+}> = ({ name, against, picks, fits, playersById, outcome, onOutcome, selected, onSelect }) => {
   const rank = picks.findIndex(pick => pick.formation === selected);
   return (
     <Panel className="p-[22px] flex flex-col gap-3.5">
@@ -429,8 +471,8 @@ export const CounterPanel: React.FC<{
         <h2 className={panelTitle}>Your counter vs {name}</h2>
         <span className="text-[13px] font-medium text-muted">
           {against
-            ? `Ranked by expected points if they play ${formationLabel(against)}, checked against your squad`
-            : 'Ranked by expected points, weighted by their likely formations and checked against your squad'}
+            ? `Ranked by ${RANKED_BY[outcome]} if they play ${formationLabel(against)}, checked against your squad`
+            : `Ranked by ${RANKED_BY[outcome]}, weighted by their likely formations and checked against your squad`}
         </span>
       </div>
       {picks.slice(0, SHOWN_PICKS).map((pick, index) => (
@@ -439,12 +481,14 @@ export const CounterPanel: React.FC<{
           pick={pick}
           fit={fits?.get(pick.formation)}
           playersById={playersById}
+          outcome={outcome}
           rank={index + 1}
           on={pick.formation === selected}
           onSelect={() => onSelect(pick.formation)}
         />
       ))}
-      {rank >= SHOWN_PICKS && <PickCard pick={picks[rank]} fit={fits?.get(selected)} playersById={playersById} rank={rank + 1} on onSelect={() => onSelect(selected)} />}
+      {rank >= SHOWN_PICKS && <PickCard pick={picks[rank]} fit={fits?.get(selected)} playersById={playersById} outcome={outcome} rank={rank + 1} on onSelect={() => onSelect(selected)} />}
+      <div className="flex items-center gap-x-5 gap-y-2.5 flex-wrap">
       <label className="flex items-center gap-2.5 flex-wrap text-xs font-semibold text-muted">
         Your formation
         <span className="relative block">
@@ -455,7 +499,7 @@ export const CounterPanel: React.FC<{
           >
             {picks.map((pick, index) => (
               <option key={pick.formation} value={pick.formation}>
-                {index + 1}. {formationLabel(pick.formation)} · {wdl(pick)[0]}% win
+                {index + 1}. {formationLabel(pick.formation)} · {headlineFor(pick, outcome).short}
               </option>
             ))}
           </select>
@@ -464,6 +508,28 @@ export const CounterPanel: React.FC<{
           </svg>
         </span>
       </label>
+      <div className="flex items-center gap-2.5 text-xs font-semibold text-muted">
+        <span id="counter-aim">Aim</span>
+        <div role="radiogroup" aria-labelledby="counter-aim" className="flex gap-0.5 p-0.5 rounded-lg border border-line-2 bg-field">
+          {OUTCOMES.map(item => {
+            const on = item.key === outcome;
+            return (
+              <button
+                key={item.key}
+                type="button"
+                role="radio"
+                aria-checked={on}
+                title={item.hint}
+                onClick={() => onOutcome(item.key)}
+                className={`h-7 px-3 rounded-md text-xs font-bold cursor-pointer transition-colors ${on ? 'bg-[#c6f432] text-[#0b1406]' : 'text-fg-3 hover:text-fg'}`}
+              >
+                {item.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+      </div>
     </Panel>
   );
 };
