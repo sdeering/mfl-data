@@ -70,9 +70,9 @@ export interface MatchDetails {
 }
 
 /** A side's formation, with its players by position: 0 to 10 the starting XI, the rest the bench */
-interface FormationDetails {
+export interface FormationDetails {
   type?: string
-  positions?: { index?: number; player?: { metadata?: { overall?: number } } }[]
+  positions?: { index?: number; player?: { id?: number; metadata?: { overall?: number } } }[]
 }
 
 export interface FormationResult {

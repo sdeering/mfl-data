@@ -11,6 +11,7 @@ import {
   type TacticSettings,
   type TacticsHistory,
 } from '../utils/tacticsHistory';
+import { playerSettingsFrom, sameTactics, teamSettingsFrom, type ReportFormation } from '../utils/mflTactics';
 
 /*
  * A club's tactics log on the server: the settings kept in club_tactics, joined with the club's played matches
@@ -117,6 +118,49 @@ export async function saveTacticsEntry(
       )
     : await executeRaw('DELETE FROM club_tactics WHERE club_id = ? AND match_id = ?', [clubId, matchId]);
   if (error) throw new Error(error.message);
+}
+
+export type ImportOutcome = { status: 'saved' | 'updated' | 'unchanged' } | { status: 'skipped'; reason: string };
+
+/**
+ * Logs the tactics MFL's match report shows the club's owner for one of the club's played matches: the team's
+ * settings, and individual instructions by player ID from the match's positions. Unchanged when the log already has
+ * the same, so an import can stop there. Skipped when the report's formation isn't the one the club played, since
+ * then it isn't this match's.
+ */
+export async function importReportTactics(
+  clubId: number,
+  squadId: number,
+  matchId: number,
+  formation: ReportFormation,
+  walletAddress: string,
+): Promise<ImportOutcome> {
+  const details = await fetchMflCached<MatchDetails>(`/matches/${matchId}?withFormations=true`, 168 * HOUR).catch(error => {
+    if (error instanceof MflHttpError && error.status === 404) return null;
+    throw error;
+  });
+  if (!details) return { status: 'skipped', reason: 'MFL has no such match' };
+  const home = details.homeSquad?.id === squadId;
+  if (!home && details.awaySquad?.id !== squadId) return { status: 'skipped', reason: "Not one of this club's matches" };
+  if (details.status !== 'ENDED') return { status: 'skipped', reason: 'Not played yet' };
+  const played = home ? details.homeFormation : details.awayFormation;
+  if (formation.type && played?.type && formation.type !== played.type) {
+    return { status: 'skipped', reason: `The report's formation (${formation.type}) isn't the one played (${played.type})` };
+  }
+
+  const playerIdAt = (index: number) => played?.positions?.find(position => position.index === index)?.player?.id;
+  const settings = validSettings(teamSettingsFrom(formation));
+  const players = validPlayerSettings(playerSettingsFrom(formation, playerIdAt));
+  if (!settings || !players) return { status: 'skipped', reason: "Couldn't read the tactics" };
+
+  const { data } = await executeRaw('SELECT settings, player_settings FROM club_tactics WHERE club_id = ? AND match_id = ?', [clubId, matchId]);
+  const row = data?.[0];
+  const logged = row && validSettings(parse(row.settings));
+  if (logged && sameTactics({ settings, players }, { settings: logged, players: validPlayerSettings(parse(row.player_settings)) ?? {} })) {
+    return { status: 'unchanged' };
+  }
+  await saveTacticsEntry(clubId, matchId, settings, players, walletAddress);
+  return { status: logged ? 'updated' : 'saved' };
 }
 
 /** The club's squad ID and owner's wallet, from MFL */

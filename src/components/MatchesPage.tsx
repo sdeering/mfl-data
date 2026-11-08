@@ -552,6 +552,7 @@ const MatchesPage: React.FC = () => {
             canEdit={canLog}
             onSave={tactics.save}
             playersById={ourPlayersById}
+            onRefresh={tactics.refresh}
           />
 
           <p className="m-0 text-[11px] font-medium text-muted-3">

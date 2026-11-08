@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import { PLAYER_ONLY_SETTINGS, PLAYER_SETTINGS, TACTIC_SETTINGS, TACTIC_STEPS, type TacticPick } from '../../services/matchAnalysis';
 import type { MFLPlayer } from '../../types/mflApi';
 import {
@@ -238,6 +238,50 @@ const PlayersEditor: React.FC<{
 const SHOWN_ROWS = 8;
 
 /**
+ * The "Import from MFL" bookmark and how to use it: on app.playmfl.com it loads public/mfl-import.js, which reads the
+ * tactics MFL's match reports show the logged-in owner and logs them here.
+ */
+const ImportFromMfl: React.FC<{ onRefresh?: () => void }> = ({ onRefresh }) => {
+  // React won't render a javascript: link, so the bookmark's address is set on the element
+  const bookmark = useCallback((link: HTMLAnchorElement | null) => {
+    if (!link) return;
+    const script = `${window.location.origin}/mfl-import.js`;
+    link.setAttribute('href', `javascript:(()=>{const s=document.createElement('script');s.src='${script}?t='+Date.now();document.body.appendChild(s)})()`);
+  }, []);
+  return (
+    <div className="flex flex-col gap-2.5 px-3.5 py-3 rounded-xl bg-inset border border-line text-[13px] font-medium text-muted">
+      <span className={capsLabel}>Import your tactics from MFL</span>
+      <ol className="m-0 pl-5 flex flex-col gap-1">
+        <li>
+          Drag this to your bookmarks bar:{' '}
+          <a
+            ref={bookmark}
+            onClick={event => event.preventDefault()}
+            title="Drag me to your bookmarks bar"
+            className="inline-flex items-center h-7 px-2.5 rounded-[9px] bg-[#c6f432] text-[#0d1a05] text-xs font-extrabold no-underline cursor-grab"
+          >
+            MFL Data import
+          </a>
+        </li>
+        <li>
+          Open <span className="font-bold text-fg-3">app.playmfl.com</span>, logged in, and click the bookmark there.
+        </li>
+      </ol>
+      <span>
+        For each of your clubs it reads MFL&apos;s match reports, newest first, up to the last {10} matches, and logs the team settings and player
+        instructions you used. It stops at a match already logged the same, so running it again only adds new matches, and it corrects any match logged
+        differently. Your MFL login stays on MFL&apos;s site.
+      </span>
+      {onRefresh && (
+        <button type="button" onClick={onRefresh} className="self-start text-xs font-semibold text-accent-ink cursor-pointer bg-transparent border-0 p-0">
+          Imported? Refresh the log
+        </button>
+      )}
+    </div>
+  );
+};
+
+/**
  * Our latest matches, competitive and friendly, with the settings logged for each. The owner can log or change them;
  * a new log starts from the one before it.
  */
@@ -250,7 +294,10 @@ export const TacticsLogPanel: React.FC<{
   onSave: (matchId: number, settings: TacticSettings | null, players?: PlayerSettings) => Promise<void>;
   /** Our squad, for naming players and adding them to individual instructions */
   playersById?: Map<number, MFLPlayer>;
-}> = ({ clubName, history, isLoading, error, canEdit, onSave, playersById }) => {
+  /** Reads the log again, after an import from MFL */
+  onRefresh?: () => void;
+}> = ({ clubName, history, isLoading, error, canEdit, onSave, playersById, onRefresh }) => {
+  const [showImport, setShowImport] = useState(false);
   const [editing, setEditing] = useState<{ matchId: number; settings: TacticSettings; players: PlayerSettings } | null>(null);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
@@ -291,8 +338,19 @@ export const TacticsLogPanel: React.FC<{
             {logged > 0 && ` ${logged} logged.`}
           </span>
         </div>
-        {!canEdit && <span className="text-xs font-semibold text-muted-3">Connect the club owner&apos;s wallet to log</span>}
+        <span className="flex items-center gap-3">
+          {!canEdit && <span className="text-xs font-semibold text-muted-3">Connect the club owner&apos;s wallet to log</span>}
+          <button
+            type="button"
+            onClick={() => setShowImport(!showImport)}
+            aria-expanded={showImport}
+            className="h-8 px-3 rounded-[9px] border border-line-2 text-xs font-bold text-fg-3 cursor-pointer hover:border-[#c6f432] hover:text-[#c6f432]"
+          >
+            {showImport ? 'Close' : 'Import from MFL'}
+          </button>
+        </span>
       </div>
+      {showImport && <ImportFromMfl onRefresh={onRefresh} />}
       {error && <p className="m-0 text-sm font-semibold text-danger-ink">{error}</p>}
       {isLoading && !history && <p className="m-0 text-sm font-medium text-muted">Loading your matches…</p>}
       {history && matches.length === 0 && <p className="m-0 text-sm font-medium text-muted">No played matches yet.</p>}
