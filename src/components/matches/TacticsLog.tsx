@@ -17,6 +17,7 @@ import {
   similarMatches,
   type Band,
   type ClubMatchLog,
+  type PlayerForm,
   type Record3,
   type TacticSettings,
   type TacticsHistory,
@@ -67,8 +68,16 @@ export const SettingsStrip: React.FC<{ settings: TacticSettings }> = ({ settings
 
 const ResultChip: React.FC<{ match: ClubMatchLog }> = ({ match }) => {
   const result = resultOf(match);
+  const expected =
+    typeof match.expectedPoints === 'number' && typeof match.ovrGap === 'number'
+      ? `XI OVR ${signed(match.ovrGap)} on theirs: ${match.expectedPoints.toFixed(1)} pts expected`
+      : undefined;
   return (
-    <span className="h-[22px] min-w-[42px] px-2 rounded-full grid place-items-center text-[11px] font-extrabold" style={{ background: RESULT_CHIPS[result][0], color: RESULT_CHIPS[result][1] }}>
+    <span
+      className="h-[22px] min-w-[42px] px-2 rounded-full grid place-items-center text-[11px] font-extrabold"
+      style={{ background: RESULT_CHIPS[result][0], color: RESULT_CHIPS[result][1] }}
+      title={expected}
+    >
       {match.goalsFor}-{match.goalsAgainst}
     </span>
   );
@@ -268,9 +277,9 @@ const ImportFromMfl: React.FC<{ onRefresh?: () => void }> = ({ onRefresh }) => {
         </li>
       </ol>
       <span>
-        For each of your clubs it reads MFL&apos;s match reports, newest first, up to the last {10} matches, and logs the team settings and player
-        instructions you used. It stops at a match already logged the same, so running it again only adds new matches, and it corrects any match logged
-        differently. Your MFL login stays on MFL&apos;s site.
+        For each of your clubs it reads MFL&apos;s match reports for the last {40} matches and logs the team settings and player instructions you
+        used, with each player&apos;s stats, so the AI can judge an instruction by how the player did. Matches imported before are skipped, so running
+        it again only reads new ones, and a match you logged by hand differently is corrected. Your MFL login stays on MFL&apos;s site.
       </span>
       {onRefresh && (
         <button type="button" onClick={onRefresh} className="self-start text-xs font-semibold text-accent-ink cursor-pointer bg-transparent border-0 p-0">
@@ -460,8 +469,15 @@ export const TacticsLogPanel: React.FC<{
 };
 
 const BAND_LABELS: Record<Band, string> = { low: 'Low 1-2', mid: 'Middle 3', high: 'High 4-5' };
+/** Points a game above or below what the OVR gaps expected, e.g. "+0.4 vs expected" */
+const vsExpectedText = (record: Record3) => (record.vsExpected !== null ? `${record.vsExpected > 0 ? '+' : ''}${record.vsExpected.toFixed(2)} vs expected` : '');
 const recordLine = (record: Record3) =>
-  `${record.games} logged · ${record.wins}W ${record.draws}D ${record.losses}L · ${record.ppg?.toFixed(2) ?? '–'} pts/game${record.xgDiff !== null ? ` · xG ${signed(record.xgDiff)} a game` : ''}`;
+  `${record.games} logged · ${record.wins}W ${record.draws}D ${record.losses}L · ${record.ppg?.toFixed(2) ?? '–'} pts/game${
+    record.vsExpected !== null ? ` (${vsExpectedText(record)}${record.expectedGames < record.games ? ` in ${record.expectedGames}` : ''})` : ''
+  }${record.xgDiff !== null ? ` · xG ${signed(record.xgDiff)} a game` : ''}`;
+/** A player's average rating and output, e.g. "7.4 rating · 0.6 goals" */
+const formText = (form: PlayerForm | null) =>
+  form ? `${form.rating.toFixed(1)} rating · ${form.goals.toFixed(1)} goals · ${form.xG.toFixed(2)} xG · ${form.assists.toFixed(1)} assists over ${form.games}` : 'no stats';
 
 const PastMatches: React.FC<{ title: string; matches: ClubMatchLog[] }> = ({ title, matches }) =>
   matches.length ? (
@@ -570,7 +586,13 @@ export const WhatWorkedSection: React.FC<{
                   return (
                     <span
                       key={band}
-                      title={record.games ? `${record.wins}W ${record.draws}D ${record.losses}L${record.xgDiff !== null ? ` · xG ${signed(record.xgDiff)} a game` : ''}` : 'Not played'}
+                      title={
+                        record.games
+                          ? `${record.wins}W ${record.draws}D ${record.losses}L${record.vsExpected !== null ? ` · ${vsExpectedText(record)}` : ''}${
+                              record.xgDiff !== null ? ` · xG ${signed(record.xgDiff)} a game` : ''
+                            }`
+                          : 'Not played'
+                      }
                       className={`h-7 px-2 rounded-lg flex items-center gap-1.5 text-xs ${best ? 'bg-[rgba(198,244,50,.12)] text-accent-ink font-extrabold' : 'text-fg-3 font-semibold'} ${
                         ai ? 'ring-1 ring-[#c6f432]' : ''
                       }`}
@@ -591,7 +613,9 @@ export const WhatWorkedSection: React.FC<{
         </div>
       </div>
       <span className="text-[11px] font-medium text-muted-3">
-        Points a game and games played with each setting. Highlighted: the best band with {2}+ games.{tactics?.length ? ' Outlined: the band of the step recommended above.' : ''}
+        Points a game and games played with each setting; hover for points against what the XIs&apos; OVR gap expected. Highlighted: the best band with{' '}
+        {2}+ games, judged against that expectation, so a setting used against weaker sides doesn&apos;t win for that alone.
+        {tactics?.length ? ' Outlined: the band of the step recommended above.' : ''}
       </span>
       {tried.length > 0 && (
         <div className="flex flex-col gap-1">
@@ -603,20 +627,25 @@ export const WhatWorkedSection: React.FC<{
                 {playerName(playersById, effect.playerId)} · {labelOf(effect.key)}
               </span>
               <span className="flex items-center gap-1.5 flex-wrap justify-end">
-                {effect.bySteps.map(({ step, record }) => (
+                {effect.bySteps.map(({ step, record, form }) => (
                   <span
                     key={step}
                     className="h-6 px-2 rounded-md flex items-center gap-1 bg-chip font-semibold text-fg-3"
-                    title={`Set to ${step}: ${record.wins}W ${record.draws}D ${record.losses}L${record.xgDiff !== null ? ` · xG ${signed(record.xgDiff)} a game` : ''}`}
+                    title={`Set to ${step}: ${record.wins}W ${record.draws}D ${record.losses}L${record.vsExpected !== null ? ` · ${vsExpectedText(record)}` : ''}${
+                      record.xgDiff !== null ? ` · xG ${signed(record.xgDiff)} a game` : ''
+                    }\nThe player: ${formText(form)}`}
                   >
-                    <b className="text-fg">{step}</b> {record.ppg!.toFixed(1)} pts<span className="text-muted-3">· {record.games}</span>
+                    <b className="text-fg">{step}</b> {record.ppg!.toFixed(1)} pts
+                    {form && <span className="text-accent-ink">· {form.rating.toFixed(1)}★</span>}
+                    <span className="text-muted-3">· {record.games}</span>
                   </span>
                 ))}
                 <span
                   className="h-6 px-2 rounded-md flex items-center gap-1 font-semibold text-muted-3"
-                  title="The other logged matches: on the team's setting, or not playing"
+                  title={`The other logged matches: on the team's setting, or not playing\nThe player on the team's setting: ${formText(effect.teamForm)}`}
                 >
                   without {effect.team.games ? `${effect.team.ppg!.toFixed(1)} pts · ${effect.team.games}` : '–'}
+                  {effect.teamForm && <span className="text-fg-3"> · {effect.teamForm.rating.toFixed(1)}★</span>}
                 </span>
               </span>
             </div>

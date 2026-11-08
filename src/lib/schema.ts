@@ -265,6 +265,10 @@ CREATE TABLE IF NOT EXISTS club_tactics (
   settings TEXT NOT NULL,
   -- Individual instructions: JSON of player ID to setting key to step, only the settings set for each player
   player_settings TEXT,
+  -- 'mfl' when imported from MFL's match report, null when logged by hand
+  source TEXT,
+  -- From the report and line-ups, for imported matches: formations, XI OVRs, xG and our players' lines (JSON)
+  match_stats TEXT,
   wallet_address TEXT NOT NULL,
   updated_at TEXT DEFAULT (datetime('now')),
   PRIMARY KEY (club_id, match_id)
@@ -349,6 +353,13 @@ export async function initializeSchema(): Promise<void> {
     const info = await db.execute('PRAGMA table_info(club_tactics)')
     if (info.rows.length > 0 && !info.rows.some((r: any) => r.name === 'player_settings')) {
       await db.execute('ALTER TABLE club_tactics ADD COLUMN player_settings TEXT')
+    }
+    // Nor, before the MFL import kept them, where a log came from and the match's stats
+    if (info.rows.length > 0 && !info.rows.some((r: any) => r.name === 'source')) {
+      await db.execute('ALTER TABLE club_tactics ADD COLUMN source TEXT')
+    }
+    if (info.rows.length > 0 && !info.rows.some((r: any) => r.name === 'match_stats')) {
+      await db.execute('ALTER TABLE club_tactics ADD COLUMN match_stats TEXT')
     }
   } catch {
     // Table doesn't exist yet — it is created with the column below

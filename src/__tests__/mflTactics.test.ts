@@ -1,4 +1,4 @@
-import { playerSettingsFrom, sameTactics, stepOf, teamSettingsFrom, type ReportFormation } from '../utils/mflTactics'
+import { playerLinesFrom, playerSettingsFrom, sameTactics, stepOf, teamSettingsFrom, xgOfLines, type ReportFormation } from '../utils/mflTactics'
 import { validPlayerSettings, validSettings } from '../utils/tacticsHistory'
 
 // DogeSports Scotland's side of the report of match 2971564 (8-0), as MFL shows it to the owner
@@ -85,5 +85,20 @@ describe('MFL tactics to steps', () => {
     expect(sameTactics({ settings, players }, { settings, players: { ...players, '11': { shooting: 1 } } })).toBe(false)
     expect(sameTactics({ settings, players }, { settings, players: { ...players, '14': { triggerPress: 2 } } })).toBe(false)
     expect(sameTactics({ settings, players: {} }, { settings, players: {} })).toBe(true)
+  })
+})
+
+describe('report lines', () => {
+  it('keeps each player line by ID, with the numbers the log uses', () => {
+    const lines = playerLinesFrom([
+      { playerId: 251866, position: 'ST', time: 4619, rating: 9.3, goals: 4, assists: 0, shots: 12, xG: 2.17, chancesCreated: 1, dribblingSuccess: 6, defensiveDuelsWon: 1, saves: 0 },
+      { playerId: 'bad' },
+      null,
+    ])
+    expect(lines).toEqual({
+      '251866': { position: 'ST', minutes: 77, rating: 9.3, goals: 4, assists: 0, xG: 2.17, shots: 12, chancesCreated: 1, dribbles: 6, duelsWon: 1 },
+    })
+    expect(xgOfLines(lines)).toBe(2.17)
+    expect(playerLinesFrom('nope')).toEqual({})
   })
 })

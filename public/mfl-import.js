@@ -2,7 +2,9 @@
  * MFL Data tactics import. The "Import from MFL" bookmark loads this on app.playmfl.com, where you're logged in. MFL's
  * match reports show a club's tactics only to its owner, so it asks MFL for them as the app does, with the app's own
  * login, which never leaves the page. For each of your clubs it walks back through the last matches played, newest
- * first, and sends each match's tactics to MFL Data's tactics log; it stops at a match already logged the same.
+ * first, and sends each match's tactics and players' stats to MFL Data's tactics log. A played match's report doesn't
+ * change, so matches imported before are skipped, and so are those whose report shows no tactics (you didn't own the
+ * club then), which this browser remembers.
  */
 (() => {
   const SITE = (() => {
@@ -14,10 +16,14 @@
   })();
   const MFL_API = 'https://api.playmfl.com';
   /** Matches looked back over per club */
-  const MAX_PER_CLUB = 10;
+  const MAX_PER_CLUB = 40;
   /** Between requests to MFL: it blocks bursts */
-  const GAP_MS = 1300;
+  const GAP_MS = 1600;
   const TEAM_KEYS = ['width', 'directness', 'sideAttackLeft', 'farShot', 'crosses', 'dribble', 'offensiveEngagement', 'depth', 'compactness', 'pressing', 'aggressivity', 'clearance'];
+  /** What MFL Data keeps of each player's line in a report */
+  const LINE_KEYS = ['playerId', 'position', 'time', 'rating', 'goals', 'assists', 'xG', 'shots', 'chancesCreated', 'dribblingSuccess', 'defensiveDuelsWon'];
+  /** Matches whose report showed no tactics, kept in this browser so they aren't read again */
+  const NO_TACTICS = 'mfldata.noTactics';
 
   if (window.__mfldataImport) return;
   window.__mfldataImport = true;
@@ -135,6 +141,24 @@
     for (const key of TEAM_KEYS) kept[key] = formation[key] ?? null;
     return kept;
   };
+  /** A side's players' lines, cut down to what's kept */
+  const linesOf = side => ((side && side.playersStats) || []).map(line => Object.fromEntries(LINE_KEYS.map(key => [key, line[key]])));
+
+  const noTactics = (() => {
+    try {
+      return new Set(JSON.parse(localStorage.getItem(NO_TACTICS) || '[]'));
+    } catch {
+      return new Set();
+    }
+  })();
+  const rememberNoTactics = matchId => {
+    noTactics.add(matchId);
+    try {
+      localStorage.setItem(NO_TACTICS, JSON.stringify([...noTactics].slice(-2000)));
+    } catch {
+      // Read again next time
+    }
+  };
 
   const run = async () => {
     if (location.hostname !== 'app.playmfl.com') throw new Stop('Open app.playmfl.com, log in, and click the bookmark there.');
@@ -152,10 +176,18 @@
       const squadId = details.squads && details.squads[0] && details.squads[0].id;
       if (!squadId) continue;
       const listed = await mfl(`/matches?squadId=${squadId}&past=true&limit=${MAX_PER_CLUB + 5}`);
-      const matches = listed.filter(match => match.status === 'ENDED').sort((a, b) => b.startDate - a.startDate).slice(0, MAX_PER_CLUB);
+      const played = listed.filter(match => match.status === 'ENDED').sort((a, b) => b.startDate - a.startDate).slice(0, MAX_PER_CLUB);
+      const known = await fetch(`${SITE}/api/tactics-import?clubId=${club.id}`).then(response => response.json()).catch(() => ({}));
+      if (!known.success) throw new Stop(known.error || 'MFL Data is unreachable. Try again in a few minutes.');
+      const imported = new Set(known.imported);
+      const matches = played.filter(match => !imported.has(match.id) && !noTactics.has(match.id));
+      say(`${club.name}: ${matches.length ? `${matches.length} to read` : 'up to date'}${imported.size ? ` · ${played.filter(match => imported.has(match.id)).length} imported before` : ''}`, 'muted');
       if (matches.length) plans.push({ club, squadId, matches });
     }
-    if (!plans.length) throw new Stop('None of your clubs has played a match yet.');
+    if (!plans.length) {
+      finish('Everything is imported already.', 'good');
+      return;
+    }
 
     say('Borrowing the MFL app’s login…', 'muted');
     const newest = plans[0].matches[0];
@@ -169,23 +201,31 @@
     for (const { club, squadId, matches } of plans) {
       if (cancelled) return;
       const line = say(`${club.name}: reading…`);
-      const counts = { saved: 0, updated: 0, skipped: 0 };
-      let stoppedAt = null;
+      const counts = { saved: 0, updated: 0, unchanged: 0, noTactics: 0, skipped: 0 };
       let refused = null;
-      for (const match of matches) {
+      for (const [index, match] of matches.entries()) {
         if (cancelled) return;
-        line.textContent = `${club.name}: ${day(match.startDate)} vs ${match.homeSquad.id === squadId ? match.awayTeamName : match.homeTeamName}…`;
+        const home = match.homeSquad.id === squadId;
+        line.textContent = `${club.name}: ${index + 1}/${matches.length} · ${day(match.startDate)} vs ${home ? match.awayTeamName : match.homeTeamName}…`;
         const report = await mfl(`/matches/${match.id}/report`, { Authorization: login });
-        const side = match.homeSquad.id === squadId ? report.home : report.away;
-        if (!side || !side.formation) {
+        const ours = home ? report.home : report.away;
+        const theirs = home ? report.away : report.home;
+        if (!ours || !ours.formation) {
           // MFL shows tactics only to whoever owned the club for that match
-          counts.skipped++;
+          counts.noTactics++;
+          rememberNoTactics(match.id);
           continue;
         }
         const response = await fetch(`${SITE}/api/tactics-import`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ walletAddress: wallet, clubId: club.id, matchId: match.id, formation: tacticsOf(side.formation) }),
+          body: JSON.stringify({
+            walletAddress: wallet,
+            clubId: club.id,
+            matchId: match.id,
+            formation: tacticsOf(ours.formation),
+            report: { ours: linesOf(ours), theirs: linesOf(theirs) },
+          }),
         });
         const result = await response.json().catch(() => ({}));
         if (response.status === 429) throw new Stop(result.error || 'MFL Data is busy. Try again in a few minutes.');
@@ -193,23 +233,21 @@
           refused = result.error || `MFL Data answered ${response.status}`;
           break;
         }
-        if (result.status === 'unchanged') {
-          stoppedAt = match;
-          break;
-        }
-        if (result.status === 'saved' || result.status === 'updated') counts[result.status]++;
+        if (result.status in counts) counts[result.status]++;
         else counts.skipped++;
       }
       total += counts.saved + counts.updated;
       const parts = [];
       if (counts.saved) parts.push(`${counts.saved} new`);
       if (counts.updated) parts.push(`${counts.updated} corrected`);
-      if (counts.skipped) parts.push(`${counts.skipped} without tactics`);
+      if (counts.unchanged) parts.push(`${counts.unchanged} already right`);
+      if (counts.noTactics) parts.push(`${counts.noTactics} not yours then`);
+      if (counts.skipped) parts.push(`${counts.skipped} skipped`);
       if (refused) {
         line.textContent = `${club.name}: ${refused}`;
         line.style.color = COLOURS.bad;
       } else {
-        line.textContent = `${club.name}: ${parts.join(', ') || 'nothing new'}${stoppedAt ? ` · up to date from ${day(stoppedAt.startDate)}` : ''}`;
+        line.textContent = `${club.name}: ${parts.join(', ') || 'nothing new'}`;
         line.style.color = counts.saved + counts.updated ? COLOURS.good : COLOURS.muted;
       }
     }

@@ -371,7 +371,9 @@ export const MFL_TACTICS_GUIDE = [
   `Besides the formation and XI, the manager sets a playing style: ${TACTIC_SETTINGS.length} settings, each on ${TACTIC_STEPS} steps from 1 (the low end) to ${TACTIC_STEPS} (the high end), listed under playingStyleSettings with what each end means. Step 3 is the middle and MFL's default. Flank Preference low favours attacking down our left, high our right.`,
   'Pick a step for every setting to suit this matchup: flank preference, width, crossing and dribbling to aim at their weak flank and use our best wide players; directness and team depth to use or deny pace in behind; pressing, aggressiveness and compactness against their midfield and creators; shooting by our shooters and their keeper; clearances by how good our defenders are on the ball.',
   'ourTacticsLog, when present, holds the settings we actually used in our own logged matches (league, cup and friendly) with the result and xG, how we did with each setting low (steps 1-2), mid (3) and high (4-5), and the logged matches against this opponent and this formation. Weigh it by sample size: a few friendlies are weak evidence, and say so. Let it shape the settings you pick and explain the link in historyNotes.',
-  "ourTacticsLog also holds the individual instructions we used (playerInstructions, by player name) and our record with each one tried (playerInstructionResults, by step, against the logged matches without it), and, where you advised us before a match, that advice and how closely we followed it (adviceFollowed: team settings set as advised) with our record when we followed it and when we didn't (followingAdvice). Learn from it: keep what worked, change advice that we followed and lost with, and test instructions we haven't tried enough, saying so in historyNotes.",
+  "Judge results against the opposition's strength. Each logged match has ovrGap (our XI's average OVR less theirs) and expectedPoints, what that gap is worth on average across MFL (3 × logistic(0.265 × gap): level XIs 1.5, +4 OVR 2.2, +8 OVR 2.7); records carry vsExpected, points a game above or below that, over expectedGames of their games. Prefer vsExpected to raw points a game: a setting used mostly against weaker sides wins for that alone. bestBand already ranks by it when every game in the bands has it.",
+  "ourTacticsLog also holds the individual instructions we used (playerInstructions, by player name, each with that player's own line in the match: rating, goals, assists, xG, shots, chances created, dribbles, defensive duels won) and our record with each one tried (playerInstructionResults, by step, against the logged matches without it), and, where you advised us before a match, that advice and how closely we followed it (adviceFollowed: team settings set as advised) with our record when we followed it and when we didn't (followingAdvice). Learn from it: keep what worked, change advice that we followed and lost with, and test instructions we haven't tried enough, saying so in historyNotes.",
+  "Judge an individual instruction by the player's own numbers as well as the team's result: playerInstructionResults gives their average line with each step (form) and in the logged matches they played on the team's step (formWithout). A striker told to shoot more who shoots more but scores less and rates lower is worse off for it even in a win; keep an instruction that lifts the player's rating and output, and drop or change one that doesn't. Small samples (a game or two) are hints, not proof.",
   `The captain plays at +${CAPTAIN_OVR} OVR, and the whole XI gets a bonus by the captain's position: goalkeeper +2 DEF; defender +2 DEF, +1 PHY; midfielder +2 PAS, +1 DRI; forward +2 SHO, +1 PAC. us.captainOptions lists our best choices with how much each lifts the XI's average rating; them.likelyCaptain is theirs. Pick ours weighing that lift against what the matchup needs, e.g. a defender's DEF bonus against a dangerous attack, or a forward's SHO bonus against a weak keeper.`,
   `Each player can also take individual instructions (playerSettings) that override the team's step for them alone, or follow it ("TEAM"). Passing Risk and Position Freedom exist only per player and start at step 3. In players, pick 2 to ${MAX_PLAYER_INSTRUCTIONS} key players from us.startingXi (those in the key matchups, our playmaker and our best attacker, a defender facing their danger man) and give each only the settings that should differ from your team step, e.g. a winger who beats his full-back on pace and dribbling dribbles more, a creative midfielder with high passing takes more passing risk, a slow centre-back clears more and presses less.`,
   'Only recommend formations, who plays where, swaps from the listed squads, the captain, the listed playing style settings and individual instructions. Do not invent other instructions.',
@@ -397,17 +399,25 @@ function describeHistory(history: TacticsHistory | null | undefined, theirClubId
   const nameOf = (id: number | string) => ourById.get(Number(id))?.metadata.lastName ?? `Player ${id} (left the squad)`;
   const named = (players: PlayerSettings | null | undefined) =>
     Object.entries(players ?? {}).map(([id, settings]) => ({ player: nameOf(id), settings }));
+  const lineOf = (match: (typeof logged)[number], id: string) => {
+    const line = match.playerStats?.[id];
+    return line && line.minutes > 0
+      ? { minutes: line.minutes, rating: line.rating, goals: line.goals, assists: line.assists, xG: line.xG, shots: line.shots, chancesCreated: line.chancesCreated, dribbles: line.dribbles, duelsWon: line.duelsWon }
+      : null;
+  };
   const describe = (match: (typeof logged)[number]) => ({
     date: new Date(match.startDate).toISOString().slice(0, 10),
     type: match.type,
     opponent: match.opponent.name,
     result: `${match.goalsFor}-${match.goalsAgainst}`,
+    ovrGap: match.ovrGap ?? null,
+    expectedPoints: match.expectedPoints ?? null,
     formation: match.formation ? formationLabel(match.formation) : 'unknown',
     opponentFormation: match.opponentFormation ? formationLabel(match.opponentFormation) : 'unknown',
     xGFor: match.xGFor,
     xGAgainst: match.xGAgainst,
     settings: match.settings,
-    playerInstructions: named(match.players),
+    playerInstructions: Object.entries(match.players ?? {}).map(([id, settings]) => ({ player: nameOf(id), settings, performance: lineOf(match, id) })),
     ...(match.advice
       ? {
           advised: {
@@ -429,6 +439,7 @@ function describeHistory(history: TacticsHistory | null | undefined, theirClubId
       setting: effect.key,
       bySteps: effect.bySteps,
       withoutIt: effect.team,
+      formWithout: effect.teamForm,
     })),
     bySetting: settingEffects(logged).map(effect => ({ setting: effect.key, ...effect.bands, bestBand: effect.best })),
     againstThisOpponent: similar.sameOpponent.map(describe),

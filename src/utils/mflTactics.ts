@@ -1,4 +1,4 @@
-import { MAX_LOGGED_PLAYERS, type PlayerSettings, type TacticSettings } from './tacticsHistory';
+import { MAX_LOGGED_PLAYERS, type PlayerLine, type PlayerSettings, type TacticSettings } from './tacticsHistory';
 
 /*
  * MFL's own tactics, as a match report shows them to the club's owner, turned into the steps our tactics log keeps.
@@ -83,7 +83,42 @@ export function playerSettingsFrom(formation: ReportFormation, playerIdAt: (inde
   return players;
 }
 
-const sameSteps = (a: TacticSettings, b: TacticSettings) => Object.keys(a).length === Object.keys(b).length && Object.entries(a).every(([key, step]) => b[key] === step);
+/** Most lines a side of a report has: the XI and the substitutes who came on */
+const MAX_LINES = 16;
+
+/**
+ * A side's lines from a match report (playersStats), as the log keeps them by player ID; lines that aren't a
+ * player's are left out
+ */
+export function playerLinesFrom(stats: unknown): Record<string, PlayerLine> {
+  const lines: Record<string, PlayerLine> = {};
+  if (!Array.isArray(stats)) return lines;
+  const count = (value: unknown) => (typeof value === 'number' && Number.isFinite(value) ? Math.round(value * 100) / 100 : 0);
+  for (const raw of stats.slice(0, MAX_LINES)) {
+    const line = raw as Record<string, unknown> | null;
+    const playerId = Number(line?.playerId);
+    if (!line || !Number.isInteger(playerId) || playerId <= 0) continue;
+    lines[String(playerId)] = {
+      position: typeof line.position === 'string' ? line.position.slice(0, 4) : '',
+      // MFL gives the time played in seconds
+      minutes: Math.round(count(line.time) / 60),
+      rating: count(line.rating),
+      goals: count(line.goals),
+      assists: count(line.assists),
+      xG: count(line.xG),
+      shots: count(line.shots),
+      chancesCreated: count(line.chancesCreated),
+      dribbles: count(line.dribblingSuccess),
+      duelsWon: count(line.defensiveDuelsWon),
+    };
+  }
+  return lines;
+}
+
+/** A side's xG, from its lines */
+export const xgOfLines = (lines: Record<string, PlayerLine>) => Math.round(Object.values(lines).reduce((total, line) => total + line.xG, 0) * 100) / 100;
+
+const sameSteps =(a: TacticSettings, b: TacticSettings) => Object.keys(a).length === Object.keys(b).length && Object.entries(a).every(([key, step]) => b[key] === step);
 
 /** Whether two logs of a match hold the same settings and the same individual instructions */
 export function sameTactics(a: { settings: TacticSettings; players: PlayerSettings }, b: { settings: TacticSettings; players: PlayerSettings }): boolean {

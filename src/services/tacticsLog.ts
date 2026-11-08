@@ -1,17 +1,19 @@
 import { executeRaw } from '../lib/db-helpers';
-import { MflHttpError, fetchMflCached, keptFormationResults, toFormationResult, type MatchDetails } from './formationResults';
+import { MflHttpError, fetchMflCached, keptFormationResults, toFormationResult, type FormationDetails, type MatchDetails } from './formationResults';
 import { MflRateLimitError } from './playerProgressionCache';
 import type { MatchReport } from './matchAnalysis';
 import {
+  expectedPoints,
   validPlayerSettings,
   validSettings,
   type ClubMatchLog,
+  type PlayerLine,
   type PlayerSettings,
   type StoredAdvice,
   type TacticSettings,
   type TacticsHistory,
 } from '../utils/tacticsHistory';
-import { playerSettingsFrom, sameTactics, teamSettingsFrom, type ReportFormation } from '../utils/mflTactics';
+import { playerLinesFrom, playerSettingsFrom, sameTactics, teamSettingsFrom, xgOfLines, type ReportFormation } from '../utils/mflTactics';
 
 /*
  * A club's tactics log on the server: the settings kept in club_tactics, joined with the club's played matches
@@ -43,7 +45,36 @@ export interface TacticsEntry {
   settings: TacticSettings;
   players: PlayerSettings;
   updatedAt: string;
+  /** 'mfl' when imported from MFL's report */
+  source: string | null;
+  /** The match's facts, kept with imported matches so the log needs nothing more from MFL for them */
+  stats: MatchFacts | null;
 }
+
+/** What the log needs about a played match beyond MFL's list of matches: from its line-ups and report */
+export interface MatchFacts {
+  formation: string | null;
+  opponentFormation: string | null;
+  /** The XIs' average OVR */
+  ovrFor: number | null;
+  ovrAgainst: number | null;
+  xGFor: number | null;
+  xGAgainst: number | null;
+  /** Our players' lines in the report, by player ID */
+  players: Record<string, PlayerLine>;
+}
+
+const isFacts = (value: unknown): value is MatchFacts =>
+  !!value && typeof value === 'object' && typeof (value as MatchFacts).players === 'object' && (value as MatchFacts).players !== null;
+
+/** A side's XI average OVR from its line-up, null without one */
+const xiAverage = (formation: FormationDetails | null | undefined) => {
+  const overalls = (formation?.positions ?? [])
+    .filter(position => typeof position.index === 'number' && position.index < 11)
+    .map(position => position.player?.metadata?.overall)
+    .filter((overall): overall is number => typeof overall === 'number');
+  return overalls.length ? Math.round((overalls.reduce((total, overall) => total + overall, 0) / overalls.length) * 10) / 10 : null;
+};
 
 const parse = (text: unknown): unknown => {
   try {
@@ -56,12 +87,18 @@ const parse = (text: unknown): unknown => {
 /** The settings logged for a club, by match. Empty without a database. */
 export async function loadTacticsEntries(clubId: number): Promise<TacticsEntry[]> {
   if (!process.env.TURSO_DATABASE_URL) return [];
-  const { data, error } = await executeRaw('SELECT match_id, settings, player_settings, updated_at FROM club_tactics WHERE club_id = ?', [clubId]);
+  const { data, error } = await executeRaw(
+    'SELECT match_id, settings, player_settings, source, match_stats, updated_at FROM club_tactics WHERE club_id = ?',
+    [clubId],
+  );
   if (error || !data) return [];
   return data.flatMap(row => {
     const settings = validSettings(parse(row.settings));
     const players = validPlayerSettings(parse(row.player_settings)) ?? {};
-    return settings ? [{ matchId: Number(row.match_id), settings, players, updatedAt: String(row.updated_at) }] : [];
+    const stats = parse(row.match_stats);
+    return settings
+      ? [{ matchId: Number(row.match_id), settings, players, updatedAt: String(row.updated_at), source: row.source ? String(row.source) : null, stats: isFacts(stats) ? stats : null }]
+      : [];
   });
 }
 
@@ -101,20 +138,26 @@ export async function saveAdvice(clubId: number, matchId: number, advice: Omit<S
   if (error) throw new Error(error.message);
 }
 
-/** Keeps the settings and individual instructions used in a match, or with null forgets them. */
+/**
+ * Keeps the settings and individual instructions used in a match, or with null forgets them. A log by hand clears
+ * the source; the match's facts, once kept, stay.
+ */
 export async function saveTacticsEntry(
   clubId: number,
   matchId: number,
   settings: TacticSettings | null,
   players: PlayerSettings,
   walletAddress: string,
+  imported?: { stats: MatchFacts },
 ): Promise<void> {
   const { error } = settings
     ? await executeRaw(
-        `INSERT INTO club_tactics (club_id, match_id, settings, player_settings, wallet_address, updated_at) VALUES (?, ?, ?, ?, ?, datetime('now'))
+        `INSERT INTO club_tactics (club_id, match_id, settings, player_settings, source, match_stats, wallet_address, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))
          ON CONFLICT (club_id, match_id) DO UPDATE SET settings = excluded.settings, player_settings = excluded.player_settings,
+           source = excluded.source, match_stats = COALESCE(excluded.match_stats, club_tactics.match_stats),
            wallet_address = excluded.wallet_address, updated_at = excluded.updated_at`,
-        [clubId, matchId, JSON.stringify(settings), JSON.stringify(players), walletAddress],
+        [clubId, matchId, JSON.stringify(settings), JSON.stringify(players), imported ? 'mfl' : null, imported ? JSON.stringify(imported.stats) : null, walletAddress],
       )
     : await executeRaw('DELETE FROM club_tactics WHERE club_id = ? AND match_id = ?', [clubId, matchId]);
   if (error) throw new Error(error.message);
@@ -134,6 +177,7 @@ export async function importReportTactics(
   matchId: number,
   formation: ReportFormation,
   walletAddress: string,
+  report: { ours?: unknown; theirs?: unknown } = {},
 ): Promise<ImportOutcome> {
   const details = await fetchMflCached<MatchDetails>(`/matches/${matchId}?withFormations=true`, 168 * HOUR).catch(error => {
     if (error instanceof MflHttpError && error.status === 404) return null;
@@ -153,14 +197,34 @@ export async function importReportTactics(
   const players = validPlayerSettings(playerSettingsFrom(formation, playerIdAt));
   if (!settings || !players) return { status: 'skipped', reason: "Couldn't read the tactics" };
 
-  const { data } = await executeRaw('SELECT settings, player_settings FROM club_tactics WHERE club_id = ? AND match_id = ?', [clubId, matchId]);
+  const theirs = home ? details.awayFormation : details.homeFormation;
+  const ourLines = playerLinesFrom(report.ours);
+  const theirLines = playerLinesFrom(report.theirs);
+  const reported = Object.keys(ourLines).length > 0 && Object.keys(theirLines).length > 0;
+  const stats: MatchFacts = {
+    formation: played?.type ?? null,
+    opponentFormation: theirs?.type ?? null,
+    ovrFor: xiAverage(played),
+    ovrAgainst: xiAverage(theirs),
+    xGFor: reported ? xgOfLines(ourLines) : null,
+    xGAgainst: reported ? xgOfLines(theirLines) : null,
+    players: ourLines,
+  };
+
+  const { data } = await executeRaw('SELECT settings, player_settings, source FROM club_tactics WHERE club_id = ? AND match_id = ?', [clubId, matchId]);
   const row = data?.[0];
   const logged = row && validSettings(parse(row.settings));
-  if (logged && sameTactics({ settings, players }, { settings: logged, players: validPlayerSettings(parse(row.player_settings)) ?? {} })) {
-    return { status: 'unchanged' };
-  }
-  await saveTacticsEntry(clubId, matchId, settings, players, walletAddress);
-  return { status: logged ? 'updated' : 'saved' };
+  const same = !!logged && sameTactics({ settings, players }, { settings: logged, players: validPlayerSettings(parse(row.player_settings)) ?? {} });
+  // Kept as imported even when unchanged, with the match's facts, so later imports skip it
+  if (!same || row?.source !== 'mfl') await saveTacticsEntry(clubId, matchId, settings, players, walletAddress, { stats });
+  return { status: same ? 'unchanged' : logged ? 'updated' : 'saved' };
+}
+
+/** The club's matches imported from MFL's reports, which an import needn't read again */
+export async function importedMatchIds(clubId: number): Promise<number[]> {
+  const { data, error } = await executeRaw("SELECT match_id FROM club_tactics WHERE club_id = ? AND source = 'mfl'", [clubId]);
+  if (error) throw new Error(error.message);
+  return (data ?? []).map(row => Number(row.match_id));
 }
 
 /** The club's squad ID and owner's wallet, from MFL */
@@ -205,7 +269,8 @@ export async function buildTacticsHistory(clubId: number, entries?: TacticsEntry
   const played = [...byId.values()].sort((a, b) => b.startDate - a.startDate);
   const settingsById = new Map(logged.map(entry => [entry.matchId, entry.settings]));
   const playersById = new Map(logged.map(entry => [entry.matchId, entry.players]));
-  const kept = await keptFormationResults(played.filter(match => settingsById.has(match.id)).map(match => match.id));
+  const factsById = new Map(logged.flatMap(entry => (entry.stats ? [[entry.matchId, entry.stats] as const] : [])));
+  const kept = await keptFormationResults(played.filter(match => settingsById.has(match.id) && !factsById.has(match.id)).map(match => match.id));
 
   const matches: ClubMatchLog[] = [];
   for (const match of played) {
@@ -213,7 +278,16 @@ export async function buildTacticsHistory(clubId: number, entries?: TacticsEntry
     const settings = settingsById.get(match.id) ?? null;
     let formations = { formation: null as string | null, opponentFormation: null as string | null };
     let xg = { xGFor: null as number | null, xGAgainst: null as number | null };
-    if (settings) {
+    let ovrGap: number | null = null;
+    let playerStats: Record<string, PlayerLine> | null = null;
+    const facts = factsById.get(match.id);
+    if (settings && facts) {
+      // Imported: everything is kept with it
+      formations = { formation: facts.formation, opponentFormation: facts.opponentFormation };
+      xg = { xGFor: facts.xGFor, xGAgainst: facts.xGAgainst };
+      ovrGap = facts.ovrFor !== null && facts.ovrAgainst !== null ? facts.ovrFor - facts.ovrAgainst : null;
+      playerStats = facts.players;
+    } else if (settings) {
       // One at a time: MFL blocks bursts
       let result = kept.get(match.id) ?? null;
       if (!result) {
@@ -224,11 +298,13 @@ export async function buildTacticsHistory(clubId: number, entries?: TacticsEntry
         result = details && toFormationResult(match.id, details);
       }
       if (result) formations = home ? { formation: result.homeFormation, opponentFormation: result.awayFormation } : { formation: result.awayFormation, opponentFormation: result.homeFormation };
+      if (result?.homeOvr && result.awayOvr) ovrGap = ((home ? 1 : -1) * (result.homeOvr - result.awayOvr)) / 11;
       const report = await fetchMflCached<MatchReport>(`/matches/${match.id}/report`, 168 * HOUR).catch(error => {
         if (error instanceof MflRateLimitError) throw error;
         return null;
       });
       xg = xgOf(report, home);
+      if (report) playerStats = playerLinesFrom(home ? report.home?.playersStats : report.away?.playersStats);
     }
     const opponent = home ? match.awaySquad.club : match.homeSquad.club;
     matches.push({
@@ -245,6 +321,13 @@ export async function buildTacticsHistory(clubId: number, entries?: TacticsEntry
       settings,
       players: settings ? playersById.get(match.id) ?? {} : null,
       advice: advice.get(match.id) ?? null,
+      ...(settings
+        ? {
+            ovrGap: ovrGap === null ? null : Math.round(ovrGap * 10) / 10,
+            expectedPoints: ovrGap === null ? null : Math.round(expectedPoints(ovrGap, home) * 100) / 100,
+            playerStats,
+          }
+        : {}),
     });
   }
   const playedIds = new Set(played.map(match => match.id));
