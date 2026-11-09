@@ -9,24 +9,60 @@ interface WalletGateProps {
   title: string;
   /** What the page shows once there is a wallet, e.g. "every player you own" */
   description: string;
+  /**
+   * The page shows private data, so only the visitor's own wallet, proved with a signature, will do: no viewing
+   * other wallets
+   */
+  ownOnly?: boolean;
 }
 
 /**
  * Shown in place of a page that needs a wallet: connect your own, or paste any wallet address to look around read-only.
  * While the saved login is still being checked it shows a spinner instead, so a connected visitor never sees it flash.
  */
-const WalletGate: React.FC<WalletGateProps> = ({ title, description }) => {
-  const { connectWallet, viewWallet, isLoading, isReady = true } = useWallet();
+const WalletGate: React.FC<WalletGateProps> = ({ title, description, ownOnly = false }) => {
+  const { connectWallet, viewWallet, isLoading, isReady = true, isConnected, account, verifyWallet, isVerifying, verifyError, isSessionChecked } = useWallet();
   const [address, setAddress] = useState('');
   const [invalid, setInvalid] = useState(false);
 
-  if (!isReady) {
+  if (!isReady || (ownOnly && !isSessionChecked)) {
     return (
       <div className="flex flex-col gap-[22px]">
         <PageHeader title={title} />
         <Panel className="flex items-center justify-center gap-3 px-6 py-12 text-muted">
           <div className="animate-spin rounded-full h-6 w-6 border-2 border-accent border-t-transparent"></div>
           <span>Checking wallet connection...</span>
+        </Panel>
+      </div>
+    );
+  }
+
+  if (ownOnly) {
+    const connected = isConnected && !!account;
+    return (
+      <div className="flex flex-col gap-[22px]">
+        <PageHeader title={title} subtitle={`Sign in with your own wallet to see ${description}. Only you can see your clubs here.`} />
+        <Panel className="flex flex-col items-start gap-3 p-6 sm:p-8 max-w-[640px]">
+          <span className="grid place-items-center w-11 h-11 rounded-xl bg-accent text-accent-fg" aria-hidden="true">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2}>
+              <rect x="4" y="10" width="16" height="11" rx="2.5" />
+              <path d="M8 10V7a4 4 0 0 1 8 0v3" />
+            </svg>
+          </span>
+          <h2 className="m-0 font-display text-xl font-bold">{connected ? 'Verify your wallet' : 'Connect your wallet'}</h2>
+          <p className="m-0 text-sm text-muted">
+            {connected
+              ? `Approve one signature in Dapper to prove ${account!.slice(0, 6)}…${account!.slice(-4)} is yours. It costs nothing and doesn't move anything; it keeps your tactics and AI analyses private to you.`
+              : "Sign in with your Dapper wallet. You'll be asked to approve a signature once, which proves the wallet is yours. It costs nothing and doesn't move anything."}
+          </p>
+          <button type="button" onClick={connected ? verifyWallet : connectWallet} disabled={isLoading || isVerifying} className={`${btnPrimary} mt-1`}>
+            {isLoading || isVerifying ? 'Check Dapper…' : connected ? 'Verify wallet' : 'Connect Wallet'}
+          </button>
+          {verifyError && (
+            <p className="m-0 text-sm text-danger-ink" role="alert">
+              {verifyError}
+            </p>
+          )}
         </Panel>
       </div>
     );

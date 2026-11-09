@@ -237,9 +237,9 @@ const OpponentPrep: React.FC<{
 
 const MatchesPage: React.FC = () => {
   const router = useRouter();
-  const { isConnected, account, viewedAddress = null, isVerified, verifyWallet, isVerifying, verifyError } = useWallet();
-  // The connected wallet, or one pasted in to look at read-only
-  const walletAddress = (isConnected ? account : null) ?? viewedAddress;
+  const { isConnected, account, isVerified } = useWallet();
+  // Only the visitor's own wallet, proved to the server: the page shows their tactics and spends AI analyses
+  const walletAddress = isConnected && isVerified ? account : null;
   const [clubs, setClubs] = useState<MFLClubData[]>([]);
   const [clubId, setClubId] = useState<number | null>(null);
   const [isLoadingClubs, setIsLoadingClubs] = useState(false);
@@ -285,8 +285,8 @@ const MatchesPage: React.FC = () => {
 
   const { meta, own } = useFormationMeta();
   const { report: ours, error: ourError } = useScoutReport(clubId, OUR_MATCHES);
-  // Only the connected wallet can log tactics, for its own clubs; a wallet pasted in only looks
-  const canLog = isConnected && !!account;
+  // Logging is for the verified wallet's own clubs, which are the only ones this page shows
+  const canLog = !!walletAddress;
   const tactics = useTacticsLog(clubId, canLog ? account : null);
   const ourFits = useMemo(() => squadFits(ours?.players ?? []), [ours]);
   const ourPlayersById = useMemo(() => new Map((ours?.players ?? []).map(player => [player.id, player])), [ours]);
@@ -393,7 +393,7 @@ const MatchesPage: React.FC = () => {
   };
 
   if (!walletAddress) {
-    return <WalletGate title="Match Prep Tool" description="your clubs' next opponents" />;
+    return <WalletGate title="Match Prep Tool" description="your clubs' next opponents" ownOnly />;
   }
 
   return (
@@ -401,28 +401,9 @@ const MatchesPage: React.FC = () => {
       <div className="flex items-end justify-between gap-[18px] flex-wrap">
         <div className="flex flex-col gap-1.5">
           <h1 className="m-0 font-display text-[32px] sm:text-[44px] leading-none font-extrabold tracking-[-0.03em] text-fg">Match Prep Tool</h1>
-          {isConnected && account && (
-            <span className="flex items-center gap-2 flex-wrap text-xs font-semibold text-muted">
-              {isVerified ? (
-                <span className="text-accent-ink" title="Your wallet signed in with a signature Flow checked">
-                  ✓ Verified as {account.slice(0, 6)}…{account.slice(-4)}
-                </span>
-              ) : (
-                <>
-                  <span>Wallet not verified yet</span>
-                  <button
-                    type="button"
-                    onClick={verifyWallet}
-                    disabled={isVerifying}
-                    className="h-7 px-2.5 rounded-[9px] border border-line-2 text-xs font-bold text-fg-3 cursor-pointer hover:border-[#c6f432] hover:text-[#c6f432]"
-                  >
-                    {isVerifying ? 'Check Dapper…' : 'Verify wallet'}
-                  </button>
-                </>
-              )}
-              {verifyError && <span className="text-danger-ink">{verifyError}</span>}
-            </span>
-          )}
+          <span className="text-xs font-semibold text-accent-ink" title="Your wallet signed in with a signature Flow checked: only you see this page">
+            ✓ Verified as {walletAddress.slice(0, 6)}…{walletAddress.slice(-4)} · private to you
+          </span>
         </div>
         <div className="flex items-end gap-3 flex-wrap">
           <label className="flex flex-col gap-1.5 text-xs font-semibold text-muted">

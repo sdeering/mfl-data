@@ -4,6 +4,9 @@ import { MflRateLimitError } from '@/src/services/playerProgressionCache';
 import { clubOwnership, importReportTactics, importedMatchIds } from '@/src/services/tacticsLog';
 import { describeWait, takeRateLimits, visitorKey } from '@/src/lib/rateLimit';
 import type { ReportFormation } from '@/src/utils/mflTactics';
+import { walletOfImportToken } from '@/src/lib/session';
+
+const OUTDATED = 'This bookmark is out of date. Drag the new one from the tactics log on MFL Data, then click it again.';
 
 /*
  * The MFL import (public/mfl-import.js) runs on app.playmfl.com, where the club owner is logged in and MFL's match
@@ -30,16 +33,22 @@ export function OPTIONS() {
 }
 
 /**
- * GET /api/tactics-import?clubId=
- * The club's matches already imported from MFL, which the import skips: MFL's report of a played match doesn't change.
+ * GET /api/tactics-import?clubId=&key=
+ * The club's matches already imported from MFL, which the import skips: MFL's report of a played match doesn't
+ * change. Only for the club's owner, by the bookmark's key.
  */
 export async function GET(request: NextRequest) {
   const clubId = Number(request.nextUrl.searchParams.get('clubId'));
   if (!Number.isInteger(clubId) || clubId <= 0) return reply({ success: false, error: 'Club ID must be a number' }, 400);
   if (!process.env.TURSO_DATABASE_URL) return reply({ success: false, error: 'The tactics log needs the database' }, 503);
+  const wallet = walletOfImportToken(request.nextUrl.searchParams.get('key'));
+  if (!wallet) return reply({ success: false, error: OUTDATED }, 401);
   try {
+    const { owner } = await clubOwnership(clubId);
+    if (!owner || owner.toLowerCase() !== wallet) return reply({ success: false, error: 'Only the club owner can import its tactics' }, 403);
     return reply({ success: true, imported: await importedMatchIds(clubId) });
   } catch (error) {
+    if (error instanceof MflRateLimitError) return busy(error.retryAfterSeconds);
     console.error(`[API] GET /api/tactics-import for club ${clubId} failed:`, error);
     return reply({ success: false, error: 'Could not read the tactics log' }, 502);
   }
@@ -64,7 +73,7 @@ const FORMATION_KEYS = [
 ];
 
 /**
- * POST /api/tactics-import { walletAddress, clubId, matchId, formation, report: { ours, theirs } }
+ * POST /api/tactics-import { key, clubId, matchId, formation, report: { ours, theirs } }
  * Logs the tactics from MFL's report of one of the club's played matches, with the match's facts: both sides'
  * playersStats from the report give our players' lines and the xG. Answers with the outcome: saved, updated,
  * unchanged (already logged the same) or skipped with the reason.
@@ -72,12 +81,13 @@ const FORMATION_KEYS = [
 export async function POST(request: NextRequest) {
   if (!process.env.TURSO_DATABASE_URL) return reply({ success: false, error: 'The tactics log needs the database' }, 503);
   const body = await request.json().catch(() => null);
-  const walletAddress = typeof body?.walletAddress === 'string' ? body.walletAddress.trim().toLowerCase() : '';
+  const walletAddress = walletOfImportToken(typeof body?.key === 'string' ? body.key : null);
+  if (!walletAddress) return reply({ success: false, error: OUTDATED }, 401);
   const clubId = Number(body?.clubId);
   const matchId = Number(body?.matchId);
   const raw = body?.formation;
-  if (!walletAddress || !Number.isInteger(clubId) || clubId <= 0 || !Number.isInteger(matchId) || matchId <= 0 || !raw || typeof raw !== 'object' || Array.isArray(raw)) {
-    return reply({ success: false, error: 'Give the wallet, the club, the match and its formation from the report' }, 400);
+  if (!Number.isInteger(clubId) || clubId <= 0 || !Number.isInteger(matchId) || matchId <= 0 || !raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    return reply({ success: false, error: 'Give the club, the match and its formation from the report' }, 400);
   }
   const formation = Object.fromEntries(FORMATION_KEYS.filter(key => key in raw).map(key => [key, raw[key]])) as ReportFormation;
   const instructions = formation.playersInstructions;

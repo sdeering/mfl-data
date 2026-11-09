@@ -31,6 +31,8 @@ interface WalletContextType {
   verifyWallet: () => Promise<void>;
   isVerifying: boolean;
   verifyError: string | null;
+  /** The session this browser already had has been read, so pages don't flash a verify prompt */
+  isSessionChecked: boolean;
 }
 
 const nonce = async (): Promise<string> => {
@@ -75,13 +77,15 @@ export const WalletProvider: React.FC<WalletProviderProps> = ({ children }) => {
   const [verifiedWallet, setVerifiedWallet] = useState<string | null>(null);
   const [isVerifying, setIsVerifying] = useState(false);
   const [verifyError, setVerifyError] = useState<string | null>(null);
+  const [isSessionChecked, setIsSessionChecked] = useState(false);
 
   // The session this browser already has, if any
   useEffect(() => {
     fetch('/api/auth/session', { cache: 'no-store' })
       .then(response => response.json())
       .then(result => setVerifiedWallet(typeof result.wallet === 'string' ? result.wallet : null))
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => setIsSessionChecked(true));
   }, []);
 
   // Initialize FCL and check connection on mount
@@ -317,6 +321,7 @@ export const WalletProvider: React.FC<WalletProviderProps> = ({ children }) => {
     verifyWallet,
     isVerifying,
     verifyError,
+    isSessionChecked,
   };
 
   return (

@@ -41,20 +41,37 @@ export function checkNonce(nonce: unknown, now = Date.now()): boolean {
   return age >= -60 * 1000 && age <= NONCE_MS
 }
 
-/** The cookie's value for a verified wallet: the wallet, when it expires, and our MAC of both */
-export function sessionValue(wallet: string, now = Date.now()): string {
-  const expires = now + SESSION_DAYS * 24 * 3600 * 1000
-  return `${wallet}.${expires}.${mac(`session:${wallet}.${expires}`).toString('hex')}`
+/** A wallet, when its proof expires, and our MAC of both, for one purpose */
+function signedWallet(purpose: string, wallet: string, days: number, now: number): string {
+  const expires = now + days * 24 * 3600 * 1000
+  return `${wallet}.${expires}.${mac(`${purpose}:${wallet}.${expires}`).toString('hex')}`
 }
 
-/** The verified wallet a cookie's value names, or null when it isn't ours, has expired or is missing */
-export function walletOfSession(value: string | undefined | null, now = Date.now()): string | null {
+/** The wallet a signed value names, or null when it isn't ours, is for another purpose, has expired or is missing */
+function walletOfSigned(purpose: string, value: string | undefined | null, now: number): string | null {
   const [wallet, expires, signature] = (value ?? '').split('.')
   const address = normalizeWalletAddress(wallet ?? '')
   if (!address || address !== wallet || !/^\d+$/.test(expires ?? '') || !/^[0-9a-f]{64}$/.test(signature ?? '')) return null
-  if (!sameBytes(Buffer.from(signature, 'hex'), mac(`session:${wallet}.${expires}`))) return null
+  if (!sameBytes(Buffer.from(signature, 'hex'), mac(`${purpose}:${wallet}.${expires}`))) return null
   return Number(expires) > now ? address : null
 }
+
+/** The cookie's value for a verified wallet */
+export const sessionValue = (wallet: string, now = Date.now()) => signedWallet('session', wallet, SESSION_DAYS, now)
+
+/** The verified wallet a cookie's value names, or null */
+export const walletOfSession = (value: string | undefined | null, now = Date.now()) => walletOfSigned('session', value, now)
+
+/** How long an MFL import bookmark works */
+export const IMPORT_TOKEN_DAYS = 365
+
+/**
+ * The MFL import bookmark's key: it runs on app.playmfl.com, where our session cookie isn't sent, so it carries
+ * this instead. It only lets the bookmark log tactics for the wallet's own clubs.
+ */
+export const importToken = (wallet: string, now = Date.now()) => signedWallet('import', wallet, IMPORT_TOKEN_DAYS, now)
+
+export const walletOfImportToken = (value: string | undefined | null, now = Date.now()) => walletOfSigned('import', value, now)
 
 /** The verified wallet of the request's session, or null */
 export const sessionWallet = (request: { cookies: { get: (name: string) => { value: string } | undefined } }) =>

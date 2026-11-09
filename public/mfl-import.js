@@ -7,13 +7,16 @@
  * club then), which this browser remembers.
  */
 (() => {
-  const SITE = (() => {
+  const SCRIPT = (() => {
     try {
-      return new URL(document.currentScript.src).origin;
+      return new URL(document.currentScript.src);
     } catch {
-      return 'https://mfldata.com';
+      return null;
     }
   })();
+  const SITE = SCRIPT ? SCRIPT.origin : 'https://mfldata.com';
+  /** The bookmark's key: it proves to MFL Data whose clubs these are */
+  const KEY = SCRIPT ? SCRIPT.searchParams.get('key') : null;
   const MFL_API = 'https://api.playmfl.com';
   /** Matches looked back over per club */
   const MAX_PER_CLUB = 40;
@@ -162,6 +165,7 @@
 
   const run = async () => {
     if (location.hostname !== 'app.playmfl.com') throw new Stop('Open app.playmfl.com, log in, and click the bookmark there.');
+    if (!KEY) throw new Stop('This bookmark is out of date. Drag the new one from the tactics log on MFL Data, then click it again.');
     const wallet = walletOf();
     if (!wallet) throw new Stop('Log in to MFL first, then click the bookmark again.');
 
@@ -177,7 +181,7 @@
       if (!squadId) continue;
       const listed = await mfl(`/matches?squadId=${squadId}&past=true&limit=${MAX_PER_CLUB + 5}`);
       const played = listed.filter(match => match.status === 'ENDED').sort((a, b) => b.startDate - a.startDate).slice(0, MAX_PER_CLUB);
-      const known = await fetch(`${SITE}/api/tactics-import?clubId=${club.id}`).then(response => response.json()).catch(() => ({}));
+      const known = await fetch(`${SITE}/api/tactics-import?clubId=${club.id}&key=${encodeURIComponent(KEY)}`).then(response => response.json()).catch(() => ({}));
       if (!known.success) throw new Stop(known.error || 'MFL Data is unreachable. Try again in a few minutes.');
       const imported = new Set(known.imported);
       const matches = played.filter(match => !imported.has(match.id) && !noTactics.has(match.id));
@@ -220,7 +224,7 @@
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            walletAddress: wallet,
+            key: KEY,
             clubId: club.id,
             matchId: match.id,
             formation: tacticsOf(ours.formation),

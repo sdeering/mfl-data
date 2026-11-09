@@ -398,8 +398,8 @@ export const AiAnalysisPanel: React.FC<{
 
   useEffect(() => {
     let cancelled = false;
-    const query = request.walletAddress ? `?walletAddress=${encodeURIComponent(request.walletAddress)}` : '';
-    fetch(`/api/match-analysis${query}`)
+    // The server reads the signed-in wallet from the session
+    fetch('/api/match-analysis')
       .then(response => response.json())
       .then(result => !cancelled && result.success && setAllowance(result.data))
       .catch(() => {});

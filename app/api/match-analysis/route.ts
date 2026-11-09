@@ -18,7 +18,8 @@ import {
   type SideReport,
 } from '@/src/services/matchAnalysis';
 import { describeWait, takeRateLimits, visitorKey } from '@/src/lib/rateLimit';
-import { analysisAllowance, analysisLimits, walletOf } from '@/src/lib/aiAccess';
+import { analysisAllowance, analysisLimits } from '@/src/lib/aiAccess';
+import { sessionWallet } from '@/src/lib/session';
 import { FORMATIONS } from '@/src/utils/squadLineups';
 import { isOutcome, squadFits } from '@/src/utils/formationPlanner';
 
@@ -116,13 +117,11 @@ async function askGemini(prompt: string): Promise<MatchAnalysis> {
  * Keeps the analysis as the advice for our club's fixture when the wallet asking owns the club and the club plays
  * in the match, so the tactics log can set what we used against what was advised. Whether it was kept.
  */
-async function rememberAdvice(clubId: number, matchId: unknown, wallet: unknown, analysis: MatchAnalysis, aim: Outcome): Promise<boolean> {
-  if (!process.env.TURSO_DATABASE_URL || !isId(matchId) || typeof wallet !== 'string' || !wallet) return false;
+async function rememberAdvice(clubId: number, squadId: number | undefined, matchId: unknown, wallet: string, analysis: MatchAnalysis, aim: Outcome): Promise<boolean> {
+  if (!process.env.TURSO_DATABASE_URL || !isId(matchId) || !squadId) return false;
   try {
-    const { squadId, owner } = await clubOwnership(clubId);
-    if (!squadId || !owner || owner.toLowerCase() !== wallet.trim().toLowerCase()) return false;
     if (!(await clubPlaysIn(squadId, matchId))) return false;
-    await saveAdvice(clubId, matchId, adviceFrom(analysis, aim), wallet.trim().toLowerCase());
+    await saveAdvice(clubId, matchId, adviceFrom(analysis, aim), wallet);
     return true;
   } catch (error) {
     console.error(`[API] Could not keep the advice for club ${clubId}, match ${matchId}:`, error);
@@ -131,13 +130,14 @@ async function rememberAdvice(clubId: number, matchId: unknown, wallet: unknown,
 }
 
 /**
- * GET /api/match-analysis?walletAddress=
- * How many fresh analyses the visitor has left today (src/lib/aiAccess.ts): whitelisted wallets have no daily cap.
+ * GET /api/match-analysis
+ * How many fresh analyses the signed-in wallet has left today (src/lib/aiAccess.ts): whitelisted wallets have no
+ * daily cap. Null when not signed in.
  */
 export async function GET(request: NextRequest) {
-  if (!process.env.TURSO_DATABASE_URL) return NextResponse.json({ success: true, data: null });
+  const wallet = sessionWallet(request);
+  if (!process.env.TURSO_DATABASE_URL || !wallet) return NextResponse.json({ success: true, data: null });
   try {
-    const wallet = walletOf(request.nextUrl.searchParams.get('walletAddress'));
     return NextResponse.json({ success: true, data: await analysisAllowance(wallet, visitorKey(request)) });
   } catch (error) {
     console.error('[API] GET /api/match-analysis failed:', error);
@@ -161,20 +161,35 @@ export async function POST(request: NextRequest) {
   }
   const { ourClubId, theirClubId, ourFormation, theirFormation } = body;
   const aim = isOutcome(body.aim) ? body.aim : 'win';
+  // The analysis reads our tactics log, which is private, and costs credits: only for a verified wallet's own club
+  const wallet = sessionWallet(request);
+  if (!wallet) return NextResponse.json({ success: false, error: 'Verify your wallet to use AI analysis' }, { status: 401 });
+  let ourSquadId: number | undefined;
+  try {
+    const { squadId, owner } = await clubOwnership(ourClubId);
+    if (!owner || owner.toLowerCase() !== wallet) {
+      return NextResponse.json({ success: false, error: 'AI analysis is for your own clubs' }, { status: 403 });
+    }
+    ourSquadId = squadId;
+  } catch (error) {
+    if (error instanceof MflRateLimitError) {
+      return NextResponse.json({ success: false, error: `MFL is busy right now. Try again in ${describeWait(error.retryAfterSeconds)}.` }, { status: 429 });
+    }
+    return NextResponse.json({ success: false, error: 'No such MFL club' }, { status: 404 });
+  }
   // Logging a match makes a new analysis, so it reads the log as it is
   const entries = await loadTacticsEntries(ourClubId);
   const logVersion = entries.length ? `${entries.length}-${entries.map(entry => entry.updatedAt).sort().at(-1)}` : '0';
   const cacheKey = `v10:${ourClubId}:${theirClubId}:${ourFormation}:${theirFormation}:${aim}:${logVersion}`;
   const cached = cache.get(cacheKey);
   if (cached && Date.now() - cached.at < CACHE_MS) {
-    const adviceSaved = await rememberAdvice(ourClubId, body.matchId, body.walletAddress, cached.analysis, aim);
+    const adviceSaved = await rememberAdvice(ourClubId, ourSquadId, body.matchId, wallet, cached.analysis, aim);
     return NextResponse.json({ success: true, data: cached.analysis, cached: true, adviceSaved });
   }
 
   const busy = (seconds: number, what = 'MFL is busy right now') =>
     NextResponse.json({ success: false, error: `${what}. Try again in ${describeWait(seconds)}.` }, { status: 429, headers: { 'Retry-After': String(seconds) } });
 
-  const wallet = walletOf(body.walletAddress);
   const visitor = visitorKey(request);
   try {
     if (process.env.TURSO_DATABASE_URL) {
@@ -209,7 +224,7 @@ export async function POST(request: NextRequest) {
     analysis.players = cleanPlayerInstructions(analysis.players, new Set(ourXi?.slots.flatMap(slot => (slot.playerId === null ? [] : [slot.playerId])) ?? []));
     cache.set(cacheKey, { analysis, at: Date.now() });
     if (cache.size > 300) cache.delete(cache.keys().next().value!);
-    const adviceSaved = await rememberAdvice(ourClubId, body.matchId, body.walletAddress, analysis, aim);
+    const adviceSaved = await rememberAdvice(ourClubId, ourSquadId, body.matchId, wallet, analysis, aim);
     const allowance = process.env.TURSO_DATABASE_URL ? await analysisAllowance(wallet, visitor).catch(() => null) : null;
     return NextResponse.json({ success: true, data: analysis, adviceSaved, allowance });
   } catch (error) {

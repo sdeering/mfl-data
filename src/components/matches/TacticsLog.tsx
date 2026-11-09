@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { PLAYER_ONLY_SETTINGS, PLAYER_SETTINGS, TACTIC_SETTINGS, TACTIC_STEPS, type TacticPick } from '../../services/matchAnalysis';
 import type { MFLPlayer } from '../../types/mflApi';
 import {
@@ -251,18 +251,32 @@ const SHOWN_ROWS = 8;
  * tactics MFL's match reports show the logged-in owner and logs them here.
  */
 const ImportFromMfl: React.FC<{ onRefresh?: () => void }> = ({ onRefresh }) => {
-  // React won't render a javascript: link, so the bookmark's address is set on the element
-  const bookmark = useCallback((link: HTMLAnchorElement | null) => {
-    if (!link) return;
-    const script = `${window.location.origin}/mfl-import.js`;
-    link.setAttribute('href', `javascript:(()=>{const s=document.createElement('script');s.src='${script}?t='+Date.now();document.body.appendChild(s)})()`);
+  // The bookmark carries a key to the signed-in wallet's own clubs, as our session cookie isn't sent from MFL's site
+  const [key, setKey] = useState<string | null>(null);
+  const [keyError, setKeyError] = useState('');
+  useEffect(() => {
+    fetch('/api/auth/import-token', { cache: 'no-store' })
+      .then(response => response.json())
+      .then(result => (result.success ? setKey(result.token) : setKeyError(result.error || 'Verify your wallet first')))
+      .catch(() => setKeyError('Could not make your bookmark. Reload and try again.'));
   }, []);
+  // React won't render a javascript: link, so the bookmark's address is set on the element
+  const bookmark = useCallback(
+    (link: HTMLAnchorElement | null) => {
+      if (!link || !key) return;
+      const script = `${window.location.origin}/mfl-import.js?key=${encodeURIComponent(key)}`;
+      link.setAttribute('href', `javascript:(()=>{const s=document.createElement('script');s.src='${script}&t='+Date.now();document.body.appendChild(s)})()`);
+    },
+    [key],
+  );
   return (
     <div className="flex flex-col gap-2.5 px-3.5 py-3 rounded-xl bg-inset border border-line text-[13px] font-medium text-muted">
       <span className={capsLabel}>Import your tactics from MFL</span>
       <ol className="m-0 pl-5 flex flex-col gap-1">
         <li>
-          Drag this to your bookmarks bar:{' '}
+          Drag this to your bookmarks bar, replacing any older one:{' '}
+          {keyError && <span className="text-danger-ink font-semibold">{keyError}</span>}
+          {key && (
           <a
             ref={bookmark}
             onClick={event => event.preventDefault()}
@@ -271,6 +285,7 @@ const ImportFromMfl: React.FC<{ onRefresh?: () => void }> = ({ onRefresh }) => {
           >
             MFL Data import
           </a>
+          )}
         </li>
         <li>
           Open <span className="font-bold text-fg-3">app.playmfl.com</span>, logged in, and click the bookmark there.
@@ -280,6 +295,7 @@ const ImportFromMfl: React.FC<{ onRefresh?: () => void }> = ({ onRefresh }) => {
         For each of your clubs it reads MFL&apos;s match reports for the last {40} matches and logs the team settings and player instructions you
         used, with each player&apos;s stats, so the AI can judge an instruction by how the player did. Matches imported before are skipped, so running
         it again only reads new ones, and a match you logged by hand differently is corrected. Your MFL login stays on MFL&apos;s site.
+        The bookmark is yours alone: it can only log tactics for your own clubs.
       </span>
       {onRefresh && (
         <button type="button" onClick={onRefresh} className="self-start text-xs font-semibold text-accent-ink cursor-pointer bg-transparent border-0 p-0">

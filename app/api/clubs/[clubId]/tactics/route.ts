@@ -4,6 +4,10 @@ import { MflRateLimitError } from '@/src/services/playerProgressionCache';
 import { buildTacticsHistory, clubOwnership, clubPlaysIn, saveTacticsEntry } from '@/src/services/tacticsLog';
 import { describeWait, takeRateLimits, visitorKey } from '@/src/lib/rateLimit';
 import { validPlayerSettings, validSettings } from '@/src/utils/tacticsHistory';
+import { sessionWallet } from '@/src/lib/session';
+
+const signInFirst = () => NextResponse.json({ success: false, error: 'Verify your wallet to see your tactics log' }, { status: 401 });
+const notYours = () => NextResponse.json({ success: false, error: 'Only the club owner can see or change its tactics log' }, { status: 403 });
 
 export const maxDuration = 60;
 
@@ -21,15 +25,20 @@ const clubIdOf = async (params: Promise<{ clubId: string }>) => {
 /**
  * GET /api/clubs/[clubId]/tactics
  * The club's tactics log: its latest played matches with the playing style settings logged for each, their
- * formations and xG, and settings logged ahead of matches not played yet.
+ * formations and xG, and settings logged ahead of matches not played yet. Private: only for the club's owner,
+ * signed in with a verified wallet.
  */
 export async function GET(request: NextRequest, { params }: { params: Promise<{ clubId: string }> }) {
   const clubId = await clubIdOf(params);
   if (!clubId) return NextResponse.json({ success: false, error: 'Club ID must be a number' }, { status: 400 });
   if (!process.env.TURSO_DATABASE_URL) return NextResponse.json({ success: false, error: 'The tactics log needs the database' }, { status: 503 });
   try {
+    const wallet = sessionWallet(request);
+    if (!wallet) return signInFirst();
     const blocked = await mflBlockedFor();
     if (blocked) return busy(blocked);
+    const { owner } = await clubOwnership(clubId);
+    if (!owner || owner.toLowerCase() !== wallet) return notYours();
     return NextResponse.json({ success: true, data: await buildTacticsHistory(clubId) });
   } catch (error) {
     if (error instanceof MflRateLimitError) return busy(error.retryAfterSeconds);
@@ -40,22 +49,23 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 }
 
 /**
- * PUT /api/clubs/[clubId]/tactics { walletAddress, matchId, settings, players? }
+ * PUT /api/clubs/[clubId]/tactics { matchId, settings, players? }
  * Keeps the settings and individual instructions (by player ID) used, or to be used, in one of the club's
- * matches; settings null forgets them. Only the wallet that owns the club on MFL can.
+ * matches; settings null forgets them. Only the club's owner on MFL can, signed in with a verified wallet.
  */
 export async function PUT(request: NextRequest, { params }: { params: Promise<{ clubId: string }> }) {
   const clubId = await clubIdOf(params);
   if (!clubId) return NextResponse.json({ success: false, error: 'Club ID must be a number' }, { status: 400 });
   if (!process.env.TURSO_DATABASE_URL) return NextResponse.json({ success: false, error: 'The tactics log needs the database' }, { status: 503 });
 
+  const walletAddress = sessionWallet(request);
+  if (!walletAddress) return signInFirst();
   const body = await request.json().catch(() => null);
-  const walletAddress = typeof body?.walletAddress === 'string' ? body.walletAddress.trim().toLowerCase() : '';
   const matchId = Number(body?.matchId);
   const settings = body?.settings === null ? null : validSettings(body?.settings);
   const players = validPlayerSettings(body?.players);
-  if (!walletAddress || !Number.isInteger(matchId) || matchId <= 0 || (body?.settings !== null && !settings)) {
-    return NextResponse.json({ success: false, error: 'Give your wallet, the match and every setting as a step from 1 to 5' }, { status: 400 });
+  if (!Number.isInteger(matchId) || matchId <= 0 || (body?.settings !== null && !settings)) {
+    return NextResponse.json({ success: false, error: 'Give the match and every setting as a step from 1 to 5' }, { status: 400 });
   }
   if (!players) {
     return NextResponse.json({ success: false, error: 'Give each player’s instructions as steps from 1 to 5, for 11 players at most' }, { status: 400 });
@@ -65,9 +75,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     const wait = (await mflBlockedFor()) || (await takeRateLimits([{ key: `tactics-log:${visitorKey(request)}`, limit: 60, windowMs: 10 * 60 * 1000 }]));
     if (wait) return busy(wait);
     const { squadId, owner } = await clubOwnership(clubId);
-    if (!owner || owner.toLowerCase() !== walletAddress) {
-      return NextResponse.json({ success: false, error: 'Only the club owner can log its tactics' }, { status: 403 });
-    }
+    if (!owner || owner.toLowerCase() !== walletAddress) return notYours();
     if (!squadId || !(await clubPlaysIn(squadId, matchId))) {
       return NextResponse.json({ success: false, error: "That match isn't one of this club's" }, { status: 400 });
     }

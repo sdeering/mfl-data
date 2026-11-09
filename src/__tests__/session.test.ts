@@ -46,3 +46,16 @@ describe('verified sessions', () => {
     expect(Buffer.from(signInMessage('ab12'), 'hex').toString('utf8')).toBe('Sign in to MFL Data: ab12')
   })
 })
+
+describe('import tokens', () => {
+  it('names the wallet, and is no session', () => {
+    process.env.SESSION_SECRET = 'test-secret'
+    const { importToken, walletOfImportToken, sessionValue, walletOfSession } = jest.requireActual('../lib/session')
+    const token = importToken(WALLET)
+    expect(walletOfImportToken(token)).toBe(WALLET)
+    // Neither works as the other
+    expect(walletOfSession(token)).toBeNull()
+    expect(walletOfImportToken(sessionValue(WALLET))).toBeNull()
+    expect(walletOfImportToken('junk')).toBeNull()
+  })
+})
