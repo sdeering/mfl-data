@@ -17,7 +17,8 @@ import {
   type RankedCounter,
   type SideReport,
 } from '@/src/services/matchAnalysis';
-import { describeWait, takeRateLimits, visitorKey, type RateLimit } from '@/src/lib/rateLimit';
+import { describeWait, takeRateLimits, visitorKey } from '@/src/lib/rateLimit';
+import { analysisAllowance, analysisLimits, walletOf } from '@/src/lib/aiAccess';
 import { FORMATIONS } from '@/src/utils/squadLineups';
 import { isOutcome, squadFits } from '@/src/utils/formationPlanner';
 
@@ -33,9 +34,9 @@ const THEIR_MATCHES = 10;
 const REPORTED_MATCHES = 5;
 const CACHE_MS = 6 * 3600 * 1000;
 
-// Each analysis costs tokens and a few MFL requests: one visitor 10 an hour, the site 100
-const ANALYSIS_LIMITS: RateLimit[] = [{ key: 'ai-analysis:1h', limit: 100, windowMs: 3600 * 1000 }, ...SCOUT_LIMITS];
-const visitorLimit = (visitor: string): RateLimit => ({ key: `ai-analysis:${visitor}`, limit: 10, windowMs: 3600 * 1000 });
+
+/** A wait as hours once it's over an hour and a half, e.g. "8 hours" */
+const inHours = (seconds: number) => (seconds > 5400 ? `${Math.round(seconds / 3600)} hours` : describeWait(seconds));
 
 const cache = new Map<string, { analysis: MatchAnalysis; at: number }>();
 
@@ -130,9 +131,25 @@ async function rememberAdvice(clubId: number, matchId: unknown, wallet: unknown,
 }
 
 /**
+ * GET /api/match-analysis?walletAddress=
+ * How many fresh analyses the visitor has left today (src/lib/aiAccess.ts): whitelisted wallets have no daily cap.
+ */
+export async function GET(request: NextRequest) {
+  if (!process.env.TURSO_DATABASE_URL) return NextResponse.json({ success: true, data: null });
+  try {
+    const wallet = walletOf(request.nextUrl.searchParams.get('walletAddress'));
+    return NextResponse.json({ success: true, data: await analysisAllowance(wallet, visitorKey(request)) });
+  } catch (error) {
+    console.error('[API] GET /api/match-analysis failed:', error);
+    return NextResponse.json({ success: false, error: 'Could not read your analyses left' }, { status: 502 });
+  }
+}
+
+/**
  * POST /api/match-analysis { ourClubId, theirClubId, ourFormation, theirFormation, counters?, aim?, matchId?, walletAddress? }
  * An AI scouting report on the opponent for the Match Prep Tool: both squads, their form and their latest match
- * stats go to Gemini, which finds edges to play on. Kept for 6 hours per matchup.
+ * stats go to Gemini, which finds edges to play on. Kept for 6 hours per matchup, and asking again in that time is
+ * free; a fresh one counts against the visitor's daily analyses unless their wallet is whitelisted.
  */
 export async function POST(request: NextRequest) {
   const body = (await request.json().catch(() => null)) as Partial<MatchAnalysisRequest> | null;
@@ -157,11 +174,24 @@ export async function POST(request: NextRequest) {
   const busy = (seconds: number, what = 'MFL is busy right now') =>
     NextResponse.json({ success: false, error: `${what}. Try again in ${describeWait(seconds)}.` }, { status: 429, headers: { 'Retry-After': String(seconds) } });
 
+  const wallet = walletOf(body.walletAddress);
+  const visitor = visitorKey(request);
   try {
     if (process.env.TURSO_DATABASE_URL) {
       const blocked = await mflBlockedFor();
       if (blocked) return busy(blocked);
-      const wait = await takeRateLimits([visitorLimit(visitorKey(request)), ...ANALYSIS_LIMITS]);
+      const allowance = await analysisAllowance(wallet, visitor);
+      if (allowance.remaining === 0) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: `You've used today's ${allowance.limit} AI analyses. More in ${inHours(allowance.resetsIn)}. A matchup analysed in the last 6 hours opens again for free.`,
+            allowance,
+          },
+          { status: 429, headers: { 'Retry-After': String(allowance.resetsIn) } },
+        );
+      }
+      const wait = await takeRateLimits([...analysisLimits(wallet, visitor), ...SCOUT_LIMITS]);
       if (wait) return busy(wait, 'That is a lot of analyses');
     }
 
@@ -180,7 +210,8 @@ export async function POST(request: NextRequest) {
     cache.set(cacheKey, { analysis, at: Date.now() });
     if (cache.size > 300) cache.delete(cache.keys().next().value!);
     const adviceSaved = await rememberAdvice(ourClubId, body.matchId, body.walletAddress, analysis, aim);
-    return NextResponse.json({ success: true, data: analysis, adviceSaved });
+    const allowance = process.env.TURSO_DATABASE_URL ? await analysisAllowance(wallet, visitor).catch(() => null) : null;
+    return NextResponse.json({ success: true, data: analysis, adviceSaved, allowance });
   } catch (error) {
     if (error instanceof MflRateLimitError) return busy(error.retryAfterSeconds);
     const status = error instanceof MflHttpError ? error.status : 500;

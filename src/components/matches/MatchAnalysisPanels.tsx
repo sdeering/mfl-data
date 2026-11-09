@@ -358,6 +358,14 @@ const PlayerInstructions: React.FC<{ instructions: PlayerInstruction[]; tactics:
   );
 };
 
+/** Fresh AI analyses left today, from /api/match-analysis */
+interface Allowance {
+  whitelisted: boolean;
+  remaining: number | null;
+  limit: number | null;
+  resetsIn: number;
+}
+
 /**
  * Gemini's read of the matchup, asked for at a click: both squads, their form and their latest match stats go to
  * /api/match-analysis. It suggests a formation, which a click plays.
@@ -385,6 +393,20 @@ export const AiAnalysisPanel: React.FC<{
   const [shownFor, setShownFor] = useState<MatchAnalysisRequest | null>(() => (analyses.has(key) ? request : null));
   // The fixture the analysis shown was kept as advice for
   const [keptFor, setKeptFor] = useState<string | null>(null);
+  // Fresh analyses left today, null until known or without a database
+  const [allowance, setAllowance] = useState<Allowance | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    const query = request.walletAddress ? `?walletAddress=${encodeURIComponent(request.walletAddress)}` : '';
+    fetch(`/api/match-analysis${query}`)
+      .then(response => response.json())
+      .then(result => !cancelled && result.success && setAllowance(result.data))
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [request.walletAddress]);
 
   useEffect(() => {
     const known = analyses.get(key);
@@ -400,6 +422,7 @@ export const AiAnalysisPanel: React.FC<{
     try {
       const response = await fetch('/api/match-analysis', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(request) });
       const result = await response.json().catch(() => ({}));
+      if (result.allowance) setAllowance(result.allowance);
       if (!response.ok || !result.success) throw new Error(result.error || `HTTP ${response.status}`);
       analyses.set(key, result.data);
       setState({ status: 'done', analysis: result.data });
@@ -424,9 +447,20 @@ export const AiAnalysisPanel: React.FC<{
               : `Gemini reads both squads, ${name}'s recent results and their last 5 matches' player stats, and looks for an edge`}
           </span>
         </div>
-        <button type="button" onClick={analyse} disabled={state.status === 'loading'} className={limeButton}>
-          {state.status === 'loading' ? 'Analysing…' : analysis ? (stale ? 'Analyse this matchup' : 'Analyse again') : 'Analyse matchup'}
-        </button>
+        <div className="flex flex-col items-end gap-1">
+          <button type="button" onClick={analyse} disabled={state.status === 'loading'} className={limeButton}>
+            {state.status === 'loading' ? 'Analysing…' : analysis ? (stale ? 'Analyse this matchup' : 'Analyse again') : 'Analyse matchup'}
+          </button>
+          {allowance && (
+            <span className="text-[11px] font-semibold text-muted-3" title="A matchup analysed in the last 6 hours opens again for free">
+              {allowance.whitelisted
+                ? 'Whitelisted: no daily limit'
+                : allowance.remaining
+                  ? `${allowance.remaining} of ${allowance.limit} analyses left today`
+                  : `No analyses left today · more in ${allowance.resetsIn < 3600 ? `${Math.ceil(allowance.resetsIn / 60)} min` : `${Math.ceil(allowance.resetsIn / 3600)} h`}`}
+            </span>
+          )}
+        </div>
       </div>
 
       {state.status === 'loading' && (

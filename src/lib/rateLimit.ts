@@ -44,6 +44,14 @@ export async function takeRateLimits(limits: RateLimit[], now = Date.now()): Pro
   return 0
 }
 
+/** How many uses a limit has had in its current window, and the seconds until that window ends */
+export async function usageOf({ key, windowMs }: RateLimit, now = Date.now()): Promise<{ used: number; resetsIn: number }> {
+  const windowStart = windowStartOf(windowMs, now)
+  const { data, error } = await executeRaw('SELECT count FROM rate_limits WHERE key = ? AND window_start = ?', [key, windowStart])
+  if (error) throw new Error(`Rate limit check failed: ${error.message}`)
+  return { used: Number(data?.[0]?.count) || 0, resetsIn: Math.max(1, Math.ceil((windowStart + windowMs - now) / 1000)) }
+}
+
 // A block is kept as a row whose window_start is when it ends
 const blockKey = (key: string) => `block:${key}`
 
