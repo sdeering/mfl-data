@@ -460,6 +460,15 @@ export const AiAnalysisPanel: React.FC<{
                   : `No analyses left today · more in ${allowance.resetsIn < 3600 ? `${Math.ceil(allowance.resetsIn / 60)} min` : `${Math.ceil(allowance.resetsIn / 3600)} h`}`}
             </span>
           )}
+          {allowance && !allowance.whitelisted && (
+            <span className="text-[11px] font-semibold text-muted-3">
+              Want more? Ask{' '}
+              <a href="https://x.com/DogeSports69" target="_blank" rel="noopener noreferrer" className="text-accent-ink hover:underline">
+                @DogeSports69
+              </a>{' '}
+              on X for access
+            </span>
+          )}
         </div>
       </div>
 

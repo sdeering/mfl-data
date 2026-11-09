@@ -185,7 +185,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json(
           {
             success: false,
-            error: `You've used today's ${allowance.limit} AI analyses. More in ${inHours(allowance.resetsIn)}. A matchup analysed in the last 6 hours opens again for free.`,
+            error: `You've used today's ${allowance.limit} AI analyses. More in ${inHours(allowance.resetsIn)}. A matchup analysed in the last 6 hours opens again for free. For more, ask @DogeSports69 on X for access.`,
             allowance,
           },
           { status: 429, headers: { 'Retry-After': String(allowance.resetsIn) } },
