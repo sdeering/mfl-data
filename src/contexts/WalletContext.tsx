@@ -4,6 +4,7 @@ import React, { createContext, useContext, useState, useEffect, ReactNode } from
 import { useRouter } from 'next/navigation';
 import * as fcl from '@onflow/fcl';
 import { normalizeWalletAddress } from '../utils/walletAddress';
+import { APP_IDENTIFIER, signInMessage } from '../utils/signIn';
 
 interface WalletContextType {
   isConnected: boolean;
@@ -19,7 +20,40 @@ interface WalletContextType {
   viewedAddress: string | null;
   viewWallet: (address: string) => boolean;
   stopViewingWallet: () => void;
+  /**
+   * The wallet this browser has proved it holds, by a signature Flow checked: the server only trusts this one, so
+   * private pages and AI analyses need it. Null until proved.
+   */
+  verifiedWallet: string | null;
+  /** The connected wallet is the verified one */
+  isVerified: boolean;
+  /** Proves the connected wallet: asks it to sign, which may open Dapper */
+  verifyWallet: () => Promise<void>;
+  isVerifying: boolean;
+  verifyError: string | null;
 }
+
+const nonce = async (): Promise<string> => {
+  const response = await fetch('/api/auth/nonce', { cache: 'no-store' });
+  const result = await response.json();
+  if (!response.ok || typeof result.nonce !== 'string') throw new Error('Could not start the sign-in');
+  return result.nonce;
+};
+
+/** Sends a signature to the server, which checks it with Flow; resolves to the verified wallet */
+const proveSession = async (payload: { kind: 'account-proof' | 'user-signature'; address: string; nonce: string; signatures: unknown }): Promise<string> => {
+  const response = await fetch('/api/auth/session', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok || !result.success) throw new Error(result.error || `Sign-in failed (${response.status})`);
+  return result.wallet;
+};
+
+/** The account proof the wallet gave at login, when it gave one */
+const accountProofOf = (user: any): { address: string; nonce: string; signatures: unknown } | null => {
+  const service = (user?.services ?? []).find((item: any) => item?.type === 'account-proof');
+  const data = service?.data;
+  return data?.nonce && Array.isArray(data?.signatures) ? { address: data.address ?? user.addr, nonce: data.nonce, signatures: data.signatures } : null;
+};
 
 const VIEWED_WALLET_KEY = 'mfl-data-viewed-wallet';
 
@@ -38,6 +72,17 @@ export const WalletProvider: React.FC<WalletProviderProps> = ({ children }) => {
   const [error, setError] = useState<string | null>(null);
   const [isReady, setIsReady] = useState(false);
   const [viewedAddress, setViewedAddress] = useState<string | null>(null);
+  const [verifiedWallet, setVerifiedWallet] = useState<string | null>(null);
+  const [isVerifying, setIsVerifying] = useState(false);
+  const [verifyError, setVerifyError] = useState<string | null>(null);
+
+  // The session this browser already has, if any
+  useEffect(() => {
+    fetch('/api/auth/session', { cache: 'no-store' })
+      .then(response => response.json())
+      .then(result => setVerifiedWallet(typeof result.wallet === 'string' ? result.wallet : null))
+      .catch(() => {});
+  }, []);
 
   // Initialize FCL and check connection on mount
   useEffect(() => {
@@ -73,6 +118,8 @@ export const WalletProvider: React.FC<WalletProviderProps> = ({ children }) => {
           // Add WalletConnect project ID to suppress warnings
           'discovery.wallet.method.https://accounts.meetdapper.com/fcl/authn-restricted': 'TAB/RPC',
           'fcl.walletConnect.projectId': 'mfl-data-app',
+          // Asks the wallet to sign a one-time code of ours at login, so the server can trust who logged in
+          'fcl.accountProof.resolver': async () => ({ appIdentifier: APP_IDENTIFIER, nonce: await nonce() }),
         });
 
         // Check if user is already authenticated
@@ -104,6 +151,16 @@ export const WalletProvider: React.FC<WalletProviderProps> = ({ children }) => {
         setUser(user);
         setAccount(user.addr);
         setIsConnected(true);
+        // A fresh login's account proof proves the wallet without asking anything more
+        const proof = accountProofOf(user);
+        if (proof) {
+          proveSession({ kind: 'account-proof', ...proof })
+            .then(wallet => {
+              setVerifiedWallet(wallet);
+              setVerifyError(null);
+            })
+            .catch(() => {});
+        }
         // Their own wallet replaces one they were looking at
         stopViewingWallet();
         
@@ -163,8 +220,55 @@ export const WalletProvider: React.FC<WalletProviderProps> = ({ children }) => {
     }
   };
 
+  /**
+   * Proves the connected wallet to the server: its login's account proof when it has a fresh one, else a signed
+   * message, else a fresh login, whose account proof does it.
+   */
+  const verifyWallet = async () => {
+    setIsVerifying(true);
+    setVerifyError(null);
+    try {
+      let current: any = await fcl.currentUser.snapshot();
+      if (!current?.loggedIn) {
+        await fcl.authenticate();
+        current = await fcl.currentUser.snapshot();
+      }
+      const proof = accountProofOf(current);
+      if (proof) {
+        try {
+          setVerifiedWallet(await proveSession({ kind: 'account-proof', ...proof }));
+          return;
+        } catch {
+          // An old login's proof has expired: sign instead
+        }
+      }
+      const code = await nonce();
+      let signatures: unknown = null;
+      try {
+        signatures = await fcl.currentUser.signUserMessage(signInMessage(code));
+      } catch {
+        // The wallet doesn't sign messages: a fresh login gives an account proof
+      }
+      if (Array.isArray(signatures) && signatures.length) {
+        setVerifiedWallet(await proveSession({ kind: 'user-signature', address: current.addr, nonce: code, signatures }));
+        return;
+      }
+      await fcl.unauthenticate();
+      await fcl.authenticate();
+      const again = accountProofOf(await fcl.currentUser.snapshot());
+      if (!again) throw new Error("Your wallet didn't give a sign-in proof. Ask @DogeSports69 on X for help.");
+      setVerifiedWallet(await proveSession({ kind: 'account-proof', ...again }));
+    } catch (error: any) {
+      setVerifyError(error?.message || 'Could not verify your wallet');
+    } finally {
+      setIsVerifying(false);
+    }
+  };
+
   const disconnectWallet = async () => {
     try {
+      fetch('/api/auth/session', { method: 'DELETE' }).catch(() => {});
+      setVerifiedWallet(null);
       await fcl.unauthenticate();
       setUser(null);
       setAccount(null);
@@ -208,6 +312,11 @@ export const WalletProvider: React.FC<WalletProviderProps> = ({ children }) => {
     viewedAddress,
     viewWallet,
     stopViewingWallet,
+    verifiedWallet,
+    isVerified: !!account && !!verifiedWallet && normalizeWalletAddress(account) === verifiedWallet,
+    verifyWallet,
+    isVerifying,
+    verifyError,
   };
 
   return (
