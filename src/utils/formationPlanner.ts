@@ -1,6 +1,6 @@
 import type { MFLPlayer } from '../types/mflApi';
 import { FORMATIONS, FORMATION_NAMES, XI_SIZE, autoFillLineup, positionFit, type FitKind } from './squadLineups';
-import { captainOptions, type CaptainOption } from './captain';
+import { CAPTAIN_OVR, captainOptions, type CaptainOption } from './captain';
 import metaSnapshot from '../data/formationMeta.json';
 
 /*
@@ -199,32 +199,66 @@ export interface FormationFit {
   outOfPosition: string[];
 }
 
+/**
+ * How a given XI lines up in a formation: `xi` holds player IDs by the formation's positions, null where empty.
+ * The captain is `captainId` when they are in the XI, otherwise the one who lifts it most. Its gap is 0.
+ */
+export function lineupFit(formation: string, xi: (number | null)[], byId: Map<number, MFLPlayer>, captainId?: number | null): FormationFit {
+  const slots: FilledSlot[] = FORMATIONS[formation].map(([position], index) => {
+    const id = xi[index];
+    const player = id === null || id === undefined ? undefined : byId.get(id);
+    return player ? { playerId: player.id, ...positionFit(player, position) } : { playerId: null, rating: 0, kind: 'out' as const };
+  });
+  const positions = (kind: FitKind) => FORMATIONS[formation].filter((_, index) => slots[index].kind === kind).map(([position]) => position);
+  const ratingWithoutCaptain = sum(slots.map(slot => slot.rating)) / XI_SIZE;
+  const options = captainOptions(formation, xi, byId);
+  const captain = options.find(option => option.playerId === captainId) ?? options[0] ?? null;
+  return {
+    formation,
+    rating: captain?.rating ?? ratingWithoutCaptain,
+    ratingWithoutCaptain,
+    captain,
+    gap: 0,
+    slots,
+    alternative: positions('alt'),
+    outOfPosition: positions('out'),
+  };
+}
+
 /** How well a squad lines up in every formation: its best XI in each, never a retired player. Empty for no players. */
 export function squadFits(players: MFLPlayer[]): Map<string, FormationFit> {
   if (players.length === 0) return new Map();
   const byId = new Map(players.map(player => [player.id, player]));
-  const fits = FORMATION_NAMES.map(formation => {
-    const { xi } = autoFillLineup(formation, players);
-    const slots: FilledSlot[] = FORMATIONS[formation].map(([position], index) => {
-      const id = xi[index];
-      const player = id === null ? undefined : byId.get(id);
-      return player ? { playerId: player.id, ...positionFit(player, position) } : { playerId: null, rating: 0, kind: 'out' as const };
-    });
-    const positions = (kind: FitKind) => FORMATIONS[formation].filter((_, index) => slots[index].kind === kind).map(([position]) => position);
-    const ratingWithoutCaptain = sum(slots.map(slot => slot.rating)) / XI_SIZE;
-    const captain = captainOptions(formation, xi, byId)[0] ?? null;
-    return {
-      formation,
-      rating: captain?.rating ?? ratingWithoutCaptain,
-      ratingWithoutCaptain,
-      captain,
-      slots,
-      alternative: positions('alt'),
-      outOfPosition: positions('out'),
-    };
-  });
+  const fits = FORMATION_NAMES.map(formation => lineupFit(formation, autoFillLineup(formation, players).xi, byId));
   const best = Math.max(...fits.map(fit => fit.rating));
   return new Map(fits.map(fit => [fit.formation, { ...fit, gap: best - fit.rating }]));
+}
+
+/** The part of a captain's gain that is the team bonus, beyond their own +CAPTAIN_OVR */
+export const bonusLift = (option: CaptainOption) => option.gain - CAPTAIN_OVR / XI_SIZE;
+/** Team bonus below this (XI average OVR) is as good as wasted: the attributes it raises are at or near 99 */
+const WASTED_BONUS = 0.04;
+
+/** The lines whose captain suits each aim: forwards to smash them, defenders or the keeper not to lose */
+const AIM_LINES: Partial<Record<Outcome, string[]>> = { smash: ['ATT'], notLose: ['DEF', 'GK'] };
+
+/**
+ * The captain for what we want from the match. To smash them, the best forward: the XI gets +2 SHO and +1 PAC,
+ * which makes chances, though a defender's DEF bonus often lifts the average rating more. Not to lose, the best
+ * defender or keeper, for the DEF bonus. To win, whoever lifts the XI's rating most. Attributes stop at 99, so a
+ * line whose bonus would be wasted (every attribute it raises already 99) doesn't get the armband for the aim
+ * alone, nor does a line the XI lacks: then it's whoever lifts the rating most.
+ */
+export function aimCaptain(fit: FormationFit | undefined, byId: Map<number, MFLPlayer>, outcome: Outcome): CaptainOption | null {
+  if (!fit) return null;
+  const lines = AIM_LINES[outcome];
+  if (!lines) return fit.captain;
+  const options = captainOptions(
+    fit.formation,
+    fit.slots.map(slot => slot.playerId),
+    byId,
+  );
+  return options.find(option => lines.includes(option.line) && bonusLift(option) >= WASTED_BONUS) ?? options[0] ?? fit.captain;
 }
 
 /** One of a club's past matches from its own side, with the formation each team played. */

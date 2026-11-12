@@ -1,8 +1,10 @@
 import type { MFLPlayer } from '../types/mflApi';
-import { squadFits, type Outcome, type PlayedMatch } from '../utils/formationPlanner';
+import { aimCaptain, bonusLift, lineupFit, squadFits, type Outcome, type PlayedMatch } from '../utils/formationPlanner';
 import { compareSquads, describeFormation, findWeaknesses, xiPlayers, type XiPlayer } from '../utils/squadComparison';
 import { CAPTAIN_OVR, captainOptions, describeBonus } from '../utils/captain';
-import { FORMATIONS, FORMATION_NAMES, formationLabel } from '../utils/squadLineups';
+import { FORMATIONS, FORMATION_NAMES, emptyXi, fillEmptyPositions, formationLabel } from '../utils/squadLineups';
+import { COVER_MAX_DROP, FIT_THRESHOLD, fitnessOf, tiredStarters } from '../utils/fitness';
+import { isRetiredPlayer } from '../utils/appSettings';
 import type { ScoutMatch, ScoutReport } from './scoutService';
 import {
   adviceAgreement,
@@ -48,8 +50,8 @@ export interface MatchAnalysisRequest {
 /** What each aim asks of the analysis */
 export const AIM_BRIEFS: Record<Outcome, string> = {
   win: 'Our aim is to win: pick what gives us the most expected points.',
-  smash: 'Our aim is to smash them: score as many goals as we can, accepting more risk at the back. Favour the formation, captain and playing style that create the most chances, and say what we risk.',
-  notLose: 'Our aim is not to lose: a draw is a good result. Pick what gives us the lowest chance of losing, even at the cost of goals and winning chances: a solid shape, a captain who strengthens the defence and a playing style that keeps us compact and denies their strengths. Say how we can still nick a goal.',
+  smash: "Our aim is to smash them: score as many goals as we can, accepting more risk at the back. Favour the formation and playing style that create the most chances, and captain a forward for the XI's +2 SHO and +1 PAC (us.captainOptions marks the aim's pick) unless that bonus is wasted on attributes already at 99. Say what we risk.",
+  notLose: 'Our aim is not to lose: a draw is a good result. Pick what gives us the lowest chance of losing, even at the cost of goals and winning chances: a solid shape, a defender or keeper as captain for the DEF bonus (unless it is wasted on defenders already at 99) and a playing style that keeps us compact and denies their strengths. Say how we can still nick a goal.',
 };
 
 /** Steps on each playing style setting, as MFL's Steps view shows them; the middle one is MFL's default */
@@ -127,7 +129,7 @@ export interface MatchAnalysis {
   summary: string;
   formation: { pick: string; reason: string };
   /** Who to captain, missing from analyses made before captains were weighed */
-  captain?: { player: string; reason: string };
+  captain?: { player: string; reason: string; playerId?: number };
   attack: { title: string; detail: string }[];
   defend: { title: string; detail: string }[];
   matchups: { ours: string; theirs: string; edge: 'ours' | 'theirs' | 'even'; note: string }[];
@@ -139,6 +141,17 @@ export interface MatchAnalysis {
   historyNotes?: { title: string; detail: string }[];
   /** Individual instructions for our key players; missing from analyses made before them */
   players?: PlayerInstruction[];
+  /** The XI as the model picked it, by position; the server turns it into `team` */
+  xi?: { position: string; playerId: number }[];
+  /** Our XI as the analysis would field it, checked against our squad; missing from analyses made before it */
+  team?: AnalysisTeam;
+}
+
+/** The analysis's lineup: player IDs by the formation's positions, and the captain, for the matchup pitch */
+export interface AnalysisTeam {
+  formation: string;
+  xi: (number | null)[];
+  captainId: number | null;
 }
 
 /** Gemini's response schema for a MatchAnalysis */
@@ -159,6 +172,7 @@ export const ANALYSIS_SCHEMA = {
       description: 'Who to captain in our XI, from us.captainOptions',
       properties: {
         player: { type: 'STRING', description: 'Our player as "POS Name"' },
+        playerId: { type: 'INTEGER', description: 'Their id, a player in xi' },
         reason: { type: 'STRING', description: 'Why, weighing the XI rating gain against the team bonus this matchup needs' },
       },
       required: ['player', 'reason'],
@@ -189,11 +203,23 @@ export const ANALYSIS_SCHEMA = {
     },
     lineup: {
       type: 'ARRAY',
-      description: 'Changes to our XI worth making, using only players listed in our squad; empty if none',
+      description: 'Changes from us.startingXi worth making, using only players in our squad: resting tired players for suitable fit cover, and better fits; each says who comes in for whom and must agree with xi. Empty if none',
       items: {
         type: 'OBJECT',
         properties: { position: { type: 'STRING' }, change: { type: 'STRING' }, reason: { type: 'STRING' } },
         required: ['position', 'change', 'reason'],
+      },
+    },
+    xi: {
+      type: 'ARRAY',
+      description: 'Our starting XI for formation.pick: one entry per position of that formation, in its order, 11 in all, each a different player id from us.startingXi or us.restOfSquad',
+      items: {
+        type: 'OBJECT',
+        properties: {
+          position: { type: 'STRING', description: 'The position, e.g. "LB"' },
+          playerId: { type: 'INTEGER' },
+        },
+        required: ['position', 'playerId'],
       },
     },
     styleSummary: { type: 'STRING', description: 'One sentence on the playing style these settings add up to' },
@@ -216,9 +242,9 @@ export const ANALYSIS_SCHEMA = {
       items: {
         type: 'OBJECT',
         properties: {
-          playerId: { type: 'INTEGER', description: 'The id of our player, from us.startingXi' },
+          playerId: { type: 'INTEGER', description: 'The id of our player, a player in your xi' },
           position: { type: 'STRING', description: 'Their position in our XI, e.g. "LM"' },
-          name: { type: 'STRING', description: 'Their name as in us.startingXi' },
+          name: { type: 'STRING', description: 'Their name as in us.startingXi or us.restOfSquad' },
           reason: { type: 'STRING', description: 'One or two sentences: their job in this match and who they face, citing attributes' },
           settings: {
             type: 'ARRAY',
@@ -243,7 +269,7 @@ export const ANALYSIS_SCHEMA = {
       items: { type: 'OBJECT', properties: { title: { type: 'STRING' }, detail: { type: 'STRING' } }, required: ['title', 'detail'] },
     },
   },
-  required: ['summary', 'formation', 'captain', 'attack', 'defend', 'matchups', 'lineup', 'styleSummary', 'tactics', 'players', 'historyNotes'],
+  required: ['summary', 'formation', 'captain', 'attack', 'defend', 'matchups', 'lineup', 'xi', 'styleSummary', 'tactics', 'players', 'historyNotes'],
 } as const;
 
 /** A player's line in a match report from MFL's /matches/{id}/report */
@@ -325,11 +351,12 @@ export function summariseReports(reports: SideReport[], playersById: Map<number,
   };
 }
 
-const describeXi = (xi: XiPlayer[], withIds = false) =>
+const describeXi = (xi: XiPlayer[], byId: Map<number, MFLPlayer>, withIds = false) =>
   xi.map(player => ({
     ...(withIds ? { id: player.id } : {}),
     position: player.position,
     name: player.name,
+    fitness: fitnessOf(byId.get(player.id)),
     ratingHere: player.rating,
     overall: player.overall,
     fit: player.kind,
@@ -355,7 +382,35 @@ const describeBench = (players: MFLPlayer[], xi: XiPlayer[]) => {
     .filter(player => !inXi.has(player.id) && player.metadata.retirementYears !== 0)
     .sort((a, b) => b.metadata.overall - a.metadata.overall)
     .slice(0, 9)
-    .map(player => ({ name: player.metadata.lastName, positions: player.metadata.positions.join('/'), overall: player.metadata.overall, age: player.metadata.age }));
+    .map(player => ({
+      name: player.metadata.lastName,
+      positions: player.metadata.positions.join('/'),
+      overall: player.metadata.overall,
+      age: player.metadata.age,
+      fitness: fitnessOf(player),
+    }));
+};
+
+/** Every one of our players not in the XI, with their id, for the AI to pick the XI and rest tired players from */
+const describeRest = (players: MFLPlayer[], xi: XiPlayer[]) => {
+  const inXi = new Set(xi.map(player => player.id));
+  return players
+    .filter(player => !inXi.has(player.id) && !isRetiredPlayer(player))
+    .sort((a, b) => b.metadata.overall - a.metadata.overall)
+    .map(player => ({
+      id: player.id,
+      name: player.metadata.lastName,
+      positions: player.metadata.positions.join('/'),
+      overall: player.metadata.overall,
+      age: player.metadata.age,
+      fitness: fitnessOf(player),
+      pace: player.metadata.pace,
+      shooting: player.metadata.shooting,
+      passing: player.metadata.passing,
+      dribbling: player.metadata.dribbling,
+      defense: player.metadata.defense,
+      physical: player.metadata.physical,
+    }));
 };
 
 /**
@@ -374,8 +429,11 @@ export const MFL_TACTICS_GUIDE = [
   "Judge results against the opposition's strength. Each logged match has ovrGap (our XI's average OVR less theirs) and expectedPoints, what that gap is worth on average across MFL (3 × logistic(0.265 × gap): level XIs 1.5, +4 OVR 2.2, +8 OVR 2.7); records carry vsExpected, points a game above or below that, over expectedGames of their games. Prefer vsExpected to raw points a game: a setting used mostly against weaker sides wins for that alone. bestBand already ranks by it when every game in the bands has it.",
   "ourTacticsLog also holds the individual instructions we used (playerInstructions, by player name, each with that player's own line in the match: rating, goals, assists, xG, shots, chances created, dribbles, defensive duels won) and our record with each one tried (playerInstructionResults, by step, against the logged matches without it), and, where you advised us before a match, that advice and how closely we followed it (adviceFollowed: team settings set as advised) with our record when we followed it and when we didn't (followingAdvice). Learn from it: keep what worked, change advice that we followed and lost with, and test instructions we haven't tried enough, saying so in historyNotes.",
   "Judge an individual instruction by the player's own numbers as well as the team's result: playerInstructionResults gives their average line with each step (form) and in the logged matches they played on the team's step (formWithout). A striker told to shoot more who shoots more but scores less and rates lower is worse off for it even in a win; keep an instruction that lifts the player's rating and output, and drop or change one that doesn't. Small samples (a game or two) are hints, not proof.",
-  `The captain plays at +${CAPTAIN_OVR} OVR, and the whole XI gets a bonus by the captain's position: goalkeeper +2 DEF; defender +2 DEF, +1 PHY; midfielder +2 PAS, +1 DRI; forward +2 SHO, +1 PAC. us.captainOptions lists our best choices with how much each lifts the XI's average rating; them.likelyCaptain is theirs. Pick ours weighing that lift against what the matchup needs, e.g. a defender's DEF bonus against a dangerous attack, or a forward's SHO bonus against a weak keeper.`,
-  `Each player can also take individual instructions (playerSettings) that override the team's step for them alone, or follow it ("TEAM"). Passing Risk and Position Freedom exist only per player and start at step 3. In players, pick 2 to ${MAX_PLAYER_INSTRUCTIONS} key players from us.startingXi (those in the key matchups, our playmaker and our best attacker, a defender facing their danger man) and give each only the settings that should differ from your team step, e.g. a winger who beats his full-back on pace and dribbling dribbles more, a creative midfielder with high passing takes more passing risk, a slow centre-back clears more and presses less.`,
+  `The captain plays at +${CAPTAIN_OVR} OVR, and the whole XI gets a bonus by the captain's position: goalkeeper +2 DEF; defender +2 DEF, +1 PHY; midfielder +2 PAS, +1 DRI; forward +2 SHO, +1 PAC. us.captainOptions lists our best choices, and the best of each line, with how much each lifts the XI's average rating (gain) and how much of that is the team bonus (bonusLift); aimPick marks the planner's choice for our aim; them.likelyCaptain is theirs. Attributes stop at 99, so a bonus on attributes already at 99 is wasted: a bonusLift near 0 means that line's bonus does nothing for this XI. Pick ours weighing that lift against what the matchup needs, e.g. a defender's DEF bonus against a dangerous attack, or a forward's SHO bonus against a weak keeper.`,
+  `Each player can also take individual instructions (playerSettings) that override the team's step for them alone, or follow it ("TEAM"). Passing Risk and Position Freedom exist only per player and start at step 3. In players, pick 2 to ${MAX_PLAYER_INSTRUCTIONS} key players from your xi (those in the key matchups, our playmaker and our best attacker, a defender facing their danger man) and give each only the settings that should differ from your team step, e.g. a winger who beats his full-back on pace and dribbling dribbles more, a creative midfielder with high passing takes more passing risk, a slow centre-back clears more and presses less.`,
+  `fitness is each player's energy in %, from MFL. A player under ${FIT_THRESHOLD}% plays below his best and tires sooner. Rest him when a fit player (${FIT_THRESHOLD}%+) in our squad suits his position: one who plays it (natural or alt) rated within about ${COVER_MAX_DROP} of him there. us.tiredInXi lists our tired starters with the best fit cover for each, marked suitable or not. When no cover suits, keep him and say so in lineup. Their fitness counts too: a tired opponent is a target.`,
+  "xi is the XI you would field in formation.pick: the best player for each position, after resting tired players for suitable cover. It is drawn on our matchup pitch, so it must agree with lineup and captain. Use ids from us.startingXi and us.restOfSquad only, each once.",
+  "clubNotes, when present, are our manager's own notes on the club: preferences, plans, players to rest or develop, what they have seen. Treat them as first-hand knowledge and follow them unless the data clearly says otherwise; then say why.",
   'Only recommend formations, who plays where, swaps from the listed squads, the captain, the listed playing style settings and individual instructions. Do not invent other instructions.',
 ];
 
@@ -389,6 +447,8 @@ export interface AnalysisInput {
   theirReports: SideReport[];
   /** Our tactics log, when any matches are logged */
   history?: TacticsHistory | null;
+  /** Our manager's notes on the club */
+  notes?: string | null;
 }
 
 /** The prompt for one analysis: the guide, both squads and XIs, their form, the planner's numbers and our weak-spot finds */
@@ -448,7 +508,7 @@ function describeHistory(history: TacticsHistory | null | undefined, theirClubId
   };
 }
 
-export function buildAnalysisPrompt({ ours, theirs, ourFormation, theirFormation, counters, aim = 'win', theirReports, history }: AnalysisInput): string {
+export function buildAnalysisPrompt({ ours, theirs, ourFormation, theirFormation, counters, aim = 'win', theirReports, history, notes }: AnalysisInput): string {
   const ourById = new Map(ours.players.map(player => [player.id, player]));
   const theirById = new Map(theirs.players.map(player => [player.id, player]));
   const ourFit = squadFits(ours.players).get(ourFormation);
@@ -456,17 +516,24 @@ export function buildAnalysisPrompt({ ours, theirs, ourFormation, theirFormation
   const ourXi = xiPlayers(ourFormation, ourFit, ourById);
   const theirXi = xiPlayers(theirFormation, theirFit, theirById);
   const nameOf = (byId: Map<number, MFLPlayer>, id: number) => byId.get(id)?.metadata.lastName ?? `Player ${id}`;
-  const captainOptionsOf = (fit: typeof ourFit, byId: Map<number, MFLPlayer>) =>
-    fit
-      ? captainOptions(fit.formation, fit.slots.map(slot => slot.playerId), byId)
-          .slice(0, 5)
-          .map(option => ({
-            player: `${option.position} ${nameOf(byId, option.playerId)}`,
-            teamBonus: describeBonus(option.line),
-            xiRatingWithThem: Math.round(option.rating * 10) / 10,
-            gain: Math.round(option.gain * 100) / 100,
-          }))
-      : [];
+  // The best five, and the best of each line so a forward or defender is there to weigh for the aim
+  const captainOptionsOf = (fit: typeof ourFit, byId: Map<number, MFLPlayer>, forAim?: Outcome) => {
+    if (!fit) return [];
+    const options = captainOptions(fit.formation, fit.slots.map(slot => slot.playerId), byId);
+    const aimPick = forAim ? aimCaptain(fit, byId, forAim)?.playerId : undefined;
+    const lineBests = new Set(['GK', 'DEF', 'MID', 'ATT'].flatMap(line => options.find(option => option.line === line) ?? []));
+    return options
+      .filter((option, index) => index < 5 || lineBests.has(option))
+      .map(option => ({
+        id: option.playerId,
+        player: `${option.position} ${nameOf(byId, option.playerId)}`,
+        teamBonus: describeBonus(option.line),
+        xiRatingWithThem: Math.round(option.rating * 10) / 10,
+        gain: Math.round(option.gain * 100) / 100,
+        bonusLift: Math.round(bonusLift(option) * 100) / 100,
+        ...(option.playerId === aimPick ? { aimPick: true } : {}),
+      }));
+  };
   const played: PlayedMatch[] = theirs.matches;
 
   const data = {
@@ -491,16 +558,18 @@ export function buildAnalysisPrompt({ ours, theirs, ourFormation, theirFormation
       club: ours.club.name,
       aim,
       plannedFormation: formationLabel(ourFormation),
-      startingXi: describeXi(ourXi, true),
-      captainOptions: captainOptionsOf(ourFit, ourById),
-      bestOfTheRest: describeBench(ours.players, ourXi),
+      startingXi: describeXi(ourXi, ourById, true),
+      tiredInXi: ourFit ? tiredStarters(ourFormation, ourFit.slots.map(slot => slot.playerId), ours.players) : [],
+      captainOptions: captainOptionsOf(ourFit, ourById, aim),
+      restOfSquad: describeRest(ours.players, ourXi),
       recentResults: describeMatches(ours.matches.slice(0, 10)),
       ourTacticsLog: describeHistory(history, theirs.club.id, theirFormation, ourById),
+      ...(notes?.trim() ? { clubNotes: notes.trim() } : {}),
     },
     them: {
       club: theirs.club.name,
       expectedFormation: formationLabel(theirFormation),
-      likelyXi: describeXi(theirXi),
+      likelyXi: describeXi(theirXi, theirById),
       likelyCaptain: captainOptionsOf(theirFit, theirById)[0] ?? null,
       bestOfTheRest: describeBench(theirs.players, theirXi),
       recentResults: describeMatches(theirs.matches),
@@ -513,7 +582,7 @@ export function buildAnalysisPrompt({ ours, theirs, ourFormation, theirFormation
 
   return [
     `You are an analyst for an MFL (Metaverse Football League) club, ${ours.club.name}, preparing to play ${theirs.club.name}.`,
-    `Study the data below: both squads, the XI each side is expected to field (their XI is the best their squad makes in their expected formation, so it may differ on the day), their recent results with formations, per-player stats from their last ${theirReports.length} matches, the planner's ranked counter formations from the formation meta, and the weak spots our rules found.`,
+    `Study the data below: both squads with each player's fitness, the XI each side is expected to field (their XI is the best their squad makes in their expected formation, so it may differ on the day), their recent results with formations, per-player stats from their last ${theirReports.length} matches, the planner's ranked counter formations from the formation meta, and the weak spots our rules found.`,
     `${AIM_BRIEFS[aim]} plannerCounters are ranked for this aim. Every recommendation (formation, captain, lineup changes, playing style) must serve it.`,
     'Find concrete edges: flanks to attack, individual duels we win, their tendencies by formation, and anything in their match stats (who gets dribbled past, who creates, xG against).',
     'Be specific and cite numbers and player names from the data. Keep each detail to one or two sentences. Name formations by their label, e.g. "4-3-3 (att)", except formation.pick, which must be a key.',
@@ -549,4 +618,50 @@ export function cleanPlayerInstructions(value: unknown, xiIds: Set<number>): Pla
     instructions.push({ playerId, position: String(item.position ?? ''), name: String(item.name ?? ''), reason: String(item.reason ?? ''), settings });
   }
   return instructions.slice(0, MAX_PLAYER_INSTRUCTIONS);
+}
+
+/**
+ * The model's XI made safe to draw: each of the formation's positions takes the first unused entry naming that
+ * position with a player from our squad (not retired, not used already); entries whose position is off fill what's
+ * left in order; anything still empty is filled as auto-fill would. The captain is the model's when in the XI,
+ * otherwise the planner's pick for the aim.
+ */
+export function cleanTeam(
+  value: unknown,
+  formation: string,
+  players: MFLPlayer[],
+  captainId: unknown,
+  aim: Outcome,
+): AnalysisTeam {
+  const byId = new Map(players.filter(player => !isRetiredPlayer(player)).map(player => [player.id, player]));
+  const entries = (Array.isArray(value) ? value : [])
+    .map(item => ({ position: String(item?.position ?? '').toUpperCase(), playerId: Number(item?.playerId) }))
+    .filter(entry => byId.has(entry.playerId));
+  const used = new Set<number>();
+  const taken = new Set<number>();
+  const xi = emptyXi();
+  FORMATIONS[formation].forEach(([position], index) => {
+    const at = entries.findIndex((entry, entryIndex) => !taken.has(entryIndex) && !used.has(entry.playerId) && entry.position === position);
+    if (at < 0) return;
+    taken.add(at);
+    used.add(entries[at].playerId);
+    xi[index] = entries[at].playerId;
+  });
+  // Entries with a position the formation doesn't have, in the order given
+  const rest = entries.filter((entry, entryIndex) => !taken.has(entryIndex) && !used.has(entry.playerId));
+  xi.forEach((id, index) => {
+    if (id !== null) return;
+    const next = rest.find(entry => !used.has(entry.playerId));
+    if (!next) return;
+    used.add(next.playerId);
+    xi[index] = next.playerId;
+  });
+  const filled = fillEmptyPositions(formation, xi, [...byId.values()]);
+  const id = Number(captainId);
+  const fit = lineupFit(formation, filled, byId);
+  return {
+    formation,
+    xi: filled,
+    captainId: filled.includes(id) ? id : (aimCaptain(fit, byId, aim)?.playerId ?? null),
+  };
 }

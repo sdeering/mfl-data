@@ -11,6 +11,7 @@ import {
   buildAnalysisPrompt,
   cleanPlayerInstructions,
   cleanTactics,
+  cleanTeam,
   type MatchAnalysis,
   type MatchAnalysisRequest,
   type MatchReport,
@@ -21,7 +22,8 @@ import { describeWait, takeRateLimits, visitorKey } from '@/src/lib/rateLimit';
 import { analysisAllowance, analysisLimits } from '@/src/lib/aiAccess';
 import { sessionWallet } from '@/src/lib/session';
 import { FORMATIONS } from '@/src/utils/squadLineups';
-import { isOutcome, squadFits } from '@/src/utils/formationPlanner';
+import { isOutcome } from '@/src/utils/formationPlanner';
+import { loadClubNotes, notesKey } from '@/src/services/clubNotes';
 
 export const maxDuration = 90;
 
@@ -100,7 +102,13 @@ async function askGemini(prompt: string): Promise<MatchAnalysis> {
   return {
     summary: analysis.summary,
     formation: isFormation(analysis.formation?.pick) ? analysis.formation : { pick: '', reason: analysis.formation?.reason ?? '' },
-    captain: analysis.captain?.player ? { player: String(analysis.captain.player), reason: String(analysis.captain.reason ?? '') } : undefined,
+    captain: analysis.captain?.player
+      ? {
+          player: String(analysis.captain.player),
+          reason: String(analysis.captain.reason ?? ''),
+          ...(Number.isInteger(analysis.captain.playerId) ? { playerId: analysis.captain.playerId } : {}),
+        }
+      : undefined,
     attack: analysis.attack ?? [],
     defend: analysis.defend ?? [],
     matchups: analysis.matchups ?? [],
@@ -108,8 +116,9 @@ async function askGemini(prompt: string): Promise<MatchAnalysis> {
     styleSummary: typeof analysis.styleSummary === 'string' ? analysis.styleSummary : '',
     tactics: cleanTactics(analysis.tactics),
     historyNotes: Array.isArray(analysis.historyNotes) ? analysis.historyNotes.filter(note => note?.title && note?.detail) : [],
-    // Checked against our XI once it's known
+    // Checked against our squad once it's known
     players: Array.isArray(analysis.players) ? analysis.players : [],
+    xi: Array.isArray(analysis.xi) ? analysis.xi : [],
   };
 }
 
@@ -178,9 +187,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ success: false, error: 'No such MFL club' }, { status: 404 });
   }
   // Logging a match makes a new analysis, so it reads the log as it is
-  const entries = await loadTacticsEntries(ourClubId);
+  // and so do new club notes
+  const [entries, { notes }] = await Promise.all([loadTacticsEntries(ourClubId), loadClubNotes(ourClubId)]);
   const logVersion = entries.length ? `${entries.length}-${entries.map(entry => entry.updatedAt).sort().at(-1)}` : '0';
-  const cacheKey = `v10:${ourClubId}:${theirClubId}:${ourFormation}:${theirFormation}:${aim}:${logVersion}`;
+  const cacheKey = `v11:${ourClubId}:${theirClubId}:${ourFormation}:${theirFormation}:${aim}:${logVersion}:${notesKey(notes)}`;
   const cached = cache.get(cacheKey);
   if (cached && Date.now() - cached.at < CACHE_MS) {
     const adviceSaved = await rememberAdvice(ourClubId, ourSquadId, body.matchId, wallet, cached.analysis, aim);
@@ -217,11 +227,13 @@ export async function POST(request: NextRequest) {
     // Our log only costs MFL requests when there is one
     const history = entries.length ? await buildTacticsHistory(ourClubId, entries) : null;
 
-    const prompt = buildAnalysisPrompt({ ours, theirs, ourFormation, theirFormation, counters: readCounters(body.counters), aim, theirReports: reports, history });
+    const prompt = buildAnalysisPrompt({ ours, theirs, ourFormation, theirFormation, counters: readCounters(body.counters), aim, theirReports: reports, history, notes });
     const analysis = await askGemini(prompt);
-    // Only players in the XI we're planning, as the page shows their stats
-    const ourXi = squadFits(ours.players).get(ourFormation);
-    analysis.players = cleanPlayerInstructions(analysis.players, new Set(ourXi?.slots.flatMap(slot => (slot.playerId === null ? [] : [slot.playerId])) ?? []));
+    // The XI it would field, made whole from our squad, for the matchup pitch
+    analysis.team = cleanTeam(analysis.xi, analysis.formation.pick || ourFormation, ours.players, analysis.captain?.playerId, aim);
+    delete analysis.xi;
+    // Only players in that XI, as the page shows their stats
+    analysis.players = cleanPlayerInstructions(analysis.players, new Set(analysis.team.xi.filter((id): id is number => id !== null)));
     cache.set(cacheKey, { analysis, at: Date.now() });
     if (cache.size > 300) cache.delete(cache.keys().next().value!);
     const adviceSaved = await rememberAdvice(ourClubId, ourSquadId, body.matchId, wallet, analysis, aim);

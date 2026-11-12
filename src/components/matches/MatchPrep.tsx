@@ -4,6 +4,8 @@ import type { ScoutMatch } from '../../services/scoutService';
 import {
   OUTCOMES,
   WEAK_POSITION_GAP,
+  aimCaptain,
+  lineupFit,
   matchResult,
   weakPositions,
   type FilledSlot,
@@ -16,6 +18,8 @@ import { FORMATIONS, FORMATION_NAMES, formationLabel } from '../../utils/squadLi
 import { CAPTAIN_OVR, describeBonus } from '../../utils/captain';
 import { placeSpots, type PitchSpot, type PlacedSpot } from '../../utils/pitchSpots';
 import type { MFLPlayer } from '../../types/mflApi';
+import type { AnalysisTeam } from '../../services/matchAnalysis';
+import { FIT_THRESHOLD, fitnessOf } from '../../utils/fitness';
 import { ClearButton, Panel } from '../ui';
 
 /*
@@ -361,7 +365,9 @@ const PickCard: React.FC<{
   const headline = headlineFor(pick, outcome);
   const chip = fitChip(pick);
   const weak = weakPositions(fit);
-  const captain = fit?.captain ? playersById?.get(fit.captain.playerId) : undefined;
+  // The captain for the aim: a forward to smash them, a defender not to lose, unless their bonus would be wasted
+  const best = playersById ? aimCaptain(fit, playersById, outcome) : fit?.captain ?? null;
+  const captain = best ? playersById?.get(best.playerId) : undefined;
   return (
     <button
       type="button"
@@ -405,13 +411,13 @@ const PickCard: React.FC<{
         <span className="h-[22px] px-[9px] rounded-full flex items-center text-[11px] font-bold" style={{ background: chip.background, color: chip.colour }}>
           {chip.label}
         </span>
-        {captain && fit?.captain && (
+        {captain && best && (
           <span
             className="h-[22px] px-[9px] rounded-full flex items-center gap-1 text-[11px] font-bold bg-chip text-fg-3"
-            title={`Best captain: ${captain.metadata.firstName} ${captain.metadata.lastName} at ${fit.captain.position}. +${CAPTAIN_OVR} for them and ${describeBonus(fit.captain.line)} for the XI lift its average by ${fit.captain.gain.toFixed(1)}`}
+            title={`${CAPTAIN_FOR[outcome]}: ${captain.metadata.firstName} ${captain.metadata.lastName} at ${best.position}. +${CAPTAIN_OVR} for them and ${describeBonus(best.line)} for the XI lift its average by ${best.gain.toFixed(1)}`}
           >
             <span className="w-[14px] h-[14px] rounded-full grid place-items-center bg-[#c6f432] text-[#0b1406] text-[9px] font-extrabold">C</span>
-            {captain.metadata.lastName} +{fit.captain.gain.toFixed(1)}
+            {captain.metadata.lastName} +{best.gain.toFixed(1)}
           </span>
         )}
         {weak.length > 0 && (
@@ -426,6 +432,13 @@ const PickCard: React.FC<{
       </span>
     </button>
   );
+};
+
+/** Why the captain shown was picked, by aim */
+const CAPTAIN_FOR: Record<Outcome, string> = {
+  win: 'Best captain',
+  smash: 'Captain to smash them (a forward, for +2 SHO and +1 PAC, unless that bonus is wasted at 99)',
+  notLose: 'Captain not to lose (a defender, for the DEF bonus, unless that bonus is wasted at 99)',
 };
 
 /** Formations shown as cards before the rest are left to the selector */
@@ -548,6 +561,8 @@ interface MatchupSpot {
   playersById: Map<number, MFLPlayer>;
   ours: boolean;
   captain: boolean;
+  /** Brought into the XI by the AI analysis */
+  aiPick?: boolean;
 }
 
 /**
@@ -560,15 +575,19 @@ const PitchPlayer: React.FC<
     ringRef: (element: HTMLSpanElement | null) => void;
     tagRef: (element: HTMLSpanElement | null) => void;
   }
-> = ({ position, left, top, slot, playersById, ours, captain, tagAbove, ringRef, tagRef }) => {
+> = ({ position, left, top, slot, playersById, ours, captain, aiPick, tagAbove, ringRef, tagRef }) => {
   const player = slot?.playerId ? playersById.get(slot.playerId) : undefined;
   const rating = player && Math.round(slot!.rating);
+  const fitness = fitnessOf(player);
+  const tired = fitness !== null && fitness < FIT_THRESHOLD;
   return (
     <span
       ref={ringRef}
       title={
         player
-          ? `${player.metadata.firstName} ${player.metadata.lastName} · ${rating} at ${position}${rating !== player.metadata.overall ? ` (overall ${player.metadata.overall})` : ''}`
+          ? `${player.metadata.firstName} ${player.metadata.lastName} · ${rating} at ${position}${rating !== player.metadata.overall ? ` (overall ${player.metadata.overall})` : ''}${
+              fitness !== null ? ` · ${fitness}% fit` : ''
+            }${aiPick ? ' · brought in by the AI' : ''}`
           : position
       }
       className={`absolute -translate-x-1/2 -translate-y-1/2 w-5 h-5 sm:w-7 sm:h-7 rounded-full grid place-items-center text-[7px] sm:text-[9px] font-extrabold ${
@@ -578,9 +597,18 @@ const PitchPlayer: React.FC<
         left: `${left}%`,
         top: `${top}%`,
         ...(ours ? { border: `2px solid ${FIT_COLOURS[slot?.kind ?? 'out']}` } : { background: ORANGE, border: '2px solid rgba(0,0,0,.35)' }),
+        ...(aiPick ? { boxShadow: `0 0 0 3px ${AI_GLOW}` } : {}),
       }}
     >
       {position}
+      {tired && (
+        <span
+          className="absolute -top-1.5 -left-2 h-3 sm:h-3.5 px-[3px] rounded-full grid place-items-center bg-[#ef4444] text-white text-[7px] sm:text-[8px] font-extrabold leading-none"
+          title={`${fitness}% fit`}
+        >
+          {fitness}
+        </span>
+      )}
       {captain && (
         <span
           className="absolute -top-1.5 -right-1.5 w-3 h-3 sm:w-3.5 sm:h-3.5 rounded-full grid place-items-center bg-[#c6f432] text-[#0b1406] text-[7px] sm:text-[8px] font-extrabold"
@@ -603,6 +631,20 @@ const PitchPlayer: React.FC<
   );
 };
 
+const AI_GLOW = 'rgba(198,244,50,.55)';
+
+/** "Martin (88%)" for a tired player, "Martin" otherwise */
+const nameWithFitness = (player: MFLPlayer | undefined) => {
+  if (!player) return '';
+  const fitness = fitnessOf(player);
+  return `${player.metadata.lastName}${fitness !== null && fitness < FIT_THRESHOLD ? ` (${fitness}%)` : ''}`;
+};
+
+const LINEUP_CHOICES = [
+  { ai: true, label: 'AI lineup', hint: 'The XI and captain from the AI match analysis, after resting tired players' },
+  { ai: false, label: 'Planner', hint: "Your formation's best XI from the planner" },
+] as const;
+
 export const MatchupPanel: React.FC<{
   name: string;
   formation: string;
@@ -612,8 +654,43 @@ export const MatchupPanel: React.FC<{
   /** Their best XI in their formation, when we know their squad */
   theirFit: FormationFit | undefined;
   theirPlayersById: Map<number, MFLPlayer>;
-  onOpenSquad: () => void;
-}> = ({ name, formation, theirFormation, fit, playersById, theirFit, theirPlayersById, onOpenSquad }) => {
+  /** What we want from the match, which picks the captain */
+  outcome: Outcome;
+  /** The AI analysis's lineup for this matchup, when there is one, and our best XI in its formation */
+  aiTeam?: AnalysisTeam | null;
+  aiBaseFit?: FormationFit;
+  showAi?: boolean;
+  onShowAi?: (show: boolean) => void;
+  /** Opens the lineup shown, the AI's when given */
+  onOpenSquad: (aiTeam?: AnalysisTeam) => void;
+}> = ({
+  name,
+  formation: plannedFormation,
+  theirFormation,
+  fit: plannedFit,
+  playersById,
+  theirFit,
+  theirPlayersById,
+  outcome,
+  aiTeam,
+  aiBaseFit,
+  showAi = true,
+  onShowAi,
+  onOpenSquad,
+}) => {
+  const usingAi = !!aiTeam && showAi;
+  const formation = usingAi ? aiTeam.formation : plannedFormation;
+  const fit = usingAi ? lineupFit(aiTeam.formation, aiTeam.xi, playersById, aiTeam.captainId) : plannedFit;
+  const ourCaptainId = usingAi ? aiTeam.captainId : aimCaptain(plannedFit, playersById, outcome)?.playerId;
+  // Who the AI brought in and left out, against our best XI in its formation
+  const baseIds = new Set(aiBaseFit?.slots.flatMap(slot => (slot.playerId === null ? [] : [slot.playerId])) ?? []);
+  const aiIds = new Set(aiTeam?.xi.filter((id): id is number => id !== null) ?? []);
+  const broughtIn = usingAi && aiBaseFit ? [...aiIds].filter(id => !baseIds.has(id)) : [];
+  const leftOut = usingAi && aiBaseFit ? [...baseIds].filter(id => !aiIds.has(id)) : [];
+  const anyTired = (fit?.slots ?? []).some(slot => {
+    const fitness = fitnessOf(slot.playerId ? playersById.get(slot.playerId) : undefined);
+    return fitness !== null && fitness < FIT_THRESHOLD;
+  });
   const pitchRef = useRef<HTMLDivElement>(null);
   const rings = useRef<(HTMLSpanElement | null)[]>([]);
   const tags = useRef<(HTMLSpanElement | null)[]>([]);
@@ -638,7 +715,8 @@ export const MatchupPanel: React.FC<{
       slot: fit?.slots[index],
       playersById,
       ours: true,
-      captain: !!fit?.captain && fit.slots[index]?.playerId === fit.captain.playerId,
+      captain: !!ourCaptainId && fit?.slots[index]?.playerId === ourCaptainId,
+      aiPick: broughtIn.includes(fit?.slots[index]?.playerId ?? -1),
     })),
   ];
 
@@ -674,15 +752,36 @@ export const MatchupPanel: React.FC<{
     <Panel className="p-[22px] flex flex-col gap-4">
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div className="flex flex-col gap-1">
-          <span className={capsLabel}>Matchup</span>
+          <span className={capsLabel}>{usingAi ? 'Matchup · AI lineup' : 'Matchup'}</span>
           <span className="font-display text-2xl leading-[1.1] font-extrabold">
             <span className="text-accent-ink">{formationLabel(formation)}</span> <span className="text-muted-3 text-base">vs</span>{' '}
             <span className="text-[#fb923c]">{formationLabel(theirFormation)}</span>
           </span>
         </div>
-        <button type="button" onClick={onOpenSquad} disabled={!fit} className={limeButton}>
-          Open in Squad Builder
-        </button>
+        <div className="flex items-center gap-2.5 flex-wrap">
+          {aiTeam && onShowAi && (
+            <div role="radiogroup" aria-label="Lineup shown" className="flex gap-0.5 p-0.5 rounded-lg border border-line-2 bg-field">
+              {LINEUP_CHOICES.map(choice => (
+                <button
+                  key={choice.label}
+                  type="button"
+                  role="radio"
+                  aria-checked={showAi === choice.ai}
+                  title={choice.hint}
+                  onClick={() => onShowAi(choice.ai)}
+                  className={`h-8 px-3 rounded-md text-xs font-bold cursor-pointer transition-colors ${
+                    showAi === choice.ai ? 'bg-[#c6f432] text-[#0b1406]' : 'text-fg-3 hover:text-fg'
+                  }`}
+                >
+                  {choice.label}
+                </button>
+              ))}
+            </div>
+          )}
+          <button type="button" onClick={() => onOpenSquad(usingAi ? aiTeam : undefined)} disabled={!fit} className={limeButton}>
+            Open in Squad Builder
+          </button>
+        </div>
       </div>
       <div
         ref={pitchRef}
@@ -730,7 +829,31 @@ export const MatchupPanel: React.FC<{
           <span className="w-2.5 h-2.5 rounded-full" style={{ background: ORANGE }} />
           {name}
         </span>
+        {anyTired && (
+          <span className="flex items-center gap-1.5">
+            <span className="h-3 px-[3px] rounded-full grid place-items-center bg-[#ef4444] text-white text-[8px] font-extrabold leading-none">%</span>
+            Under {FIT_THRESHOLD}% fit
+          </span>
+        )}
+        {broughtIn.length > 0 && (
+          <span className="flex items-center gap-1.5">
+            <span className="w-2.5 h-2.5 rounded-full" style={{ boxShadow: `0 0 0 3px ${AI_GLOW}` }} />
+            Brought in by AI
+          </span>
+        )}
       </div>
+      {usingAi && (broughtIn.length > 0 || leftOut.length > 0) && (
+        <p className="m-0 text-xs font-medium text-muted">
+          AI changes to your best {formationLabel(formation)} XI: in{' '}
+          <b className="text-fg">{broughtIn.map(id => nameWithFitness(playersById.get(id))).join(', ') || 'no one'}</b>
+          {leftOut.length > 0 && (
+            <>
+              , out <b className="text-fg">{leftOut.map(id => nameWithFitness(playersById.get(id))).join(', ')}</b>
+            </>
+          )}
+          .
+        </p>
+      )}
     </Panel>
   );
 };

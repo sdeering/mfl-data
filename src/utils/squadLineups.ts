@@ -237,8 +237,18 @@ function fillPositions(
   return filled;
 }
 
+/**
+ * Fills the XI's empty positions from `players` as auto-fill does, never with a retired player: first with players
+ * who play there (natural or alternative), then with anyone.
+ */
+export function fillEmptyPositions(formation: string, xi: (number | null)[], players: MFLPlayer[]): (number | null)[] {
+  const available = players.filter(player => !isRetiredPlayer(player));
+  const filled = fillPositions(formation, available, xi, fit => fit.kind !== 'out');
+  return fillPositions(formation, available, filled);
+}
+
 /** The best of the players not in the XI on the bench, a goalkeeper first, and the next best as reserves. */
-function restFrom(players: MFLPlayer[], xi: (number | null)[]): Pick<Lineup, 'bench' | 'reserves'> {
+export function restFrom(players: MFLPlayer[], xi: (number | null)[]): Pick<Lineup, 'bench' | 'reserves'> {
   const rest = players.filter(player => !xi.includes(player.id)).sort((a, b) => b.metadata.overall - a.metadata.overall);
   const keeper = rest.find(isGoalkeeper);
   const ids = (keeper ? [keeper, ...rest.filter(player => player !== keeper)] : rest).map(player => player.id);

@@ -358,6 +358,113 @@ const PlayerInstructions: React.FC<{ instructions: PlayerInstruction[]; tactics:
   );
 };
 
+/** Longest club notes the server keeps, as in src/services/clubNotes.ts */
+const MAX_NOTES = 2000;
+
+type NotesState = { status: 'loading' } | { status: 'ready'; saved: string } | { status: 'error'; error: string };
+
+/**
+ * The owner's notes on the club, which every AI analysis of its matches reads: players to rest or develop,
+ * preferences, what they've seen. Kept on the server per club, private to the owner.
+ */
+const ClubNotesBox: React.FC<{ clubId: number; hasAnalysis: boolean }> = ({ clubId, hasAnalysis }) => {
+  const [state, setState] = useState<NotesState>({ status: 'loading' });
+  const [draft, setDraft] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState('');
+  const [justSaved, setJustSaved] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    setState({ status: 'loading' });
+    setJustSaved(false);
+    fetch(`/api/clubs/${clubId}/notes`)
+      .then(response => response.json())
+      .then(result => {
+        if (cancelled) return;
+        if (!result.success) return setState({ status: 'error', error: result.error || 'Could not load the notes' });
+        const notes = String(result.data?.notes ?? '');
+        setState({ status: 'ready', saved: notes });
+        setDraft(notes);
+      })
+      .catch(() => !cancelled && setState({ status: 'error', error: 'Could not load the notes' }));
+    return () => {
+      cancelled = true;
+    };
+  }, [clubId]);
+
+  const saved = state.status === 'ready' ? state.saved : '';
+  const changed = state.status === 'ready' && draft.trim() !== saved.trim();
+  const save = async () => {
+    setSaving(true);
+    setSaveError('');
+    try {
+      const response = await fetch(`/api/clubs/${clubId}/notes`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ notes: draft }),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok || !result.success) throw new Error(result.error || `HTTP ${response.status}`);
+      const notes = String(result.data?.notes ?? '');
+      setState({ status: 'ready', saved: notes });
+      setDraft(notes);
+      setJustSaved(true);
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : 'Could not save');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="flex flex-col gap-2.5">
+      <span className="flex flex-col gap-0.5">
+        <span className={capsLabel}>Notes for the AI</span>
+        <span className="text-xs font-medium text-muted">
+          Anything about your club the data doesn&apos;t show: players to rest or bring on, who to keep fresh for the cup, how you like to play. Every
+          analysis for this club reads them.
+        </span>
+      </span>
+      {state.status === 'error' ? (
+        <p className="m-0 text-xs font-semibold text-danger-ink">{state.error}</p>
+      ) : (
+        <>
+          <textarea
+            value={draft}
+            onChange={event => {
+              setDraft(event.target.value.slice(0, MAX_NOTES));
+              setJustSaved(false);
+            }}
+            disabled={state.status === 'loading'}
+            rows={4}
+            maxLength={MAX_NOTES}
+            placeholder={state.status === 'loading' ? 'Loading your notes…' : 'e.g. Rest Torres for the cup tie on Saturday. Prefer 4-3-3 when we can. Bader is our penalty taker.'}
+            className="w-full min-h-[96px] px-3.5 py-3 rounded-xl border border-line-2 bg-field text-fg text-sm font-medium leading-relaxed outline-none resize-y focus:border-[#c6f432] disabled:opacity-60"
+          />
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <span className="text-[11px] font-semibold text-muted-3">
+              {draft.length} / {MAX_NOTES}
+              {justSaved && !changed && (hasAnalysis ? ' · Saved. Analyse again to use them.' : ' · Saved. The next analysis uses them.')}
+            </span>
+            <span className="flex items-center gap-2">
+              {saveError && <span className="text-xs font-semibold text-[#f87171]">{saveError}</span>}
+              <button
+                type="button"
+                onClick={save}
+                disabled={!changed || saving}
+                className="h-8 px-3 rounded-lg border border-line-2 text-xs font-bold text-fg-3 cursor-pointer hover:border-[#c6f432] hover:text-[#c6f432] disabled:opacity-50 disabled:cursor-default disabled:hover:border-line-2 disabled:hover:text-fg-3"
+              >
+                {saving ? 'Saving…' : 'Save notes'}
+              </button>
+            </span>
+          </div>
+        </>
+      )}
+    </div>
+  );
+};
+
 /** Fresh AI analyses left today, from /api/match-analysis */
 interface Allowance {
   whitelisted: boolean;
@@ -383,7 +490,9 @@ export const AiAnalysisPanel: React.FC<{
   playersById?: Map<number, MFLPlayer>;
   /** Called when the server kept the analysis as the advice for the fixture */
   onAdviceSaved?: () => void;
-}> = ({ name, request, onUseFormation, history, fixture, onSaveSettings, playersById, onAdviceSaved }) => {
+  /** Told the analysis shown for this matchup, null when there is none or it was for another one */
+  onAnalysis?: (analysis: MatchAnalysis | null) => void;
+}> = ({ name, request, onUseFormation, history, fixture, onSaveSettings, playersById, onAdviceSaved, onAnalysis }) => {
   const key = keyOf(request);
   const [state, setState] = useState<AnalysisState>(() => {
     const known = analyses.get(key);
@@ -434,8 +543,15 @@ export const AiAnalysisPanel: React.FC<{
     }
   };
 
-  const stale = shownFor && keyOf(shownFor) !== key;
   const analysis = state.status === 'done' ? state.analysis : null;
+  // Playing the formation it picked keeps it current
+  const stale =
+    !!shownFor && keyOf(shownFor) !== key && !(analysis?.formation.pick === request.ourFormation && keyOf({ ...shownFor, ourFormation: request.ourFormation }) === key);
+  const current = analysis && !stale ? analysis : null;
+  useEffect(() => {
+    onAnalysis?.(current);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [current]);
   return (
     <Panel className="p-[22px] flex flex-col gap-4">
       <div className="flex items-start justify-between gap-3 flex-wrap">
@@ -539,7 +655,7 @@ export const AiAnalysisPanel: React.FC<{
           )}
           {analysis.lineup.length > 0 && (
             <Points
-              title="Lineup changes"
+              title={analysis.team ? 'Lineup changes · shown on the matchup pitch' : 'Lineup changes'}
               items={analysis.lineup.map(change => ({ title: `${change.position}: ${change.change}`, detail: change.reason }))}
               colour="#facc15"
             />
@@ -583,6 +699,9 @@ export const AiAnalysisPanel: React.FC<{
           />
         </div>
       )}
+      <div className="pt-4 border-t border-divider">
+        <ClubNotesBox clubId={request.ourClubId} hasAnalysis={!!analysis} />
+      </div>
     </Panel>
   );
 };

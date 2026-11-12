@@ -284,6 +284,14 @@ CREATE TABLE IF NOT EXISTS club_match_advice (
   PRIMARY KEY (club_id, match_id)
 );
 
+-- The club owner's own notes for the AI match analysis to use, one per club
+CREATE TABLE IF NOT EXISTS club_notes (
+  club_id INTEGER PRIMARY KEY,
+  notes TEXT NOT NULL,
+  wallet_address TEXT NOT NULL,
+  updated_at TEXT DEFAULT (datetime('now'))
+);
+
 -- Schema version tracking
 CREATE TABLE IF NOT EXISTS schema_version (
   version INTEGER PRIMARY KEY,

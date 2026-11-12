@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useWallet } from '../contexts/WalletContext';
 import { matchesService, type MFLMatch } from '../services/matchesService';
@@ -15,13 +15,16 @@ import {
   rankFormations,
   splitByMatchDay,
   rankForOutcome,
+  aimCaptain,
   isOutcome,
   type Outcome,
   squadFits,
   type FormationFit,
   type FormationMeta,
 } from '../utils/formationPlanner';
-import { autoFillLineup } from '../utils/squadLineups';
+import { autoFillLineup, restFrom } from '../utils/squadLineups';
+import { isRetiredPlayer } from '../utils/appSettings';
+import type { AnalysisTeam, MatchAnalysis } from '../services/matchAnalysis';
 import { addDraftLineup } from '../utils/squadDraft';
 import type { MFLPlayer } from '../types/mflApi';
 import { Panel, btnSecondary, linkClass } from './ui';
@@ -114,7 +117,7 @@ const OpponentPrep: React.FC<{
   /** What the user picked to plan against: a formation or LIKELY_MIX, undefined for their likeliest formation */
   against: string | undefined;
   onAgainst: (against: string) => void;
-  onOpenSquad: (opponentName: string, formation: string) => void;
+  onOpenSquad: (opponentName: string, formation: string, aiTeam?: AnalysisTeam) => void;
   tactics: TacticsLogState;
   /** Whether the connected wallet owns our club, so it can log tactics */
   canLog: boolean;
@@ -138,6 +141,17 @@ const OpponentPrep: React.FC<{
   }, [report, ours, guesses, against, ourFits, meta]);
   // Best first for what we want from the match
   const picks = useMemo(() => rankForOutcome(ranked, outcome), [ranked, outcome]);
+  // The AI analysis's lineup for the matchup shown, drawn on the matchup pitch until the planner's is picked
+  const [aiTeam, setAiTeam] = useState<AnalysisTeam | null>(null);
+  const [showAi, setShowAi] = useState(true);
+  const onAnalysis = useCallback((analysis: MatchAnalysis | null) => {
+    const team = analysis?.team ?? null;
+    setAiTeam(current => {
+      // A new lineup shows at once
+      if (team && team !== current) setShowAi(true);
+      return team;
+    });
+  }, []);
 
   // Our XI against theirs in the formations picked, and their weak spots
   const likeliestFormation = guesses[0]?.formation;
@@ -189,7 +203,12 @@ const OpponentPrep: React.FC<{
             playersById={ourPlayersById}
             theirFit={theirFits.get(theirFormation)}
             theirPlayersById={theirPlayersById}
-            onOpenSquad={() => onOpenSquad(name, selected)}
+            outcome={outcome}
+            aiTeam={aiTeam}
+            aiBaseFit={aiTeam ? ourFits.get(aiTeam.formation) : undefined}
+            showAi={showAi}
+            onShowAi={setShowAi}
+            onOpenSquad={team => onOpenSquad(name, team?.formation ?? selected, team)}
           />
         </div>
       ) : (
@@ -229,6 +248,7 @@ const OpponentPrep: React.FC<{
           onSaveSettings={canLog ? tactics.save : undefined}
           playersById={ourPlayersById}
           onAdviceSaved={tactics.refresh}
+          onAnalysis={onAnalysis}
         />
       )}
     </>
@@ -380,15 +400,30 @@ const MatchesPage: React.FC = () => {
     return (ours?.matches ?? []).map(match => match.opponent).filter(opponent => !seen.has(opponent.clubId) && seen.add(opponent.clubId)).slice(0, 8);
   }, [ours]);
 
-  const openSquad = (opponentName: string, formation: string) => {
-    if (!walletAddress || !ours) return;
-    // The same XI the planner rated, with its best captain
-    addDraftLineup(walletAddress, {
-      name: `vs ${opponentName}`,
-      formation,
-      ...autoFillLineup(formation, ours.players),
-      captain: ourFits.get(formation)?.captain?.playerId ?? null,
-    });
+  const openSquad = (opponentName: string, formation: string, aiTeam?: AnalysisTeam) => {
+    if (!walletAddress || !ours || !clubId) return;
+    addDraftLineup(
+      walletAddress,
+      aiTeam
+        ? // The AI's XI and captain, with the best of the rest on the bench
+          {
+            name: `vs ${opponentName} (AI)`,
+            formation: aiTeam.formation,
+            xi: aiTeam.xi,
+            ...restFrom(
+              ours.players.filter(player => !isRetiredPlayer(player)),
+              aiTeam.xi,
+            ),
+            captain: aiTeam.captainId,
+          }
+        : // The same XI the planner rated, with the captain for our aim
+          {
+            name: `vs ${opponentName}`,
+            formation,
+            ...autoFillLineup(formation, ours.players),
+            captain: aimCaptain(ourFits.get(formation), ourPlayersById, aims[clubId] ?? 'win')?.playerId ?? null,
+          },
+    );
     router.push('/squad-builder');
   };
 
