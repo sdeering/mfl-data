@@ -186,11 +186,58 @@ const REFUSED_COST = 1e6;
 /** Filling a position counts for more than any rating, so as many as can be are filled */
 const FILLED_BONUS = 1000;
 
+/** The side of the pitch a formation's slot stands on, from its own team's point of view */
+export function slotSide(formation: string, index: number): 'left' | 'centre' | 'right' {
+  const across = FORMATIONS[formation][index][1];
+  return across < 50 ? 'left' : across > 50 ? 'right' : 'centre';
+}
+
+/** Most a player's strong foot is worth at a slot: under one rating point, so it never beats a better-rated player */
+const FOOT_WEIGHT = 0.4;
+
+/**
+ * A little extra for a player on their strong foot's side: right-footed on the right, left-footed on the left.
+ * Scaled by overall, so of two right-footed centre-backs the better one takes the right. Nothing in the centre.
+ */
+export function footBonus(player: MFLPlayer, formation: string, index: number): number {
+  const side = slotSide(formation, index);
+  const foot = player.metadata.preferredFoot;
+  if (side === 'centre' || (foot !== 'LEFT' && foot !== 'RIGHT')) return 0;
+  return (side === 'left') === (foot === 'LEFT') ? (FOOT_WEIGHT * player.metadata.overall) / 100 : 0;
+}
+
+/** Every order of a few items */
+const permutations = <T,>(items: T[]): T[][] =>
+  items.length <= 1 ? [items] : items.flatMap((item, index) => permutations([...items.slice(0, index), ...items.slice(index + 1)]).map(rest => [item, ...rest]));
+
+/**
+ * The XI with players who share a position (two CBs, two STs…) swapped between those slots so each is on their
+ * strong foot's side where they can be, by footBonus. They rate the same in either slot, so the XI's rating
+ * doesn't change.
+ */
+export function sideByFoot(formation: string, xi: (number | null)[], playersById: Map<number, MFLPlayer>): (number | null)[] {
+  const sided = [...xi];
+  const byPosition = new Map<string, number[]>();
+  FORMATIONS[formation].forEach(([position], index) => byPosition.set(position, [...(byPosition.get(position) ?? []), index]));
+  for (const slots of byPosition.values()) {
+    const filled = slots.filter(index => sided[index] !== null && playersById.has(sided[index]!));
+    if (filled.length < 2) continue;
+    const players = filled.map(index => playersById.get(sided[index]!)!);
+    const total = (order: MFLPlayer[]) => order.reduce((sum, player, at) => sum + footBonus(player, formation, filled[at]), 0);
+    // The current order wins ties
+    let best = players;
+    for (const order of permutations(players)) if (total(order) > total(best) + 1e-9) best = order;
+    best.forEach((player, at) => (sided[filled[at]] = player.id));
+  }
+  return sided;
+}
+
 /**
  * Puts players into the formation's empty positions so the ratings add up to the most they can: a 95 CM who is a
  * 94 at RM goes to RM when that frees a 94 CM, rather than leaving a 90 at RM. As many positions are filled as
- * can be, and a thousandth of the overall settles ties in favour of the better player. `accept` limits which fits
- * count, e.g. none out of position.
+ * can be, and a thousandth of the overall settles ties in favour of the better player. Players lean to their
+ * strong foot's side (footBonus), which only decides sides and ties. `accept` limits which fits count, e.g. none
+ * out of position.
  */
 function fillPositions(
   formation: string,
@@ -208,7 +255,7 @@ function fillPositions(
   for (const player of free) {
     for (const { position, index } of open) {
       const fit = positionFit(player, position);
-      if (accept(fit)) score.set(`${player.id}:${index}`, fit.rating + player.metadata.overall / 1000);
+      if (accept(fit)) score.set(`${player.id}:${index}`, fit.rating + player.metadata.overall / 1000 + footBonus(player, formation, index));
     }
   }
   // Only a position's best few can be in the best XI: with fewer positions than that, one would be free to swap in

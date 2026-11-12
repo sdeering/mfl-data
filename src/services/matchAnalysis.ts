@@ -2,7 +2,7 @@ import type { MFLPlayer } from '../types/mflApi';
 import { aimCaptain, bonusLift, lineupFit, squadFits, type Outcome, type PlayedMatch } from '../utils/formationPlanner';
 import { compareSquads, describeFormation, findWeaknesses, xiPlayers, type XiPlayer } from '../utils/squadComparison';
 import { CAPTAIN_OVR, captainOptions, describeBonus } from '../utils/captain';
-import { FORMATIONS, FORMATION_NAMES, emptyXi, fillEmptyPositions, formationLabel } from '../utils/squadLineups';
+import { FORMATIONS, FORMATION_NAMES, emptyXi, fillEmptyPositions, formationLabel, sideByFoot } from '../utils/squadLineups';
 import { COVER_MAX_DROP, FIT_THRESHOLD, fitnessOf, tiredStarters } from '../utils/fitness';
 import { isRetiredPlayer } from '../utils/appSettings';
 import type { ScoutMatch, ScoutReport } from './scoutService';
@@ -432,6 +432,7 @@ export const MFL_TACTICS_GUIDE = [
   `The captain plays at +${CAPTAIN_OVR} OVR, and the whole XI gets a bonus by the captain's position: goalkeeper +2 DEF; defender +2 DEF, +1 PHY; midfielder +2 PAS, +1 DRI; forward +2 SHO, +1 PAC. us.captainOptions lists our best choices, and the best of each line, with how much each lifts the XI's average rating (gain) and how much of that is the team bonus (bonusLift); aimPick marks the planner's choice for our aim; them.likelyCaptain is theirs. Attributes stop at 99, so a bonus on attributes already at 99 is wasted: a bonusLift near 0 means that line's bonus does nothing for this XI. Pick ours weighing that lift against what the matchup needs, e.g. a defender's DEF bonus against a dangerous attack, or a forward's SHO bonus against a weak keeper.`,
   `Each player can also take individual instructions (playerSettings) that override the team's step for them alone, or follow it ("TEAM"). Passing Risk and Position Freedom exist only per player and start at step 3. In players, pick 2 to ${MAX_PLAYER_INSTRUCTIONS} key players from your xi (those in the key matchups, our playmaker and our best attacker, a defender facing their danger man) and give each only the settings that should differ from your team step, e.g. a winger who beats his full-back on pace and dribbling dribbles more, a creative midfielder with high passing takes more passing risk, a slow centre-back clears more and presses less.`,
   `fitness is each player's energy in %, from MFL. A player under ${FIT_THRESHOLD}% plays below his best and tires sooner. Rest him when a fit player (${FIT_THRESHOLD}%+) in our squad suits his position: one who plays it (natural or alt) rated within about ${COVER_MAX_DROP} of him there. us.tiredInXi lists our tired starters with the best fit cover for each, marked suitable or not. When no cover suits, keep him and say so in lineup. Their fitness counts too: a tired opponent is a target.`,
+  "Footedness: where a formation has two or three of a position side by side (CBs, CMs, CDMs, STs, CFs), put a right-footed player on the right one and a left-footed player on the left; if both are right-footed the better one goes right, if both left-footed the better one goes left. The side positions follow the same lean (a right-footed player at RB, RM or RW) when he rates the same either side. Foot never outweighs a better rating. The formations list positions left to right within each line.",
   "xi is the XI you would field in formation.pick: the best player for each position, after resting tired players for suitable cover. It is drawn on our matchup pitch, so it must agree with lineup and captain. Use ids from us.startingXi and us.restOfSquad only, each once.",
   "clubNotes, when present, are our manager's own notes on the club: preferences, plans, players to rest or develop, what they have seen. Treat them as first-hand knowledge and follow them unless the data clearly says otherwise; then say why.",
   'Only recommend formations, who plays where, swaps from the listed squads, the captain, the listed playing style settings and individual instructions. Do not invent other instructions.',
@@ -656,7 +657,7 @@ export function cleanTeam(
     used.add(next.playerId);
     xi[index] = next.playerId;
   });
-  const filled = fillEmptyPositions(formation, xi, [...byId.values()]);
+  const filled = sideByFoot(formation, fillEmptyPositions(formation, xi, [...byId.values()]), byId);
   const id = Number(captainId);
   const fit = lineupFit(formation, filled, byId);
   return {

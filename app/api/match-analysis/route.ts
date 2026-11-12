@@ -190,7 +190,7 @@ export async function POST(request: NextRequest) {
   // and so do new club notes
   const [entries, { notes }] = await Promise.all([loadTacticsEntries(ourClubId), loadClubNotes(ourClubId)]);
   const logVersion = entries.length ? `${entries.length}-${entries.map(entry => entry.updatedAt).sort().at(-1)}` : '0';
-  const cacheKey = `v11:${ourClubId}:${theirClubId}:${ourFormation}:${theirFormation}:${aim}:${logVersion}:${notesKey(notes)}`;
+  const cacheKey = `v12:${ourClubId}:${theirClubId}:${ourFormation}:${theirFormation}:${aim}:${logVersion}:${notesKey(notes)}`;
   const cached = cache.get(cacheKey);
   if (cached && Date.now() - cached.at < CACHE_MS) {
     const adviceSaved = await rememberAdvice(ourClubId, ourSquadId, body.matchId, wallet, cached.analysis, aim);
