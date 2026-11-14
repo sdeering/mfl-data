@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { MflRateLimitError, fetchMfl } from '@/src/services/playerProgressionCache'
+import { whitelistDenial } from '@/src/lib/whitelistGate'
 
 const MAX_IDS = 5
 const PAUSE_MS = 600 // MFL blocks a token that is asked too fast; see playerProgressionCache
@@ -13,8 +14,12 @@ const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
 /**
  * GET /api/scout/played?ids=1,2,3 -> { success, played: { [id]: boolean } }
  * Whether each player has played a game. A 429 carries `retryAfterSeconds` and whatever was checked first.
+ * Only for whitelisted wallets, like the Scouting page.
  */
 export async function GET(request: NextRequest) {
+  const denial = whitelistDenial(request)
+  if (denial) return denial
+
   const ids = (request.nextUrl.searchParams.get('ids') ?? '').split(',').filter(Boolean).map(Number)
   if (ids.length === 0 || ids.length > MAX_IDS || !ids.every(id => Number.isInteger(id) && id > 0)) {
     return NextResponse.json({ success: false, error: `ids must be 1-${MAX_IDS} player ids`, played: {} }, { status: 400 })

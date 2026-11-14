@@ -2,6 +2,7 @@
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useWallet } from '../contexts/WalletContext';
+import WalletGate from './WalletGate';
 import { loadProgressionHistories, type PlayerHistories, type ProgressionLoadProgress } from '../services/playerProgressionService';
 import type { MFLListing, MFLPosition } from '../types/mflApi';
 import { ALL_POSITIONS, POSITIONS, POSITION_GROUPS } from '../utils/positionOptions';
@@ -104,7 +105,49 @@ function formatListedAgo(timestamp: number, now: number): string {
   return hours < 24 ? `${hours}h ago` : `${Math.floor(hours / 24)}d ago`;
 }
 
+const SCOUT_TITLE = 'Player Scouting';
+
+/** Scouting is for the whitelisted friends only (src/lib/aiAccess.ts): a verified wallet on the list, as the APIs check */
 export default function ScoutPage() {
+  const { account, isVerified, isWhitelisted } = useWallet();
+
+  if (!isVerified) {
+    return (
+      <WalletGate
+        title={SCOUT_TITLE}
+        description="the newest marketplace listings and how fast each player is improving"
+        subtitle="Player Scouting is invite-only. Sign in with your own wallet to check you're on the list."
+        proofFor="it checks you're on the Scouting list"
+        ownOnly
+      />
+    );
+  }
+
+  if (!isWhitelisted) {
+    return (
+      <div className="flex flex-col gap-[22px]">
+        <PageHeader title={SCOUT_TITLE} />
+        <Panel className="flex flex-col items-start gap-3 p-6 sm:p-8 max-w-[640px]">
+          <span className="grid place-items-center w-11 h-11 rounded-xl bg-accent text-accent-fg" aria-hidden="true">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2}>
+              <rect x="4" y="10" width="16" height="11" rx="2.5" />
+              <path d="M8 10V7a4 4 0 0 1 8 0v3" />
+            </svg>
+          </span>
+          <h2 className="m-0 font-display text-xl font-bold">Scouting is invite-only</h2>
+          <p className="m-0 text-sm text-muted">
+            {account ? `${account.slice(0, 6)}…${account.slice(-4)}` : 'Your wallet'} isn&apos;t on the list yet. Ask @DogeSports69 on X for
+            access.
+          </p>
+        </Panel>
+      </div>
+    );
+  }
+
+  return <ScoutTool />;
+}
+
+function ScoutTool() {
   const [listings, setListings] = useState<MFLListing[]>([]);
   const [isLoadingListings, setIsLoadingListings] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -431,7 +474,7 @@ export default function ScoutPage() {
   return (
     <div className="flex flex-col gap-[22px]">
       <PageHeader
-        title="Player Scouting"
+        title={SCOUT_TITLE}
         subtitle="The newest marketplace listings that match your filters, with how much each player’s overall has risen over the last 7, 30 and 90 days"
       />
 

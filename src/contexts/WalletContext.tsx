@@ -27,6 +27,8 @@ interface WalletContextType {
   verifiedWallet: string | null;
   /** The connected wallet is the verified one */
   isVerified: boolean;
+  /** The verified wallet is on the site's whitelist (src/lib/aiAccess.ts), which lets it into Player Scouting */
+  isWhitelisted: boolean;
   /** Proves the connected wallet: asks it to sign, which may open Dapper */
   verifyWallet: () => Promise<void>;
   isVerifying: boolean;
@@ -42,12 +44,17 @@ const nonce = async (): Promise<string> => {
   return result.nonce;
 };
 
+interface VerifiedSession {
+  wallet: string;
+  whitelisted: boolean;
+}
+
 /** Sends a signature to the server, which checks it with Flow; resolves to the verified wallet */
-const proveSession = async (payload: { kind: 'account-proof' | 'user-signature'; address: string; nonce: string; signatures: unknown }): Promise<string> => {
+const proveSession = async (payload: { kind: 'account-proof' | 'user-signature'; address: string; nonce: string; signatures: unknown }): Promise<VerifiedSession> => {
   const response = await fetch('/api/auth/session', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
   const result = await response.json().catch(() => ({}));
   if (!response.ok || !result.success) throw new Error(result.error || `Sign-in failed (${response.status})`);
-  return result.wallet;
+  return { wallet: result.wallet, whitelisted: result.whitelisted === true };
 };
 
 /** The account proof the wallet gave at login, when it gave one */
@@ -74,7 +81,8 @@ export const WalletProvider: React.FC<WalletProviderProps> = ({ children }) => {
   const [error, setError] = useState<string | null>(null);
   const [isReady, setIsReady] = useState(false);
   const [viewedAddress, setViewedAddress] = useState<string | null>(null);
-  const [verifiedWallet, setVerifiedWallet] = useState<string | null>(null);
+  const [session, setSession] = useState<VerifiedSession | null>(null);
+  const verifiedWallet = session?.wallet ?? null;
   const [isVerifying, setIsVerifying] = useState(false);
   const [verifyError, setVerifyError] = useState<string | null>(null);
   const [isSessionChecked, setIsSessionChecked] = useState(false);
@@ -83,7 +91,7 @@ export const WalletProvider: React.FC<WalletProviderProps> = ({ children }) => {
   useEffect(() => {
     fetch('/api/auth/session', { cache: 'no-store' })
       .then(response => response.json())
-      .then(result => setVerifiedWallet(typeof result.wallet === 'string' ? result.wallet : null))
+      .then(result => setSession(typeof result.wallet === 'string' ? { wallet: result.wallet, whitelisted: result.whitelisted === true } : null))
       .catch(() => {})
       .finally(() => setIsSessionChecked(true));
   }, []);
@@ -159,8 +167,8 @@ export const WalletProvider: React.FC<WalletProviderProps> = ({ children }) => {
         const proof = accountProofOf(user);
         if (proof) {
           proveSession({ kind: 'account-proof', ...proof })
-            .then(wallet => {
-              setVerifiedWallet(wallet);
+            .then(verified => {
+              setSession(verified);
               setVerifyError(null);
             })
             .catch(() => {});
@@ -240,7 +248,7 @@ export const WalletProvider: React.FC<WalletProviderProps> = ({ children }) => {
       const proof = accountProofOf(current);
       if (proof) {
         try {
-          setVerifiedWallet(await proveSession({ kind: 'account-proof', ...proof }));
+          setSession(await proveSession({ kind: 'account-proof', ...proof }));
           return;
         } catch {
           // An old login's proof has expired: sign instead
@@ -254,14 +262,14 @@ export const WalletProvider: React.FC<WalletProviderProps> = ({ children }) => {
         // The wallet doesn't sign messages: a fresh login gives an account proof
       }
       if (Array.isArray(signatures) && signatures.length) {
-        setVerifiedWallet(await proveSession({ kind: 'user-signature', address: current.addr, nonce: code, signatures }));
+        setSession(await proveSession({ kind: 'user-signature', address: current.addr, nonce: code, signatures }));
         return;
       }
       await fcl.unauthenticate();
       await fcl.authenticate();
       const again = accountProofOf(await fcl.currentUser.snapshot());
       if (!again) throw new Error("Your wallet didn't give a sign-in proof. Ask @DogeSports69 on X for help.");
-      setVerifiedWallet(await proveSession({ kind: 'account-proof', ...again }));
+      setSession(await proveSession({ kind: 'account-proof', ...again }));
     } catch (error: any) {
       setVerifyError(error?.message || 'Could not verify your wallet');
     } finally {
@@ -272,7 +280,7 @@ export const WalletProvider: React.FC<WalletProviderProps> = ({ children }) => {
   const disconnectWallet = async () => {
     try {
       fetch('/api/auth/session', { method: 'DELETE' }).catch(() => {});
-      setVerifiedWallet(null);
+      setSession(null);
       await fcl.unauthenticate();
       setUser(null);
       setAccount(null);
@@ -304,6 +312,7 @@ export const WalletProvider: React.FC<WalletProviderProps> = ({ children }) => {
     }
   }
 
+  const isVerified = !!account && !!verifiedWallet && normalizeWalletAddress(account) === verifiedWallet;
   const value: WalletContextType = {
     isConnected,
     account,
@@ -317,7 +326,8 @@ export const WalletProvider: React.FC<WalletProviderProps> = ({ children }) => {
     viewWallet,
     stopViewingWallet,
     verifiedWallet,
-    isVerified: !!account && !!verifiedWallet && normalizeWalletAddress(account) === verifiedWallet,
+    isVerified,
+    isWhitelisted: isVerified && !!session?.whitelisted,
     verifyWallet,
     isVerifying,
     verifyError,

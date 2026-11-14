@@ -9,8 +9,20 @@ jest.mock('../services/playerProgressionService', () => ({
   loadProgressionHistories: jest.fn()
 }));
 let mockAccount: string | null = null;
+// Scouting is whitelisted-only: most tests are a verified, whitelisted visitor
+let mockAccess: 'signed-out' | 'verified' | 'whitelisted' = 'whitelisted';
+const mockConnectWallet = jest.fn();
 jest.mock('../contexts/WalletContext', () => ({
-  useWallet: () => ({ account: mockAccount })
+  useWallet: () => ({
+    account: mockAccount,
+    isConnected: mockAccess !== 'signed-out',
+    isVerified: mockAccess !== 'signed-out',
+    isWhitelisted: mockAccess === 'whitelisted',
+    isReady: true,
+    isSessionChecked: true,
+    connectWallet: mockConnectWallet,
+    verifyWallet: jest.fn(),
+  })
 }));
 
 const mockLoadHistories = loadProgressionHistories as jest.Mock;
@@ -49,11 +61,32 @@ describe('ScoutPage', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockAccount = null;
+    mockAccess = 'whitelisted';
     window.localStorage.clear(); // The page remembers its settings, which would carry into the next test
     mockListings({ success: true, data: [listing(1, 'Steady', 50, daysAgo(0.01), ['ST', 'CF', 'CB']), listing(2, 'Rising', 120, daysAgo(1))] });
     mockLoadHistories.mockImplementation(async (playerIds: number[], onProgress: (update: unknown) => void) => {
       onProgress({ histories: { 1: [], 2: risingHistory }, refreshed: 0, toRefresh: 0, failedIds: [], done: true });
     });
+  });
+
+  test('asks a signed-out visitor to sign in, and searches nothing', () => {
+    mockAccess = 'signed-out';
+    render(<ScoutPage />);
+
+    expect(screen.getByText(/Player Scouting is invite-only/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Connect Wallet' })).toBeInTheDocument();
+    expect(global.fetch).not.toHaveBeenCalled();
+    expect(mockLoadHistories).not.toHaveBeenCalled();
+  });
+
+  test('turns away a verified wallet that is not on the whitelist', () => {
+    mockAccess = 'verified';
+    mockAccount = '0x1234567890abcdef';
+    render(<ScoutPage />);
+
+    expect(screen.getByText('Scouting is invite-only')).toBeInTheDocument();
+    expect(screen.getByText(/0x1234…cdef isn.t on the list yet/)).toBeInTheDocument();
+    expect(global.fetch).not.toHaveBeenCalled();
   });
 
   test('opens on the default scouting filter and loads the history of every listed player', async () => {

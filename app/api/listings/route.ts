@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { MflRateLimitError, fetchMfl } from '@/src/services/playerProgressionCache'
+import { whitelistDenial } from '@/src/lib/whitelistGate'
 
 const MAX_LIMIT = 50
 
@@ -13,9 +14,12 @@ const ALLOWED_PARAMS = new Set([
 
 /**
  * GET /api/listings?<MFL listing filters> -> { success, data }  marketplace listings, straight from MFL
- * A 429 carries `retryAfterSeconds` if MFL is rate limiting.
+ * A 429 carries `retryAfterSeconds` if MFL is rate limiting. Only for whitelisted wallets, like the Scouting page.
  */
 export async function GET(request: NextRequest) {
+  const denial = whitelistDenial(request)
+  if (denial) return denial
+
   const query = new URLSearchParams()
   for (const [key, value] of new URL(request.url).searchParams) {
     if (ALLOWED_PARAMS.has(key)) query.append(key, value)

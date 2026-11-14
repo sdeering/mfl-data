@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { cleanSignatures, verifyAccountProof, verifyUserSignatures } from '@/src/lib/flowVerify';
+import { isWhitelisted } from '@/src/lib/aiAccess';
 import { takeRateLimits, visitorKey } from '@/src/lib/rateLimit';
 import { APP_IDENTIFIER, SESSION_COOKIE, checkNonce, sessionCookieOptions, sessionValue, sessionWallet, signInMessage } from '@/src/lib/session';
 import { normalizeWalletAddress } from '@/src/utils/walletAddress';
@@ -7,9 +8,10 @@ import { normalizeWalletAddress } from '@/src/utils/walletAddress';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 30;
 
-/** GET /api/auth/session: the wallet this browser has proved, or null */
+/** GET /api/auth/session: the wallet this browser has proved, or null, and whether it is on the whitelist */
 export function GET(request: NextRequest) {
-  return NextResponse.json({ wallet: sessionWallet(request) }, { headers: { 'Cache-Control': 'no-store' } });
+  const wallet = sessionWallet(request);
+  return NextResponse.json({ wallet, whitelisted: isWhitelisted(wallet) }, { headers: { 'Cache-Control': 'no-store' } });
 }
 
 /**
@@ -38,7 +40,7 @@ export async function POST(request: NextRequest) {
         ? await verifyAccountProof(APP_IDENTIFIER, wallet, nonce, signatures)
         : await verifyUserSignatures(signInMessage(nonce), signatures);
     if (!valid) return NextResponse.json({ success: false, error: "Flow says that signature isn't this wallet's" }, { status: 401 });
-    const response = NextResponse.json({ success: true, wallet });
+    const response = NextResponse.json({ success: true, wallet, whitelisted: isWhitelisted(wallet) });
     response.cookies.set(SESSION_COOKIE, sessionValue(wallet), sessionCookieOptions);
     return response;
   } catch (error) {

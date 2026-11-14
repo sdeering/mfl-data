@@ -8,7 +8,7 @@ const DAY_MS = 24 * HOUR_MS
 
 /**
  * Wallets with no daily cap: the site's owner and the friends they named (Nov 2026). AI_WHITELIST adds more,
- * comma-separated, without a deploy.
+ * comma-separated, without a deploy. The same list is the only one let into Player Scouting (whitelistGate.ts).
  */
 const WHITELIST = [
   '0x95dc70d7d39f6f76', // the site's owner

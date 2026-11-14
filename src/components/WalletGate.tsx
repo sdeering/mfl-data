@@ -14,13 +14,17 @@ interface WalletGateProps {
    * other wallets
    */
   ownOnly?: boolean;
+  /** With ownOnly: what proving the wallet is for, in place of keeping tactics and AI analyses private */
+  proofFor?: string;
+  /** With ownOnly: the header's line in place of the one about seeing your own clubs */
+  subtitle?: string;
 }
 
 /**
  * Shown in place of a page that needs a wallet: connect your own, or paste any wallet address to look around read-only.
  * While the saved login is still being checked it shows a spinner instead, so a connected visitor never sees it flash.
  */
-const WalletGate: React.FC<WalletGateProps> = ({ title, description, ownOnly = false }) => {
+const WalletGate: React.FC<WalletGateProps> = ({ title, description, ownOnly = false, proofFor, subtitle }) => {
   const { connectWallet, viewWallet, isLoading, isReady = true, isConnected, account, verifyWallet, isVerifying, verifyError, isSessionChecked } = useWallet();
   const [address, setAddress] = useState('');
   const [invalid, setInvalid] = useState(false);
@@ -41,7 +45,7 @@ const WalletGate: React.FC<WalletGateProps> = ({ title, description, ownOnly = f
     const connected = isConnected && !!account;
     return (
       <div className="flex flex-col gap-[22px]">
-        <PageHeader title={title} subtitle={`Sign in with your own wallet to see ${description}. Only you can see your clubs here.`} />
+        <PageHeader title={title} subtitle={subtitle ?? `Sign in with your own wallet to see ${description}. Only you can see your clubs here.`} />
         <Panel className="flex flex-col items-start gap-3 p-6 sm:p-8 max-w-[640px]">
           <span className="grid place-items-center w-11 h-11 rounded-xl bg-accent text-accent-fg" aria-hidden="true">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2}>
@@ -52,7 +56,7 @@ const WalletGate: React.FC<WalletGateProps> = ({ title, description, ownOnly = f
           <h2 className="m-0 font-display text-xl font-bold">{connected ? 'Verify your wallet' : 'Connect your wallet'}</h2>
           <p className="m-0 text-sm text-muted">
             {connected
-              ? `Approve one signature in Dapper to prove ${account!.slice(0, 6)}…${account!.slice(-4)} is yours. It costs nothing and doesn't move anything; it keeps your tactics and AI analyses private to you.`
+              ? `Approve one signature in Dapper to prove ${account!.slice(0, 6)}…${account!.slice(-4)} is yours. It costs nothing and doesn't move anything; ${proofFor ?? 'it keeps your tactics and AI analyses private to you'}.`
               : "Sign in with your Dapper wallet. You'll be asked to approve a signature once, which proves the wallet is yours. It costs nothing and doesn't move anything."}
           </p>
           <button type="button" onClick={connected ? verifyWallet : connectWallet} disabled={isLoading || isVerifying} className={`${btnPrimary} mt-1`}>
