@@ -14,7 +14,8 @@ const WHITELIST = [
   '0x95dc70d7d39f6f76', // the site's owner
   '0xedecde2008028486', // McBrideAce
   '0x960e08852ea945d2', // bruce
-  '0xf16d5fbca5a5ed4f', // rootcoors
+  '0xf16d5fbca5a5ed4f', // rootcoors (Roots)
+  '0x1bf514872695c603', // Kev
 ]
 
 /** Fresh analyses a day for everyone else, per wallet and per connection; one asked for again within 6 hours is free */
