@@ -3,6 +3,7 @@
 
 import { cacheService } from './cacheService';
 import { MFL_API_BASE_URL } from '../config/mflApi';
+import { getSelfBaseUrl } from '../lib/serverBaseUrl';
 
 // Rate limiter to protect external API
 class RateLimiter {
@@ -114,9 +115,7 @@ export async function fetchMarketData(params: {
     
     // Use our server-side API route to avoid CORS issues
     // Handle both frontend (relative URL) and backend (absolute URL) contexts
-    const baseUrl = typeof window !== 'undefined' 
-      ? '' // Frontend context - use relative URL
-      : 'http://localhost:3000'; // Backend context - use absolute URL
+    const baseUrl = getSelfBaseUrl();
     
     const apiUrl = `${baseUrl}/api/market-data?${new URLSearchParams({
       limit: limit.toString(),

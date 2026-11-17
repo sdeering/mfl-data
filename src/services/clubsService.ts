@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { incrementUsage } from './apiUsage'
+import { getSelfBaseUrl } from '../lib/serverBaseUrl'
 
 export interface MFLClub {
   id: number;
@@ -48,9 +49,7 @@ class ClubsService {
       console.log(`🚀 Fetching clubs from MFL API for wallet: ${walletAddress}`);
       
       // Use server-side API route to avoid CORS issues
-      const baseUrl = typeof window !== 'undefined' 
-        ? '' // Frontend context - use relative URL
-        : process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'; // Backend context
+      const baseUrl = getSelfBaseUrl();
       
       const apiUrl = `${baseUrl}/api/clubs?walletAddress=${walletAddress}`;
       const startTime = Date.now();
