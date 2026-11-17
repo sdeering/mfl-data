@@ -358,27 +358,30 @@ const PlayerInstructions: React.FC<{ instructions: PlayerInstruction[]; tactics:
   );
 };
 
-/** Longest club notes the server keeps, as in src/services/clubNotes.ts */
+/** Longest notes the server keeps, as in src/services/clubNotes.ts */
 const MAX_NOTES = 2000;
 
 type NotesState = { status: 'loading' } | { status: 'ready'; saved: string } | { status: 'error'; error: string };
 
 /**
- * The owner's notes on the club, which every AI analysis of its matches reads: players to rest or develop,
- * preferences, what they've seen. Kept on the server per club, private to the owner.
+ * The owner's notes for one match, which its AI analysis reads: players to rest or develop, preferences, what
+ * they've seen. Kept on the server per fixture (per opponent without one), so a new match starts blank.
  */
-const ClubNotesBox: React.FC<{ clubId: number; hasAnalysis: boolean }> = ({ clubId, hasAnalysis }) => {
+function useMatchNotes(clubId: number, opponentId: number, matchId: number | undefined) {
   const [state, setState] = useState<NotesState>({ status: 'loading' });
   const [draft, setDraft] = useState('');
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
   const [justSaved, setJustSaved] = useState(false);
+  const scope = `opponentId=${opponentId}${matchId ? `&matchId=${matchId}` : ''}`;
 
   useEffect(() => {
     let cancelled = false;
     setState({ status: 'loading' });
+    setDraft('');
+    setSaveError('');
     setJustSaved(false);
-    fetch(`/api/clubs/${clubId}/notes`)
+    fetch(`/api/clubs/${clubId}/notes?${scope}`)
       .then(response => response.json())
       .then(result => {
         if (cancelled) return;
@@ -391,18 +394,20 @@ const ClubNotesBox: React.FC<{ clubId: number; hasAnalysis: boolean }> = ({ club
     return () => {
       cancelled = true;
     };
-  }, [clubId]);
+  }, [clubId, scope]);
 
   const saved = state.status === 'ready' ? state.saved : '';
   const changed = state.status === 'ready' && draft.trim() !== saved.trim();
-  const save = async () => {
+
+  /** Saves the draft; whether it's kept */
+  const save = async (): Promise<boolean> => {
     setSaving(true);
     setSaveError('');
     try {
       const response = await fetch(`/api/clubs/${clubId}/notes`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ notes: draft }),
+        body: JSON.stringify({ notes: draft, opponentId, ...(matchId ? { matchId } : {}) }),
       });
       const result = await response.json().catch(() => ({}));
       if (!response.ok || !result.success) throw new Error(result.error || `HTTP ${response.status}`);
@@ -410,20 +415,34 @@ const ClubNotesBox: React.FC<{ clubId: number; hasAnalysis: boolean }> = ({ club
       setState({ status: 'ready', saved: notes });
       setDraft(notes);
       setJustSaved(true);
+      return true;
     } catch (error) {
       setSaveError(error instanceof Error ? error.message : 'Could not save');
+      return false;
     } finally {
       setSaving(false);
     }
   };
 
+  const edit = (text: string) => {
+    setDraft(text.slice(0, MAX_NOTES));
+    setJustSaved(false);
+  };
+
+  return { state, draft, edit, changed, save, saving, saveError, justSaved, clearJustSaved: () => setJustSaved(false) };
+}
+
+type MatchNotes = ReturnType<typeof useMatchNotes>;
+
+const MatchNotesBox: React.FC<{ notes: MatchNotes; hasAnalysis: boolean; forFixture: boolean }> = ({ notes, hasAnalysis, forFixture }) => {
+  const { state, draft, edit, changed, save, saving, saveError, justSaved } = notes;
   return (
     <div className="flex flex-col gap-2.5">
       <span className="flex flex-col gap-0.5">
         <span className={capsLabel}>Notes for the AI</span>
         <span className="text-xs font-medium text-muted">
-          Anything about your club the data doesn&apos;t show: players to rest or bring on, who to keep fresh for the cup, how you like to play. Every
-          analysis for this club reads them.
+          Anything the data doesn&apos;t show: players to rest or bring on, who to keep fresh for the cup, how you want to play. Kept for this{' '}
+          {forFixture ? 'match' : 'opponent'} only, and saved when you analyse.
         </span>
       </span>
       {state.status === 'error' ? (
@@ -432,15 +451,12 @@ const ClubNotesBox: React.FC<{ clubId: number; hasAnalysis: boolean }> = ({ club
         <>
           <textarea
             value={draft}
-            onChange={event => {
-              setDraft(event.target.value.slice(0, MAX_NOTES));
-              setJustSaved(false);
-            }}
+            onChange={event => edit(event.target.value)}
             disabled={state.status === 'loading'}
-            rows={4}
+            rows={3}
             maxLength={MAX_NOTES}
             placeholder={state.status === 'loading' ? 'Loading your notes…' : 'e.g. Rest Torres for the cup tie on Saturday. Prefer 4-3-3 when we can. Bader is our penalty taker.'}
-            className="w-full min-h-[96px] px-3.5 py-3 rounded-xl border border-line-2 bg-field text-fg text-sm font-medium leading-relaxed outline-none resize-y focus:border-[#c6f432] disabled:opacity-60"
+            className="w-full min-h-[80px] px-3.5 py-3 rounded-xl border border-line-2 bg-field text-fg text-sm font-medium leading-relaxed outline-none resize-y focus:border-[#c6f432] disabled:opacity-60"
           />
           <div className="flex items-center justify-between gap-3 flex-wrap">
             <span className="text-[11px] font-semibold text-muted-3">
@@ -451,7 +467,7 @@ const ClubNotesBox: React.FC<{ clubId: number; hasAnalysis: boolean }> = ({ club
               {saveError && <span className="text-xs font-semibold text-[#f87171]">{saveError}</span>}
               <button
                 type="button"
-                onClick={save}
+                onClick={() => void save()}
                 disabled={!changed || saving}
                 className="h-8 px-3 rounded-lg border border-line-2 text-xs font-bold text-fg-3 cursor-pointer hover:border-[#c6f432] hover:text-[#c6f432] disabled:opacity-50 disabled:cursor-default disabled:hover:border-line-2 disabled:hover:text-fg-3"
               >
@@ -504,6 +520,7 @@ export const AiAnalysisPanel: React.FC<{
   const [keptFor, setKeptFor] = useState<string | null>(null);
   // Fresh analyses left today, null until known or without a database
   const [allowance, setAllowance] = useState<Allowance | null>(null);
+  const notes = useMatchNotes(request.ourClubId, request.theirClubId, request.matchId);
 
   useEffect(() => {
     let cancelled = false;
@@ -527,6 +544,11 @@ export const AiAnalysisPanel: React.FC<{
   }, [key]);
 
   const analyse = async () => {
+    // Unsaved notes are kept first, so this analysis reads them
+    if (notes.changed) {
+      if (!(await notes.save())) return;
+      notes.clearJustSaved();
+    }
     setState({ status: 'loading' });
     try {
       const response = await fetch('/api/match-analysis', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(request) });
@@ -564,7 +586,7 @@ export const AiAnalysisPanel: React.FC<{
           </span>
         </div>
         <div className="flex flex-col items-end gap-1">
-          <button type="button" onClick={analyse} disabled={state.status === 'loading'} className={limeButton}>
+          <button type="button" onClick={analyse} disabled={state.status === 'loading' || notes.saving} className={limeButton}>
             {state.status === 'loading' ? 'Analysing…' : analysis ? (stale ? 'Analyse this matchup' : 'Analyse again') : 'Analyse matchup'}
           </button>
           {allowance && (
@@ -588,10 +610,12 @@ export const AiAnalysisPanel: React.FC<{
         </div>
       </div>
 
+      <MatchNotesBox notes={notes} hasAnalysis={!!analysis} forFixture={!!request.matchId} />
+
       {state.status === 'loading' && (
         <div className="flex items-center gap-3 py-4">
           <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-accent" />
-          <span className="text-sm font-medium text-muted">Reading the squads and their match stats. This can take up to a minute.</span>
+          <span className="text-sm font-medium text-muted">Reading the squads and their match stats. This can take a minute or two.</span>
         </div>
       )}
       {state.status === 'error' && <p className="m-0 text-sm font-semibold text-danger-ink">{state.error}</p>}
@@ -699,9 +723,6 @@ export const AiAnalysisPanel: React.FC<{
           />
         </div>
       )}
-      <div className="pt-4 border-t border-divider">
-        <ClubNotesBox clubId={request.ourClubId} hasAnalysis={!!analysis} />
-      </div>
     </Panel>
   );
 };

@@ -25,11 +25,13 @@ import { FORMATIONS } from '@/src/utils/squadLineups';
 import { isOutcome } from '@/src/utils/formationPlanner';
 import { loadClubNotes, notesKey } from '@/src/services/clubNotes';
 
-export const maxDuration = 90;
+// Gemini's own time, plus reading both squads and their reports from MFL first
+export const maxDuration = 300;
 
 const GEMINI_PROXY_URL = process.env.GEMINI_PROXY_URL || 'https://gcloud-proxy-179582583097.us-central1.run.app';
 const MODEL = 'gemini-3.8-flash';
-const TIMEOUT_MS = 80 * 1000;
+/** A long prompt with a full answer schema can keep Gemini thinking well past a minute */
+const TIMEOUT_MS = 240 * 1000;
 /** Must match what the Matches page scouts, so the reports come from the same cache */
 const OUR_MATCHES = 15;
 const THEIR_MATCHES = 10;
@@ -84,6 +86,8 @@ async function theirReports(matches: ScoutMatch[]): Promise<SideReport[]> {
 async function askGemini(prompt: string): Promise<MatchAnalysis> {
   const key = process.env.GEMINI_PROXY_API_KEY;
   if (!key) throw new Error('GEMINI_PROXY_API_KEY is not set');
+  const startedAt = Date.now();
+  console.log(`[API] match-analysis: asking Gemini, prompt ${prompt.length} characters`);
   const response = await fetch(`${GEMINI_PROXY_URL}/v1/models/${MODEL}:generateContent`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
@@ -95,6 +99,7 @@ async function askGemini(prompt: string): Promise<MatchAnalysis> {
   });
   if (!response.ok) throw new Error(`Gemini proxy ${response.status}: ${(await response.text().catch(() => '')).slice(0, 300)}`);
   const result = await response.json();
+  console.log(`[API] match-analysis: Gemini answered in ${Math.round((Date.now() - startedAt) / 1000)}s`);
   const text: string | undefined = result?.candidates?.[0]?.content?.parts?.map((part: { text?: string }) => part.text ?? '').join('');
   if (!text) throw new Error('Gemini gave no analysis');
   const analysis = JSON.parse(text) as MatchAnalysis;
@@ -187,8 +192,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ success: false, error: 'No such MFL club' }, { status: 404 });
   }
   // Logging a match makes a new analysis, so it reads the log as it is
-  // and so do new club notes
-  const [entries, { notes }] = await Promise.all([loadTacticsEntries(ourClubId), loadClubNotes(ourClubId)]);
+  // and so do new notes for this match
+  const notesScope = { matchId: isId(body.matchId) ? body.matchId : null, opponentId: theirClubId };
+  const [entries, { notes }] = await Promise.all([loadTacticsEntries(ourClubId), loadClubNotes(ourClubId, notesScope)]);
   const logVersion = entries.length ? `${entries.length}-${entries.map(entry => entry.updatedAt).sort().at(-1)}` : '0';
   const cacheKey = `v12:${ourClubId}:${theirClubId}:${ourFormation}:${theirFormation}:${aim}:${logVersion}:${notesKey(notes)}`;
   const cached = cache.get(cacheKey);

@@ -292,6 +292,17 @@ CREATE TABLE IF NOT EXISTS club_notes (
   updated_at TEXT DEFAULT (datetime('now'))
 );
 
+-- The club owner's own notes for the AI analysis of one match: match_key is 'match:<fixture id>', or
+-- 'vs:<opponent club id>' when there's no fixture. Replaces club_notes, which is no longer read.
+CREATE TABLE IF NOT EXISTS match_notes (
+  club_id INTEGER NOT NULL,
+  match_key TEXT NOT NULL,
+  notes TEXT NOT NULL,
+  wallet_address TEXT NOT NULL,
+  updated_at TEXT DEFAULT (datetime('now')),
+  PRIMARY KEY (club_id, match_key)
+);
+
 -- Schema version tracking
 CREATE TABLE IF NOT EXISTS schema_version (
   version INTEGER PRIMARY KEY,
