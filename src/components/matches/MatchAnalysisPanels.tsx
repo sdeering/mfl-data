@@ -676,6 +676,7 @@ export const AiAnalysisPanel: React.FC<{
               </div>
             </div>
           )}
+          {analysis.rotation && analysis.rotation.length > 0 && <Points title="Fixture plan · cup match ahead" items={analysis.rotation} colour="#38bdf8" />}
           {analysis.lineup.length > 0 && (
             <Points
               title={analysis.team ? 'Lineup changes · shown on the AI lineup above' : 'Lineup changes'}

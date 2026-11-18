@@ -125,6 +125,9 @@ export interface TacticPick {
   reason: string;
 }
 
+/** How many days ahead a cup match makes resting players in this one worth weighing */
+export const CUP_REST_WINDOW_DAYS = 3;
+
 export interface MatchAnalysis {
   summary: string;
   formation: { pick: string; reason: string };
@@ -139,6 +142,8 @@ export interface MatchAnalysis {
   tactics?: TacticPick[];
   /** What our logged matches say, empty when none are logged */
   historyNotes?: { title: string; detail: string }[];
+  /** Who to rest or play for a cup match coming up; missing from analyses made before fixtures were read */
+  rotation?: { title: string; detail: string }[];
   /** Individual instructions for our key players; missing from analyses made before them */
   players?: PlayerInstruction[];
   /** The XI as the model picked it, by position; the server turns it into `team` */
@@ -268,8 +273,14 @@ export const ANALYSIS_SCHEMA = {
       description: 'What our logged matches (ourTacticsLog) say about the settings to use here, citing results and xG; empty if none are logged',
       items: { type: 'OBJECT', properties: { title: { type: 'STRING' }, detail: { type: 'STRING' } }, required: ['title', 'detail'] },
     },
+    rotation: {
+      type: 'ARRAY',
+      description:
+        'The fixture plan around a cup match in us.fixtures: who to rest in this match to keep them fresh for it, naming each player, his fitness and his cover, or, when this is the cup match, who to bring back fresh. Must agree with xi and lineup. Empty when no cup match is near',
+      items: { type: 'OBJECT', properties: { title: { type: 'STRING' }, detail: { type: 'STRING' } }, required: ['title', 'detail'] },
+    },
   },
-  required: ['summary', 'formation', 'captain', 'attack', 'defend', 'matchups', 'lineup', 'xi', 'styleSummary', 'tactics', 'players', 'historyNotes'],
+  required: ['summary', 'formation', 'captain', 'attack', 'defend', 'matchups', 'lineup', 'xi', 'styleSummary', 'tactics', 'players', 'historyNotes', 'rotation'],
 } as const;
 
 /** A player's line in a match report from MFL's /matches/{id}/report */
@@ -433,6 +444,7 @@ export const MFL_TACTICS_GUIDE = [
   `Each player can also take individual instructions (playerSettings) that override the team's step for them alone, or follow it ("TEAM"). Passing Risk and Position Freedom exist only per player and start at step 3. In players, pick 2 to ${MAX_PLAYER_INSTRUCTIONS} key players from your xi (those in the key matchups, our playmaker and our best attacker, a defender facing their danger man) and give each only the settings that should differ from your team step, e.g. a winger who beats his full-back on pace and dribbling dribbles more, a creative midfielder with high passing takes more passing risk, a slow centre-back clears more and presses less.`,
   `fitness is each player's energy in %, from MFL. A player under ${FIT_THRESHOLD}% plays below his best and tires sooner. Rest him when a fit player (${FIT_THRESHOLD}%+) in our squad suits his position: one who plays it (natural or alt) rated within about ${COVER_MAX_DROP} of him there. us.tiredInXi lists our tired starters with the best fit cover for each, marked suitable or not. When no cover suits, keep him and say so in lineup. Their fitness counts too: a tired opponent is a target.`,
   "Footedness: where a formation has two or three of a position side by side (CBs, CMs, CDMs, STs, CFs), put a right-footed player on the right one and a left-footed player on the left; if both are right-footed the better one goes right, if both left-footed the better one goes left. The side positions follow the same lean (a right-footed player at RB, RM or RW) when he rates the same either side. Foot never outweighs a better rating. The formations list positions left to right within each line.",
+  `us.fixtures lists our next matches in date order, each with its competition, kind (cup or league) and daysFromThisMatch (negative before it); thisMatch marks the one being analysed. A cup match matters more than a league match unless clubNotes say otherwise. When a cup match comes within ${CUP_REST_WINDOW_DAYS} days after this one, rest key players (our best and most important starters) and anyone already low on fitness in this match, so they reach the cup fresh: only for suitable cover (as for tired players), and fewer of them when the aim or the opponent's strength needs our best XI; say what it costs us. When this match is the cup match, field the strongest fit XI. fatigueOff marks a competition without fatigue, where resting saves nothing. Put the plan in rotation, and make lineup and xi follow it.`,
   "xi is the XI you would field in formation.pick: the best player for each position, after resting tired players for suitable cover. It is drawn on our matchup pitch, so it must agree with lineup and captain. Use ids from us.startingXi and us.restOfSquad only, each once.",
   "clubNotes, when present, are our manager's own notes for this match: preferences, plans, players to rest or develop, what they have seen. Treat them as first-hand knowledge and follow them unless the data clearly says otherwise; then say why.",
   'Only recommend formations, who plays where, swaps from the listed squads, the captain, the listed playing style settings and individual instructions. Do not invent other instructions.',
@@ -448,8 +460,43 @@ export interface AnalysisInput {
   theirReports: SideReport[];
   /** Our tactics log, when any matches are logged */
   history?: TacticsHistory | null;
-  /** Our manager's notes on the club */
+  /** Our manager's notes for this match */
   notes?: string | null;
+  /** Our next matches, for resting players before a cup match */
+  fixtures?: UpcomingFixture[];
+  /** The fixture being analysed, when it is one */
+  matchId?: number | null;
+}
+
+/** One of our next matches, from MFL's upcoming fixtures */
+export interface UpcomingFixture {
+  matchId: number;
+  startDate: number;
+  competition: string;
+  /** MFL's competition type: LEAGUE, CUP, ... */
+  type: string;
+  opponent: string;
+  home: boolean;
+  /** A competition MFL plays without fatigue */
+  noFatigue?: boolean;
+}
+
+const DAY_MS = 24 * 3600 * 1000;
+
+/** Our next matches for the prompt, the analysed one marked, each dated against it (or against now without one) */
+export function describeFixtures(fixtures: UpcomingFixture[] | undefined, matchId: number | null | undefined, now = Date.now()) {
+  const sorted = [...(fixtures ?? [])].sort((a, b) => a.startDate - b.startDate).slice(0, 8);
+  const anchor = sorted.find(fixture => fixture.matchId === matchId)?.startDate ?? now;
+  return sorted.map(fixture => ({
+    date: new Date(fixture.startDate).toISOString().slice(0, 10),
+    daysFromThisMatch: Math.round(((fixture.startDate - anchor) / DAY_MS) * 10) / 10,
+    competition: fixture.competition,
+    kind: fixture.type === 'CUP' ? 'cup' : fixture.type === 'LEAGUE' ? 'league' : fixture.type.toLowerCase(),
+    opponent: fixture.opponent,
+    venue: fixture.home ? 'home' : 'away',
+    ...(fixture.matchId === matchId ? { thisMatch: true } : {}),
+    ...(fixture.noFatigue ? { fatigueOff: true } : {}),
+  }));
 }
 
 /** The prompt for one analysis: the guide, both squads and XIs, their form, the planner's numbers and our weak-spot finds */
@@ -509,7 +556,7 @@ function describeHistory(history: TacticsHistory | null | undefined, theirClubId
   };
 }
 
-export function buildAnalysisPrompt({ ours, theirs, ourFormation, theirFormation, counters, aim = 'win', theirReports, history, notes }: AnalysisInput): string {
+export function buildAnalysisPrompt({ ours, theirs, ourFormation, theirFormation, counters, aim = 'win', theirReports, history, notes, fixtures, matchId }: AnalysisInput): string {
   const ourById = new Map(ours.players.map(player => [player.id, player]));
   const theirById = new Map(theirs.players.map(player => [player.id, player]));
   const ourFit = squadFits(ours.players).get(ourFormation);
@@ -565,6 +612,7 @@ export function buildAnalysisPrompt({ ours, theirs, ourFormation, theirFormation
       restOfSquad: describeRest(ours.players, ourXi),
       recentResults: describeMatches(ours.matches.slice(0, 10)),
       ourTacticsLog: describeHistory(history, theirs.club.id, theirFormation, ourById),
+      fixtures: describeFixtures(fixtures, matchId),
       ...(notes?.trim() ? { clubNotes: notes.trim() } : {}),
     },
     them: {

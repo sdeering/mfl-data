@@ -17,6 +17,7 @@ import {
   type MatchReport,
   type RankedCounter,
   type SideReport,
+  type UpcomingFixture,
 } from '@/src/services/matchAnalysis';
 import { describeWait, takeRateLimits, visitorKey } from '@/src/lib/rateLimit';
 import { analysisAllowance, analysisLimits } from '@/src/lib/aiAccess';
@@ -83,6 +84,30 @@ async function theirReports(matches: ScoutMatch[]): Promise<SideReport[]> {
   return reports;
 }
 
+/** Our next matches, for resting players before a cup match; none when MFL can't say */
+async function upcomingFixtures(squadId: number | undefined): Promise<UpcomingFixture[]> {
+  if (!squadId) return [];
+  const listed = await fetchMflCached<any[]>(`/matches?squadId=${squadId}&upcoming=true&limit=8`, 300).catch(error => {
+    if (error instanceof MflRateLimitError) throw error;
+    return [];
+  });
+  return (Array.isArray(listed) ? listed : []).flatMap(match => {
+    if (!isId(match?.id) || !Number.isFinite(match?.startDate)) return [];
+    const home = match.homeSquad?.id === squadId;
+    return [
+      {
+        matchId: match.id,
+        startDate: match.startDate,
+        competition: String(match.competition?.name ?? ''),
+        type: String(match.competition?.type ?? match.type ?? ''),
+        opponent: String((home ? match.awayTeamName : match.homeTeamName) ?? ''),
+        home,
+        ...(match.competition?.noFatigue ? { noFatigue: true } : {}),
+      },
+    ];
+  });
+}
+
 async function askGemini(prompt: string): Promise<MatchAnalysis> {
   const key = process.env.GEMINI_PROXY_API_KEY;
   if (!key) throw new Error('GEMINI_PROXY_API_KEY is not set');
@@ -121,6 +146,7 @@ async function askGemini(prompt: string): Promise<MatchAnalysis> {
     styleSummary: typeof analysis.styleSummary === 'string' ? analysis.styleSummary : '',
     tactics: cleanTactics(analysis.tactics),
     historyNotes: Array.isArray(analysis.historyNotes) ? analysis.historyNotes.filter(note => note?.title && note?.detail) : [],
+    rotation: Array.isArray(analysis.rotation) ? analysis.rotation.filter(note => note?.title && note?.detail) : [],
     // Checked against our squad once it's known
     players: Array.isArray(analysis.players) ? analysis.players : [],
     xi: Array.isArray(analysis.xi) ? analysis.xi : [],
@@ -196,7 +222,7 @@ export async function POST(request: NextRequest) {
   const notesScope = { matchId: isId(body.matchId) ? body.matchId : null, opponentId: theirClubId };
   const [entries, { notes }] = await Promise.all([loadTacticsEntries(ourClubId), loadClubNotes(ourClubId, notesScope)]);
   const logVersion = entries.length ? `${entries.length}-${entries.map(entry => entry.updatedAt).sort().at(-1)}` : '0';
-  const cacheKey = `v12:${ourClubId}:${theirClubId}:${ourFormation}:${theirFormation}:${aim}:${logVersion}:${notesKey(notes)}`;
+  const cacheKey = `v13:${ourClubId}:${theirClubId}:${ourFormation}:${theirFormation}:${aim}:${logVersion}:${notesKey(notes)}`;
   const cached = cache.get(cacheKey);
   if (cached && Date.now() - cached.at < CACHE_MS) {
     const adviceSaved = await rememberAdvice(ourClubId, ourSquadId, body.matchId, wallet, cached.analysis, aim);
@@ -226,14 +252,30 @@ export async function POST(request: NextRequest) {
       if (wait) return busy(wait, 'That is a lot of analyses');
     }
 
-    const [ours, theirs] = await Promise.all([buildScoutReport(ourClubId, OUR_MATCHES), buildScoutReport(theirClubId, THEIR_MATCHES)]);
+    const [ours, theirs, fixtures] = await Promise.all([
+      buildScoutReport(ourClubId, OUR_MATCHES),
+      buildScoutReport(theirClubId, THEIR_MATCHES),
+      upcomingFixtures(ourSquadId),
+    ]);
     if (!theirs.players.length) return NextResponse.json({ success: false, error: `${theirs.club.name} has no squad to analyse` }, { status: 422 });
 
     const reports = await theirReports(theirs.matches);
     // Our log only costs MFL requests when there is one
     const history = entries.length ? await buildTacticsHistory(ourClubId, entries) : null;
 
-    const prompt = buildAnalysisPrompt({ ours, theirs, ourFormation, theirFormation, counters: readCounters(body.counters), aim, theirReports: reports, history, notes });
+    const prompt = buildAnalysisPrompt({
+      ours,
+      theirs,
+      ourFormation,
+      theirFormation,
+      counters: readCounters(body.counters),
+      aim,
+      theirReports: reports,
+      history,
+      notes,
+      fixtures,
+      matchId: isId(body.matchId) ? body.matchId : null,
+    });
     const analysis = await askGemini(prompt);
     // The XI it would field, made whole from our squad, for the matchup pitch
     analysis.team = cleanTeam(analysis.xi, analysis.formation.pick || ourFormation, ours.players, analysis.captain?.playerId, aim);
