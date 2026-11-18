@@ -550,7 +550,8 @@ export const CounterPanel: React.FC<{
 
 const PITCH_LINE = 'rgba(255,255,255,.45)';
 // Formations stand up the pitch with our goal at the bottom; the matchup lays it sideways, us attacking left to right
-const ourX = (down: number) => 4 + (100 - down) * 0.46;
+// Our half is used up to the halfway line, spread wider between defence and midfield to fit longer names
+const ourX = (down: number) => (down >= 75 ? 4.5 + (90 - down) * (8.5 / 15) : 13 + (75 - down) * (33.5 / 59));
 const ourY = (across: number) => 6 + across * 0.88;
 
 interface MatchupSpot {
@@ -595,7 +596,7 @@ const PitchPlayer: React.FC<
           : position
       }
       className={`absolute -translate-x-1/2 -translate-y-1/2 rounded-full grid place-items-center font-extrabold ${
-        large ? 'w-10 h-10 sm:w-12 sm:h-12 lg:w-14 lg:h-14 text-[10px] sm:text-xs' : 'w-5 h-5 sm:w-7 sm:h-7 text-[7px] sm:text-[9px]'
+        large ? 'w-8 h-8 sm:w-12 sm:h-12 lg:w-16 lg:h-16 text-[9px] sm:text-xs' : 'w-5 h-5 sm:w-7 sm:h-7 text-[7px] sm:text-[9px]'
       } ${ours || face ? 'text-white bg-[#0b1406]' : 'text-[#1a0d02]'}`}
       style={{
         left: `${left}%`,
@@ -632,11 +633,11 @@ const PitchPlayer: React.FC<
         <span
           ref={tagRef}
           className={`absolute left-1/2 -translate-x-1/2 ${tagAbove ? 'bottom-[calc(100%+4px)]' : 'top-[calc(100%+4px)]'} w-max flex items-center rounded-[5px] bg-black/60 font-bold text-white ${
-            large ? 'gap-1 px-1 sm:px-1.5 py-px sm:py-0.5 text-[10px] sm:text-xs' : 'sm:gap-1 px-[3px] sm:px-[5px] py-px text-[9px] sm:text-[10px]'
+            large ? 'gap-1 px-1 sm:px-1.5 py-px sm:py-0.5 text-[10px] sm:text-xs lg:text-[13px]' : 'sm:gap-1 px-[3px] sm:px-[5px] py-px text-[9px] sm:text-[10px]'
           }`}
         >
           {face && <span className="text-white/55">{position}</span>}
-          <span className={`${player ? 'hidden sm:block' : 'block'} ${large ? 'max-w-[84px]' : 'max-w-[44px]'} truncate`}>{player?.metadata.lastName ?? '—'}</span>
+          <span className={`${player ? 'hidden sm:block' : 'block'} ${large ? 'max-w-[84px] lg:max-w-[120px]' : 'max-w-[44px]'} truncate`}>{player?.metadata.lastName ?? '—'}</span>
           {player && <span className={ours ? 'text-[#c6f432]' : 'text-[#fdba74]'}>{rating}</span>}
         </span>
       )}
@@ -654,7 +655,7 @@ const nameWithFitness = (player: MFLPlayer | undefined) => {
 };
 
 const LINEUP_CHOICES = [
-  { ai: true, label: 'AI lineup', hint: 'The XI and captain from the AI match analysis, after resting tired players' },
+  { ai: true, label: 'AI suggested lineup', hint: 'The XI and captain from the AI match analysis, after resting tired players' },
   { ai: false, label: 'Planner', hint: "Your formation's best XI from the planner" },
 ] as const;
 
@@ -769,7 +770,7 @@ export const MatchupPanel: React.FC<{
     <Wrapper className={embedded ? 'flex flex-col gap-4' : 'p-[22px] flex flex-col gap-4'}>
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div className="flex flex-col gap-1">
-          <span className={capsLabel}>{usingAi ? (embedded ? 'AI lineup' : 'Matchup · AI lineup') : 'Matchup'}</span>
+          <span className={capsLabel}>{usingAi ? (embedded ? 'AI suggested lineup' : 'Matchup · AI suggested lineup') : 'Matchup'}</span>
           <span className="font-display text-2xl leading-[1.1] font-extrabold">
             <span className="text-accent-ink">{formationLabel(formation)}</span> <span className="text-muted-3 text-base">vs</span>{' '}
             <span className="text-[#fb923c]">{formationLabel(theirFormation)}</span>

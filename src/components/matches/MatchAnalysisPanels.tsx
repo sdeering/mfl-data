@@ -108,6 +108,26 @@ type AnalysisState = { status: 'idle' } | { status: 'loading' } | { status: 'don
 const analyses = new Map<string, MatchAnalysis>();
 const keyOf = (request: MatchAnalysisRequest) =>
   `${request.ourClubId}:${request.theirClubId}:${request.ourFormation}:${request.theirFormation}:${request.aim ?? 'win'}`;
+/** Saved analyses being looked up, by match, so an effect run twice asks once */
+const savedLookups = new Map<string, Promise<any>>();
+
+/** Where the analysis shown came from, when it wasn't made just now */
+type AnalysisOrigin =
+  /** Kept from an earlier visit; current is whether asking again would read the same (null when unknown) */
+  | { kind: 'saved'; savedAt: string; current: boolean | null }
+  /** Asked again with nothing changed, so the kept one came back */
+  | { kind: 'repeat'; savedAt: string };
+
+/** "12 min ago", "3 h ago", "2 days ago" */
+function timeAgo(iso: string, now = Date.now()): string {
+  const minutes = Math.max(0, Math.round((now - new Date(iso).getTime()) / 60000));
+  if (!Number.isFinite(minutes)) return 'earlier';
+  if (minutes < 1) return 'just now';
+  if (minutes < 60) return `${minutes} min ago`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 36) return `${hours} h ago`;
+  return `${Math.round(hours / 24)} days ago`;
+}
 
 const EDGE_CHIPS = {
   ours: { label: 'Your edge', colour: '#8ae63a', background: 'rgba(138,230,58,.12)' },
@@ -518,6 +538,7 @@ export const AiAnalysisPanel: React.FC<{
   const [keptFor, setKeptFor] = useState<string | null>(null);
   // Fresh analyses left today, null until known or without a database
   const [allowance, setAllowance] = useState<Allowance | null>(null);
+  const [origin, setOrigin] = useState<AnalysisOrigin | null>(null);
   const notes = useMatchNotes(request.ourClubId, request.theirClubId, request.matchId);
 
   useEffect(() => {
@@ -541,6 +562,48 @@ export const AiAnalysisPanel: React.FC<{
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key]);
 
+  // Coming back to a match shows its last analysis, in the formation it picked
+  const matchKey = `${request.ourClubId}:${request.theirClubId}:${request.matchId ?? ''}`;
+  useEffect(() => {
+    if (!request.walletAddress || analyses.has(key)) return;
+    let lookup = savedLookups.get(matchKey);
+    if (!lookup) {
+      const params = new URLSearchParams({ ourClubId: String(request.ourClubId), theirClubId: String(request.theirClubId) });
+      if (request.matchId) params.set('matchId', String(request.matchId));
+      lookup = fetch(`/api/match-analysis?${params}`)
+        .then(response => response.json())
+        .then(result => (result?.success ? result.data : null));
+      savedLookups.set(matchKey, lookup);
+      const done = lookup;
+      done.catch(() => null).finally(() => savedLookups.get(matchKey) === done && savedLookups.delete(matchKey));
+    }
+    let cancelled = false;
+    lookup
+      .then(saved => {
+        if (cancelled || !saved?.analysis || !saved.request) return;
+        const savedFor: MatchAnalysisRequest = { ...request, ...saved.request };
+        analyses.set(keyOf(savedFor), saved.analysis);
+        // Only over nothing: an analysis asked for meanwhile stays
+        setState(previous => (previous.status === 'idle' ? { status: 'done', analysis: saved.analysis } : previous));
+        setShownFor(previous => previous ?? savedFor);
+        setOrigin({ kind: 'saved', savedAt: saved.savedAt, current: saved.current ?? null });
+        const pick: string | undefined = saved.analysis.formation?.pick || saved.request.ourFormation;
+        if (
+          pick &&
+          pick !== request.ourFormation &&
+          saved.request.theirFormation === request.theirFormation &&
+          (saved.request.aim ?? 'win') === (request.aim ?? 'win')
+        ) {
+          onUseFormation(pick);
+        }
+      })
+      .catch(() => null);
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [matchKey, request.walletAddress]);
+
   const analyse = async () => {
     // Unsaved notes are kept first, so this analysis reads them
     if (notes.changed) {
@@ -556,6 +619,7 @@ export const AiAnalysisPanel: React.FC<{
       analyses.set(key, result.data);
       setState({ status: 'done', analysis: result.data });
       setShownFor(request);
+      setOrigin(result.cached && result.savedAt ? { kind: 'repeat', savedAt: result.savedAt } : null);
       setKeptFor(result.adviceSaved && fixture ? fixture.when : null);
       if (result.adviceSaved) onAdviceSaved?.();
     } catch (error) {
@@ -588,7 +652,7 @@ export const AiAnalysisPanel: React.FC<{
             {state.status === 'loading' ? 'Analysing…' : analysis ? (stale ? 'Analyse this matchup' : 'Analyse again') : 'Analyse matchup'}
           </button>
           {allowance && (
-            <span className="text-[11px] font-semibold text-muted-3" title="A matchup analysed in the last 6 hours opens again for free">
+            <span className="text-[11px] font-semibold text-muted-3" title="Asking again when nothing has changed is free">
               {allowance.whitelisted
                 ? 'Whitelisted: no daily limit'
                 : allowance.remaining
@@ -609,6 +673,16 @@ export const AiAnalysisPanel: React.FC<{
       </div>
 
       <MatchNotesBox notes={notes} hasAnalysis={!!analysis} forFixture={!!request.matchId} />
+
+      {analysis && origin && state.status === 'done' && !stale && (
+        <p className="m-0 text-xs font-semibold text-muted">
+          {origin.kind === 'repeat'
+            ? `Nothing has changed since this analysis (${timeAgo(origin.savedAt)}), so it's shown again for free.`
+            : `Saved analysis from ${timeAgo(origin.savedAt)}.${
+                origin.current === false ? ' New matches, notes or log entries since: analyse again for a fresh read.' : ''
+              }`}
+        </p>
+      )}
 
       {state.status === 'loading' && (
         <div className="flex items-center gap-3 py-4">
@@ -679,7 +753,7 @@ export const AiAnalysisPanel: React.FC<{
           {analysis.rotation && analysis.rotation.length > 0 && <Points title="Fixture plan · cup match ahead" items={analysis.rotation} colour="#38bdf8" />}
           {analysis.lineup.length > 0 && (
             <Points
-              title={analysis.team ? 'Lineup changes · shown on the AI lineup above' : 'Lineup changes'}
+              title={analysis.team ? 'Lineup changes · shown on the AI suggested lineup above' : 'Lineup changes'}
               items={analysis.lineup.map(change => ({ title: `${change.position}: ${change.change}`, detail: change.reason }))}
               colour="#facc15"
             />

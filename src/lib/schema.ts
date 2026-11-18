@@ -303,6 +303,18 @@ CREATE TABLE IF NOT EXISTS match_notes (
   PRIMARY KEY (club_id, match_key)
 );
 
+-- AI match analyses per club and match (match_key as in match_notes), each under the fingerprint of what it read,
+-- so a matchup shows its last analysis again and an unchanged one isn't asked of Gemini twice.
+CREATE TABLE IF NOT EXISTS match_analyses (
+  club_id INTEGER NOT NULL,
+  match_key TEXT NOT NULL,
+  fingerprint TEXT NOT NULL,
+  request TEXT NOT NULL,
+  analysis TEXT NOT NULL,
+  created_at TEXT DEFAULT (datetime('now')),
+  PRIMARY KEY (club_id, match_key, fingerprint)
+);
+
 -- Schema version tracking
 CREATE TABLE IF NOT EXISTS schema_version (
   version INTEGER PRIMARY KEY,

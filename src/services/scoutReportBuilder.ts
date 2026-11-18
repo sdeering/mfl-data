@@ -42,6 +42,21 @@ async function mapLimited<T, R>(items: T[], limit: number, task: (item: T) => Pr
 }
 
 /**
+ * What buildScoutReport would read for a club, as a short string that changes when its squad or its latest matches
+ * do. Reads the same cached MFL lists, so it costs nothing once the report has been built.
+ */
+export async function scoutDataVersion(clubId: string | number, requested = 10): Promise<string> {
+  const limit = Math.min(Math.max(1, requested), MAX_SCOUT_MATCHES);
+  const [club, players] = await Promise.all([fetchMflCached<any>(`/clubs/${clubId}`, 24 * HOUR), fetchMflCached<MFLPlayer[]>(`/clubs/${clubId}/players`, HOUR)]);
+  const squadId: number | undefined = club.squads?.[0]?.id;
+  const listed = squadId
+    ? await fetchMflCached<ListedMatch[]>(`/matches?squadId=${squadId}&past=true&onlyCompetitions=true&limit=${limit}`, RECENT_MATCHES_CACHE)
+    : [];
+  const squad = (Array.isArray(players) ? players : []).map(player => player.id).sort((a, b) => a - b).join(',');
+  return `${squad}/${(Array.isArray(listed) ? listed : []).map(match => match.id).join(',')}`;
+}
+
+/**
  * A club's squad and its latest competitive matches with the formation each side played. Formations come from our
  * own formation results when kept already, otherwise from MFL, and each new one is kept, adding to our formation meta.
  * Throws MflHttpError (404 for no such club) and MflRateLimitError.

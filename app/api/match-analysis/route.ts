@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { MflHttpError, fetchMflCached, mflBlockedFor } from '@/src/services/formationResults';
 import type { ScoutMatch } from '@/src/services/scoutService';
 import { MflRateLimitError } from '@/src/services/playerProgressionCache';
-import { SCOUT_LIMITS, buildScoutReport } from '@/src/services/scoutReportBuilder';
+import { SCOUT_LIMITS, buildScoutReport, scoutDataVersion } from '@/src/services/scoutReportBuilder';
 import { buildTacticsHistory, clubOwnership, clubPlaysIn, loadTacticsEntries, saveAdvice } from '@/src/services/tacticsLog';
 import { adviceFrom } from '@/src/utils/tacticsHistory';
 import type { Outcome } from '@/src/utils/formationPlanner';
@@ -24,7 +24,8 @@ import { analysisAllowance, analysisLimits } from '@/src/lib/aiAccess';
 import { sessionWallet } from '@/src/lib/session';
 import { FORMATIONS } from '@/src/utils/squadLineups';
 import { isOutcome } from '@/src/utils/formationPlanner';
-import { loadClubNotes, notesKey } from '@/src/services/clubNotes';
+import { loadClubNotes, notesKey, type NotesScope } from '@/src/services/clubNotes';
+import { findSavedAnalysis, fingerprintOf, latestSavedAnalysis, saveAnalysis } from '@/src/services/savedAnalyses';
 
 // Gemini's own time, plus reading both squads and their reports from MFL first
 export const maxDuration = 300;
@@ -38,6 +39,9 @@ const OUR_MATCHES = 15;
 const THEIR_MATCHES = 10;
 /** Their latest matches whose per-player stats it reads */
 const REPORTED_MATCHES = 5;
+/** Changes when the prompt or the answer does, so older analyses aren't served again */
+const PROMPT_VERSION = 'v13';
+/** How long an analysis is kept in memory, where there's no database to keep it in */
 const CACHE_MS = 6 * 3600 * 1000;
 
 
@@ -106,6 +110,35 @@ async function upcomingFixtures(squadId: number | undefined): Promise<UpcomingFi
       },
     ];
   });
+}
+
+interface AnalysisKey {
+  ourClubId: number;
+  theirClubId: number;
+  ourFormation: string;
+  theirFormation: string;
+  aim: Outcome;
+  matchId: number | null;
+}
+
+/**
+ * What an analysis reads besides the squads (our tactics log, the notes for the match) and the fingerprint of all
+ * of it, both squads and their latest matches included: an analysis with the same fingerprint would read the same.
+ * Throws MflRateLimitError and MflHttpError.
+ */
+async function analysisInputs({ ourClubId, theirClubId, ourFormation, theirFormation, aim, matchId }: AnalysisKey) {
+  const notesScope: NotesScope = { matchId, opponentId: theirClubId };
+  const [entries, { notes }, ourData, theirData] = await Promise.all([
+    loadTacticsEntries(ourClubId),
+    loadClubNotes(ourClubId, notesScope),
+    scoutDataVersion(ourClubId, OUR_MATCHES),
+    scoutDataVersion(theirClubId, THEIR_MATCHES),
+  ]);
+  const logVersion = entries.length ? `${entries.length}-${entries.map(entry => entry.updatedAt).sort().at(-1)}` : '0';
+  /** The fingerprint with our formation as given */
+  const fingerprintFor = (formation: string) =>
+    fingerprintOf([PROMPT_VERSION, ourClubId, theirClubId, formation, theirFormation, aim, matchId, logVersion, notesKey(notes), ourData, theirData]);
+  return { notesScope, entries, notes, fingerprint: fingerprintFor(ourFormation), fingerprintFor };
 }
 
 async function askGemini(prompt: string): Promise<MatchAnalysis> {
@@ -177,6 +210,7 @@ async function rememberAdvice(clubId: number, squadId: number | undefined, match
 export async function GET(request: NextRequest) {
   const wallet = sessionWallet(request);
   if (!process.env.TURSO_DATABASE_URL || !wallet) return NextResponse.json({ success: true, data: null });
+  if (request.nextUrl.searchParams.has('theirClubId')) return savedFor(request, wallet);
   try {
     return NextResponse.json({ success: true, data: await analysisAllowance(wallet, visitorKey(request)) });
   } catch (error) {
@@ -186,10 +220,48 @@ export async function GET(request: NextRequest) {
 }
 
 /**
+ * GET /api/match-analysis?ourClubId=&theirClubId=&matchId=
+ * The latest analysis kept for the match, for our club's owner, and whether it's current: whether asking again with
+ * its formations and aim would read the same (null when MFL couldn't say). Null when there is none.
+ */
+async function savedFor(request: NextRequest, wallet: string) {
+  const params = request.nextUrl.searchParams;
+  const ourClubId = Number(params.get('ourClubId'));
+  const theirClubId = Number(params.get('theirClubId'));
+  const matchId = Number(params.get('matchId'));
+  if (!isId(ourClubId) || !isId(theirClubId)) return NextResponse.json({ success: false, error: 'Give both club IDs' }, { status: 400 });
+  try {
+    const { owner } = await clubOwnership(ourClubId);
+    if (!owner || owner.toLowerCase() !== wallet) return NextResponse.json({ success: false, error: 'AI analysis is for your own clubs' }, { status: 403 });
+    const saved = await latestSavedAnalysis(ourClubId, { matchId: isId(matchId) ? matchId : null, opponentId: theirClubId });
+    if (!saved) return NextResponse.json({ success: true, data: null });
+    const { request: asked } = saved;
+    const current = await analysisInputs({
+      ourClubId,
+      theirClubId,
+      ourFormation: asked.ourFormation,
+      theirFormation: asked.theirFormation,
+      aim: asked.aim ?? 'win',
+      matchId: isId(matchId) ? matchId : null,
+    })
+      .then(inputs => inputs.fingerprint === saved.fingerprint)
+      .catch(() => null);
+    return NextResponse.json({ success: true, data: { request: asked, analysis: saved.analysis, savedAt: saved.savedAt, current } });
+  } catch (error) {
+    if (error instanceof MflRateLimitError) {
+      return NextResponse.json({ success: false, error: `MFL is busy right now. Try again in ${describeWait(error.retryAfterSeconds)}.` }, { status: 429 });
+    }
+    console.error('[API] GET /api/match-analysis saved analysis failed:', error);
+    return NextResponse.json({ success: false, error: 'Could not read the saved analysis' }, { status: 502 });
+  }
+}
+
+/**
  * POST /api/match-analysis { ourClubId, theirClubId, ourFormation, theirFormation, counters?, aim?, matchId?, walletAddress? }
  * An AI scouting report on the opponent for the Match Prep Tool: both squads, their form and their latest match
- * stats go to Gemini, which finds edges to play on. Kept for 6 hours per matchup, and asking again in that time is
- * free; a fresh one counts against the visitor's daily analyses unless their wallet is whitelisted.
+ * stats go to Gemini, which finds edges to play on. Kept per match: asking again when nothing it reads has changed
+ * (formations, aim, notes, tactics log, both squads and their latest matches) gives the kept one back for free; a
+ * fresh one counts against the visitor's daily analyses unless their wallet is whitelisted.
  */
 export async function POST(request: NextRequest) {
   const body = (await request.json().catch(() => null)) as Partial<MatchAnalysisRequest> | null;
@@ -217,18 +289,7 @@ export async function POST(request: NextRequest) {
     }
     return NextResponse.json({ success: false, error: 'No such MFL club' }, { status: 404 });
   }
-  // Logging a match makes a new analysis, so it reads the log as it is
-  // and so do new notes for this match
-  const notesScope = { matchId: isId(body.matchId) ? body.matchId : null, opponentId: theirClubId };
-  const [entries, { notes }] = await Promise.all([loadTacticsEntries(ourClubId), loadClubNotes(ourClubId, notesScope)]);
-  const logVersion = entries.length ? `${entries.length}-${entries.map(entry => entry.updatedAt).sort().at(-1)}` : '0';
-  const cacheKey = `v13:${ourClubId}:${theirClubId}:${ourFormation}:${theirFormation}:${aim}:${logVersion}:${notesKey(notes)}`;
-  const cached = cache.get(cacheKey);
-  if (cached && Date.now() - cached.at < CACHE_MS) {
-    const adviceSaved = await rememberAdvice(ourClubId, ourSquadId, body.matchId, wallet, cached.analysis, aim);
-    return NextResponse.json({ success: true, data: cached.analysis, cached: true, adviceSaved });
-  }
-
+  const matchId = isId(body.matchId) ? body.matchId : null;
   const busy = (seconds: number, what = 'MFL is busy right now') =>
     NextResponse.json({ success: false, error: `${what}. Try again in ${describeWait(seconds)}.` }, { status: 429, headers: { 'Retry-After': String(seconds) } });
 
@@ -237,12 +298,33 @@ export async function POST(request: NextRequest) {
     if (process.env.TURSO_DATABASE_URL) {
       const blocked = await mflBlockedFor();
       if (blocked) return busy(blocked);
+    }
+    // A new match played, a logged match or new notes make a new analysis; otherwise the kept one comes back,
+    // including the match's latest when we now play the formation it picked, as the page shows it as current then
+    const pickedAnalysis = async () => {
+      const latest = await latestSavedAnalysis(ourClubId, notesScope).catch(() => null);
+      if (!latest || latest.analysis.formation?.pick !== ourFormation || latest.request.ourFormation === ourFormation) return null;
+      return latest.fingerprint === fingerprintFor(latest.request.ourFormation) ? latest : null;
+    };
+    const { notesScope, entries, notes, fingerprint, fingerprintFor } = await analysisInputs({ ourClubId, theirClubId, ourFormation, theirFormation, aim, matchId });
+    const cacheKey = `${ourClubId}:${fingerprint}`;
+    const cached = cache.get(cacheKey);
+    const kept =
+      cached && Date.now() - cached.at < CACHE_MS
+        ? { analysis: cached.analysis, savedAt: new Date(cached.at).toISOString() }
+        : ((await findSavedAnalysis(ourClubId, notesScope, fingerprint).catch(() => null)) ?? (await pickedAnalysis()));
+    if (kept) {
+      const adviceSaved = await rememberAdvice(ourClubId, ourSquadId, body.matchId, wallet, kept.analysis, aim);
+      return NextResponse.json({ success: true, data: kept.analysis, cached: true, savedAt: kept.savedAt, adviceSaved });
+    }
+
+    if (process.env.TURSO_DATABASE_URL) {
       const allowance = await analysisAllowance(wallet, visitor);
       if (allowance.remaining === 0) {
         return NextResponse.json(
           {
             success: false,
-            error: `You've used today's ${allowance.limit} AI analyses. More in ${inHours(allowance.resetsIn)}. A matchup analysed in the last 6 hours opens again for free. For more, ask @DogeSports69 on X for access.`,
+            error: `You've used today's ${allowance.limit} AI analyses. More in ${inHours(allowance.resetsIn)}. Asking again when nothing has changed is free. For more, ask @DogeSports69 on X for access.`,
             allowance,
           },
           { status: 429, headers: { 'Retry-After': String(allowance.resetsIn) } },
@@ -274,7 +356,7 @@ export async function POST(request: NextRequest) {
       history,
       notes,
       fixtures,
-      matchId: isId(body.matchId) ? body.matchId : null,
+      matchId,
     });
     const analysis = await askGemini(prompt);
     // The XI it would field, made whole from our squad, for the matchup pitch
@@ -284,6 +366,9 @@ export async function POST(request: NextRequest) {
     analysis.players = cleanPlayerInstructions(analysis.players, new Set(analysis.team.xi.filter((id): id is number => id !== null)));
     cache.set(cacheKey, { analysis, at: Date.now() });
     if (cache.size > 300) cache.delete(cache.keys().next().value!);
+    await saveAnalysis(ourClubId, notesScope, fingerprint, { ourClubId, theirClubId, ourFormation, theirFormation, aim, ...(matchId ? { matchId } : {}) }, analysis).catch(error =>
+      console.error(`[API] Could not keep the analysis for club ${ourClubId}:`, error),
+    );
     const adviceSaved = await rememberAdvice(ourClubId, ourSquadId, body.matchId, wallet, analysis, aim);
     const allowance = process.env.TURSO_DATABASE_URL ? await analysisAllowance(wallet, visitor).catch(() => null) : null;
     return NextResponse.json({ success: true, data: analysis, adviceSaved, allowance });
