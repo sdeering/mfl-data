@@ -663,6 +663,8 @@ export const MatchupPanel: React.FC<{
   onShowAi?: (show: boolean) => void;
   /** Opens the lineup shown, the AI's when given */
   onOpenSquad: (aiTeam?: AnalysisTeam) => void;
+  /** Drawn inside another panel (the AI analysis report) rather than as a panel of its own */
+  embedded?: boolean;
 }> = ({
   name,
   formation: plannedFormation,
@@ -677,7 +679,9 @@ export const MatchupPanel: React.FC<{
   showAi = true,
   onShowAi,
   onOpenSquad,
+  embedded = false,
 }) => {
+  const Wrapper = embedded ? EmbeddedBox : Panel;
   const usingAi = !!aiTeam && showAi;
   const formation = usingAi ? aiTeam.formation : plannedFormation;
   const fit = usingAi ? lineupFit(aiTeam.formation, aiTeam.xi, playersById, aiTeam.captainId) : plannedFit;
@@ -749,10 +753,10 @@ export const MatchupPanel: React.FC<{
   });
 
   return (
-    <Panel className="p-[22px] flex flex-col gap-4">
+    <Wrapper className={embedded ? 'flex flex-col gap-4' : 'p-[22px] flex flex-col gap-4'}>
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div className="flex flex-col gap-1">
-          <span className={capsLabel}>{usingAi ? 'Matchup · AI lineup' : 'Matchup'}</span>
+          <span className={capsLabel}>{usingAi ? (embedded ? 'AI lineup' : 'Matchup · AI lineup') : 'Matchup'}</span>
           <span className="font-display text-2xl leading-[1.1] font-extrabold">
             <span className="text-accent-ink">{formationLabel(formation)}</span> <span className="text-muted-3 text-base">vs</span>{' '}
             <span className="text-[#fb923c]">{formationLabel(theirFormation)}</span>
@@ -854,9 +858,11 @@ export const MatchupPanel: React.FC<{
           .
         </p>
       )}
-    </Panel>
+    </Wrapper>
   );
 };
+
+const EmbeddedBox: React.FC<{ className?: string; children?: React.ReactNode }> = ({ className, children }) => <div className={className}>{children}</div>;
 
 export const RecentResultsPanel: React.FC<{ name: string; matches: ScoutMatch[]; ourClubId: number }> = ({ name, matches, ourClubId }) => (
   <Panel className="p-[22px] flex flex-col gap-1">

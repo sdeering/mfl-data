@@ -438,12 +438,8 @@ const MatchNotesBox: React.FC<{ notes: MatchNotes; hasAnalysis: boolean; forFixt
   const { state, draft, edit, changed, save, saving, saveError, justSaved } = notes;
   return (
     <div className="flex flex-col gap-2.5">
-      <span className="flex flex-col gap-0.5">
-        <span className={capsLabel}>Notes for the AI</span>
-        <span className="text-xs font-medium text-muted">
-          Anything the data doesn&apos;t show: players to rest or bring on, who to keep fresh for the cup, how you want to play. Kept for this{' '}
-          {forFixture ? 'match' : 'opponent'} only, and saved when you analyse.
-        </span>
+      <span className={capsLabel} title={`Kept for this ${forFixture ? 'match' : 'opponent'} only, and saved when you analyse`}>
+        Notes for the AI
       </span>
       {state.status === 'error' ? (
         <p className="m-0 text-xs font-semibold text-danger-ink">{state.error}</p>
@@ -508,7 +504,9 @@ export const AiAnalysisPanel: React.FC<{
   onAdviceSaved?: () => void;
   /** Told the analysis shown for this matchup, null when there is none or it was for another one */
   onAnalysis?: (analysis: MatchAnalysis | null) => void;
-}> = ({ name, request, onUseFormation, history, fixture, onSaveSettings, playersById, onAdviceSaved, onAnalysis }) => {
+  /** The pitch with the analysis's lineup, drawn at the top of the report */
+  lineup?: React.ReactNode;
+}> = ({ name, request, onUseFormation, history, fixture, onSaveSettings, playersById, onAdviceSaved, onAnalysis, lineup }) => {
   const key = keyOf(request);
   const [state, setState] = useState<AnalysisState>(() => {
     const known = analyses.get(key);
@@ -622,7 +620,6 @@ export const AiAnalysisPanel: React.FC<{
 
       {analysis && (
         <div className={`flex flex-col gap-5 ${state.status === 'loading' ? 'opacity-50' : ''}`}>
-          <p className="m-0 text-[15px] font-medium leading-relaxed">{analysis.summary}</p>
           {analysis.formation.pick && (
             <div className="flex items-center gap-3.5 flex-wrap px-4 py-3.5 rounded-2xl bg-inset border border-line">
               <span className="flex flex-col gap-1 flex-1 min-w-[200px]">
@@ -649,6 +646,8 @@ export const AiAnalysisPanel: React.FC<{
               )}
             </div>
           )}
+          {lineup && !stale && <div className="px-4 py-4 rounded-2xl bg-inset border border-line">{lineup}</div>}
+          <p className="m-0 text-[15px] font-medium leading-relaxed">{analysis.summary}</p>
           <div className="grid gap-5 grid-cols-[repeat(auto-fit,minmax(min(100%,320px),1fr))]">
             <Points title="Attack" items={analysis.attack} colour={LIME} />
             <Points title="Defend" items={analysis.defend} colour={ORANGE} />
@@ -679,7 +678,7 @@ export const AiAnalysisPanel: React.FC<{
           )}
           {analysis.lineup.length > 0 && (
             <Points
-              title={analysis.team ? 'Lineup changes · shown on the matchup pitch' : 'Lineup changes'}
+              title={analysis.team ? 'Lineup changes · shown on the AI lineup above' : 'Lineup changes'}
               items={analysis.lineup.map(change => ({ title: `${change.position}: ${change.change}`, detail: change.reason }))}
               colour="#facc15"
             />

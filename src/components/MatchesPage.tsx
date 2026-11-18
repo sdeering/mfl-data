@@ -141,17 +141,9 @@ const OpponentPrep: React.FC<{
   }, [report, ours, guesses, against, ourFits, meta]);
   // Best first for what we want from the match
   const picks = useMemo(() => rankForOutcome(ranked, outcome), [ranked, outcome]);
-  // The AI analysis's lineup for the matchup shown, drawn on the matchup pitch until the planner's is picked
+  // The AI analysis's lineup for the matchup shown, drawn at the top of its report
   const [aiTeam, setAiTeam] = useState<AnalysisTeam | null>(null);
-  const [showAi, setShowAi] = useState(true);
-  const onAnalysis = useCallback((analysis: MatchAnalysis | null) => {
-    const team = analysis?.team ?? null;
-    setAiTeam(current => {
-      // A new lineup shows at once
-      if (team && team !== current) setShowAi(true);
-      return team;
-    });
-  }, []);
+  const onAnalysis = useCallback((analysis: MatchAnalysis | null) => setAiTeam(analysis?.team ?? null), []);
 
   // Our XI against theirs in the formations picked, and their weak spots
   const likeliestFormation = guesses[0]?.formation;
@@ -204,11 +196,7 @@ const OpponentPrep: React.FC<{
             theirFit={theirFits.get(theirFormation)}
             theirPlayersById={theirPlayersById}
             outcome={outcome}
-            aiTeam={aiTeam}
-            aiBaseFit={aiTeam ? ourFits.get(aiTeam.formation) : undefined}
-            showAi={showAi}
-            onShowAi={setShowAi}
-            onOpenSquad={team => onOpenSquad(name, team?.formation ?? selected, team)}
+            onOpenSquad={() => onOpenSquad(name, selected)}
           />
         </div>
       ) : (
@@ -249,6 +237,24 @@ const OpponentPrep: React.FC<{
           playersById={ourPlayersById}
           onAdviceSaved={tactics.refresh}
           onAnalysis={onAnalysis}
+          lineup={
+            aiTeam ? (
+              <MatchupPanel
+                embedded
+                name={name}
+                formation={aiTeam.formation}
+                theirFormation={theirFormation}
+                fit={ourFits.get(aiTeam.formation)}
+                playersById={ourPlayersById}
+                theirFit={theirFits.get(theirFormation)}
+                theirPlayersById={theirPlayersById}
+                outcome={outcome}
+                aiTeam={aiTeam}
+                aiBaseFit={ourFits.get(aiTeam.formation)}
+                onOpenSquad={team => onOpenSquad(name, team?.formation ?? aiTeam.formation, team)}
+              />
+            ) : null
+          }
         />
       )}
     </>
