@@ -21,6 +21,7 @@ import type { MFLPlayer } from '../../types/mflApi';
 import type { AnalysisTeam } from '../../services/matchAnalysis';
 import { FIT_THRESHOLD, fitnessOf } from '../../utils/fitness';
 import { ClearButton, Panel } from '../ui';
+import { PlayerAvatar } from '../squadBuilder/shared';
 
 /*
  * The panels of the Match Prep Tool (the Matches page), from the "MFL Matches" Claude Design file: an opponent's
@@ -567,19 +568,22 @@ interface MatchupSpot {
 
 /**
  * A player on the matchup pitch: their position in a ring, and on a tag below it (above, when that makes room) who
- * plays there and their rating at it.
+ * plays there and their rating at it. Large, the ring holds the player's photo and the tag their position too.
  */
 const PitchPlayer: React.FC<
   MatchupSpot & {
     tagAbove: boolean;
+    large: boolean;
     ringRef: (element: HTMLSpanElement | null) => void;
     tagRef: (element: HTMLSpanElement | null) => void;
   }
-> = ({ position, left, top, slot, playersById, ours, captain, aiPick, tagAbove, ringRef, tagRef }) => {
+> = ({ position, left, top, slot, playersById, ours, captain, aiPick, tagAbove, large, ringRef, tagRef }) => {
   const player = slot?.playerId ? playersById.get(slot.playerId) : undefined;
   const rating = player && Math.round(slot!.rating);
   const fitness = fitnessOf(player);
   const tired = fitness !== null && fitness < FIT_THRESHOLD;
+  const face = large && !!player;
+  const ringColour = ours ? FIT_COLOURS[slot?.kind ?? 'out'] : ORANGE;
   return (
     <span
       ref={ringRef}
@@ -590,20 +594,24 @@ const PitchPlayer: React.FC<
             }${aiPick ? ' · brought in by the AI' : ''}`
           : position
       }
-      className={`absolute -translate-x-1/2 -translate-y-1/2 w-5 h-5 sm:w-7 sm:h-7 rounded-full grid place-items-center text-[7px] sm:text-[9px] font-extrabold ${
-        ours ? 'text-white bg-[#0b1406]' : 'text-[#1a0d02]'
-      }`}
+      className={`absolute -translate-x-1/2 -translate-y-1/2 rounded-full grid place-items-center font-extrabold ${
+        large ? 'w-10 h-10 sm:w-12 sm:h-12 lg:w-14 lg:h-14 text-[10px] sm:text-xs' : 'w-5 h-5 sm:w-7 sm:h-7 text-[7px] sm:text-[9px]'
+      } ${ours || face ? 'text-white bg-[#0b1406]' : 'text-[#1a0d02]'}`}
       style={{
         left: `${left}%`,
         top: `${top}%`,
-        ...(ours ? { border: `2px solid ${FIT_COLOURS[slot?.kind ?? 'out']}` } : { background: ORANGE, border: '2px solid rgba(0,0,0,.35)' }),
-        ...(aiPick ? { boxShadow: `0 0 0 3px ${AI_GLOW}` } : {}),
+        ...(ours || face
+          ? { border: `${large ? 3 : 2}px solid ${ringColour}` }
+          : { background: ORANGE, border: `${large ? 3 : 2}px solid rgba(0,0,0,.35)` }),
+        ...(aiPick ? { boxShadow: `0 0 0 ${large ? 4 : 3}px ${AI_GLOW}` } : {}),
       }}
     >
-      {position}
+      {face ? <PlayerAvatar player={player} className="w-full h-full" initialsClassName="text-[10px] sm:text-xs text-white" /> : position}
       {tired && (
         <span
-          className="absolute -top-1.5 -left-2 h-3 sm:h-3.5 px-[3px] rounded-full grid place-items-center bg-[#ef4444] text-white text-[7px] sm:text-[8px] font-extrabold leading-none"
+          className={`absolute rounded-full grid place-items-center bg-[#ef4444] text-white font-extrabold leading-none ${
+            large ? '-top-1.5 -left-2.5 h-4 sm:h-[18px] px-1 text-[9px] sm:text-[10px]' : '-top-1.5 -left-2 h-3 sm:h-3.5 px-[3px] text-[7px] sm:text-[8px]'
+          }`}
           title={`${fitness}% fit`}
         >
           {fitness}
@@ -611,7 +619,9 @@ const PitchPlayer: React.FC<
       )}
       {captain && (
         <span
-          className="absolute -top-1.5 -right-1.5 w-3 h-3 sm:w-3.5 sm:h-3.5 rounded-full grid place-items-center bg-[#c6f432] text-[#0b1406] text-[7px] sm:text-[8px] font-extrabold"
+          className={`absolute rounded-full grid place-items-center bg-[#c6f432] text-[#0b1406] font-extrabold ${
+            large ? '-top-1.5 -right-1.5 w-4 h-4 sm:w-[18px] sm:h-[18px] text-[9px] sm:text-[10px]' : '-top-1.5 -right-1.5 w-3 h-3 sm:w-3.5 sm:h-3.5 text-[7px] sm:text-[8px]'
+          }`}
           title="Captain"
         >
           C
@@ -621,9 +631,12 @@ const PitchPlayer: React.FC<
       {(player || ours) && (
         <span
           ref={tagRef}
-          className={`absolute left-1/2 -translate-x-1/2 ${tagAbove ? 'bottom-[calc(100%+4px)]' : 'top-[calc(100%+4px)]'} w-max flex items-center sm:gap-1 px-[3px] sm:px-[5px] py-px rounded-[5px] bg-black/60 text-[9px] sm:text-[10px] font-bold text-white`}
+          className={`absolute left-1/2 -translate-x-1/2 ${tagAbove ? 'bottom-[calc(100%+4px)]' : 'top-[calc(100%+4px)]'} w-max flex items-center rounded-[5px] bg-black/60 font-bold text-white ${
+            large ? 'gap-1 px-1 sm:px-1.5 py-px sm:py-0.5 text-[10px] sm:text-xs' : 'sm:gap-1 px-[3px] sm:px-[5px] py-px text-[9px] sm:text-[10px]'
+          }`}
         >
-          <span className={`${player ? 'hidden sm:block' : 'block'} max-w-[44px] truncate`}>{player?.metadata.lastName ?? '—'}</span>
+          {face && <span className="text-white/55">{position}</span>}
+          <span className={`${player ? 'hidden sm:block' : 'block'} ${large ? 'max-w-[84px]' : 'max-w-[44px]'} truncate`}>{player?.metadata.lastName ?? '—'}</span>
           {player && <span className={ours ? 'text-[#c6f432]' : 'text-[#fdba74]'}>{rating}</span>}
         </span>
       )}
@@ -806,6 +819,7 @@ export const MatchupPanel: React.FC<{
               left={placed?.x ?? spot.left}
               top={placed?.y ?? spot.top}
               tagAbove={placed?.tagAbove ?? false}
+              large={embedded}
               ringRef={element => {
                 rings.current[index] = element;
               }}
