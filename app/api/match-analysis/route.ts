@@ -3,7 +3,7 @@ import { MflHttpError, fetchMflCached, mflBlockedFor } from '@/src/services/form
 import type { ScoutMatch } from '@/src/services/scoutService';
 import { MflRateLimitError } from '@/src/services/playerProgressionCache';
 import { SCOUT_LIMITS, buildScoutReport, scoutDataVersion } from '@/src/services/scoutReportBuilder';
-import { buildTacticsHistory, clubOwnership, clubPlaysIn, loadTacticsEntries, saveAdvice } from '@/src/services/tacticsLog';
+import { buildTacticsHistory, clubPlaysIn, tacticsAccess, loadTacticsEntries, saveAdvice } from '@/src/services/tacticsLog';
 import { adviceFrom } from '@/src/utils/tacticsHistory';
 import type { Outcome } from '@/src/utils/formationPlanner';
 import {
@@ -49,6 +49,9 @@ const CACHE_MS = 6 * 3600 * 1000;
 const inHours = (seconds: number) => (seconds > 5400 ? `${Math.round(seconds / 3600)} hours` : describeWait(seconds));
 
 const cache = new Map<string, { analysis: MatchAnalysis; at: number }>();
+
+/** For a club the wallet neither owns nor manages for its owner (tacticsAccess) */
+const NOT_YOURS = 'AI analysis is for clubs you own, or manage on MFL with the tactics permission';
 
 const isId = (value: unknown): value is number => Number.isInteger(value) && (value as number) > 0;
 const isFormation = (value: unknown): value is string => typeof value === 'string' && value in FORMATIONS;
@@ -231,8 +234,8 @@ async function savedFor(request: NextRequest, wallet: string) {
   const matchId = Number(params.get('matchId'));
   if (!isId(ourClubId) || !isId(theirClubId)) return NextResponse.json({ success: false, error: 'Give both club IDs' }, { status: 400 });
   try {
-    const { owner } = await clubOwnership(ourClubId);
-    if (!owner || owner.toLowerCase() !== wallet) return NextResponse.json({ success: false, error: 'AI analysis is for your own clubs' }, { status: 403 });
+    const { allowed } = await tacticsAccess(ourClubId, wallet);
+    if (!allowed) return NextResponse.json({ success: false, error: NOT_YOURS }, { status: 403 });
     const saved = await latestSavedAnalysis(ourClubId, { matchId: isId(matchId) ? matchId : null, opponentId: theirClubId });
     if (!saved) return NextResponse.json({ success: true, data: null });
     const { request: asked } = saved;
@@ -278,9 +281,9 @@ export async function POST(request: NextRequest) {
   if (!wallet) return NextResponse.json({ success: false, error: 'Verify your wallet to use AI analysis' }, { status: 401 });
   let ourSquadId: number | undefined;
   try {
-    const { squadId, owner } = await clubOwnership(ourClubId);
-    if (!owner || owner.toLowerCase() !== wallet) {
-      return NextResponse.json({ success: false, error: 'AI analysis is for your own clubs' }, { status: 403 });
+    const { squadId, allowed } = await tacticsAccess(ourClubId, wallet);
+    if (!allowed) {
+      return NextResponse.json({ success: false, error: NOT_YOURS }, { status: 403 });
     }
     ourSquadId = squadId;
   } catch (error) {

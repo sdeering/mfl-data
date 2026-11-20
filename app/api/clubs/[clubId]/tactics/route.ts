@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { MflHttpError, mflBlockedFor } from '@/src/services/formationResults';
 import { MflRateLimitError } from '@/src/services/playerProgressionCache';
-import { buildTacticsHistory, clubOwnership, clubPlaysIn, saveTacticsEntry } from '@/src/services/tacticsLog';
+import { buildTacticsHistory, clubPlaysIn, saveTacticsEntry, tacticsAccess } from '@/src/services/tacticsLog';
 import { describeWait, takeRateLimits, visitorKey } from '@/src/lib/rateLimit';
 import { validPlayerSettings, validSettings } from '@/src/utils/tacticsHistory';
 import { sessionWallet } from '@/src/lib/session';
 
 const signInFirst = () => NextResponse.json({ success: false, error: 'Verify your wallet to see your tactics log' }, { status: 401 });
-const notYours = () => NextResponse.json({ success: false, error: 'Only the club owner can see or change its tactics log' }, { status: 403 });
+const notYours = () => NextResponse.json({ success: false, error: "Only the club's owner, or staff they let set its tactics on MFL, can see or change its tactics log" }, { status: 403 });
 
 export const maxDuration = 60;
 
@@ -25,8 +25,8 @@ const clubIdOf = async (params: Promise<{ clubId: string }>) => {
 /**
  * GET /api/clubs/[clubId]/tactics
  * The club's tactics log: its latest played matches with the playing style settings logged for each, their
- * formations and xG, and settings logged ahead of matches not played yet. Private: only for the club's owner,
- * signed in with a verified wallet.
+ * formations and xG, and settings logged ahead of matches not played yet. Private: only for the club's owner and
+ * the staff they let set its tactics on MFL (tacticsAccess), signed in with a verified wallet.
  */
 export async function GET(request: NextRequest, { params }: { params: Promise<{ clubId: string }> }) {
   const clubId = await clubIdOf(params);
@@ -37,8 +37,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     if (!wallet) return signInFirst();
     const blocked = await mflBlockedFor();
     if (blocked) return busy(blocked);
-    const { owner } = await clubOwnership(clubId);
-    if (!owner || owner.toLowerCase() !== wallet) return notYours();
+    const { allowed } = await tacticsAccess(clubId, wallet);
+    if (!allowed) return notYours();
     return NextResponse.json({ success: true, data: await buildTacticsHistory(clubId) });
   } catch (error) {
     if (error instanceof MflRateLimitError) return busy(error.retryAfterSeconds);
@@ -51,7 +51,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 /**
  * PUT /api/clubs/[clubId]/tactics { matchId, settings, players? }
  * Keeps the settings and individual instructions (by player ID) used, or to be used, in one of the club's
- * matches; settings null forgets them. Only the club's owner on MFL can, signed in with a verified wallet.
+ * matches; settings null forgets them. Only the club's owner and their tactics staff
+ * on MFL can, signed in with a verified wallet.
  */
 export async function PUT(request: NextRequest, { params }: { params: Promise<{ clubId: string }> }) {
   const clubId = await clubIdOf(params);
@@ -74,8 +75,8 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
   try {
     const wait = (await mflBlockedFor()) || (await takeRateLimits([{ key: `tactics-log:${visitorKey(request)}`, limit: 60, windowMs: 10 * 60 * 1000 }]));
     if (wait) return busy(wait);
-    const { squadId, owner } = await clubOwnership(clubId);
-    if (!owner || owner.toLowerCase() !== walletAddress) return notYours();
+    const { squadId, allowed } = await tacticsAccess(clubId, walletAddress);
+    if (!allowed) return notYours();
     if (!squadId || !(await clubPlaysIn(squadId, matchId))) {
       return NextResponse.json({ success: false, error: "That match isn't one of this club's" }, { status: 400 });
     }

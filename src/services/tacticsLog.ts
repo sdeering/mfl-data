@@ -1,4 +1,5 @@
 import { executeRaw } from '../lib/db-helpers';
+import { isWhitelisted } from '../lib/aiAccess';
 import { MflHttpError, fetchMflCached, keptFormationResults, toFormationResult, type FormationDetails, type MatchDetails } from './formationResults';
 import { MflRateLimitError } from './playerProgressionCache';
 import type { MatchReport } from './matchAnalysis';
@@ -231,6 +232,34 @@ export async function importedMatchIds(clubId: number): Promise<number[]> {
 export async function clubOwnership(clubId: number): Promise<{ squadId: number | undefined; owner: string | undefined }> {
   const club = await fetchMflCached<{ squads?: { id: number }[]; ownedBy?: { walletAddress?: string } }>(`/clubs/${clubId}`, 24 * HOUR);
   return { squadId: club.squads?.[0]?.id, owner: club.ownedBy?.walletAddress };
+}
+
+/** A club a wallet is listed on by MFL's /clubs?walletAddress=, with its role there */
+interface WalletClub {
+  /** MFL_OWNER, or the staff role the owner gave: manager, assistantManager, sportingDirector… */
+  title?: string;
+  club?: { id?: number };
+  permissions?: { tactics?: boolean };
+}
+
+/** How long a wallet's staff roles are trusted: an owner taking a role back takes effect within this */
+const STAFF_CACHE = 15 * 60;
+
+/** Whether MFL lists the wallet as staff the club's owner lets set its tactics */
+export async function isTacticsStaff(clubId: number, wallet: string): Promise<boolean> {
+  const listed = await fetchMflCached<WalletClub[]>(`/clubs?walletAddress=${encodeURIComponent(wallet)}`, STAFF_CACHE);
+  return Array.isArray(listed) && listed.some(item => item?.club?.id === clubId && item.permissions?.tactics === true);
+}
+
+/**
+ * Who may see and change a club's tactics log, notes and AI analyses: its owner, and whitelisted wallets the owner
+ * made staff on MFL with the tactics permission (a manager, assistant manager or sporting director managing the club
+ * on the owner's behalf). Gives the club's squad too, which the callers need.
+ */
+export async function tacticsAccess(clubId: number, wallet: string): Promise<{ squadId: number | undefined; allowed: boolean }> {
+  const { squadId, owner } = await clubOwnership(clubId);
+  if (owner && owner.toLowerCase() === wallet) return { squadId, allowed: true };
+  return { squadId, allowed: isWhitelisted(wallet) && (await isTacticsStaff(clubId, wallet)) };
 }
 
 /** Whether a match is one the club plays in, asked of MFL fresh so a fixture just made counts */

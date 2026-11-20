@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { MflHttpError, mflBlockedFor } from '@/src/services/formationResults';
 import { MflRateLimitError } from '@/src/services/playerProgressionCache';
-import { clubOwnership } from '@/src/services/tacticsLog';
+import { tacticsAccess } from '@/src/services/tacticsLog';
 import { MAX_NOTES, loadClubNotes, saveClubNotes, scopeOf } from '@/src/services/clubNotes';
 import { describeWait, takeRateLimits, visitorKey } from '@/src/lib/rateLimit';
 import { sessionWallet } from '@/src/lib/session';
@@ -17,15 +17,15 @@ const clubIdOf = async (params: Promise<{ clubId: string }>) => {
   return /^\d+$/.test(clubId) ? Number(clubId) : null;
 };
 
-/** Null when the session's wallet owns the club, otherwise the response to send */
+/** Null when the session's wallet owns the club or is its tactics staff, otherwise the response to send */
 async function ownerCheck(request: NextRequest, clubId: number): Promise<NextResponse | null> {
   const wallet = sessionWallet(request);
   if (!wallet) return NextResponse.json({ success: false, error: 'Verify your wallet to use club notes' }, { status: 401 });
   const blocked = await mflBlockedFor();
   if (blocked) return busy(blocked);
-  const { owner } = await clubOwnership(clubId);
-  if (!owner || owner.toLowerCase() !== wallet) {
-    return NextResponse.json({ success: false, error: 'Only the club owner can see or change its notes' }, { status: 403 });
+  const { allowed } = await tacticsAccess(clubId, wallet);
+  if (!allowed) {
+    return NextResponse.json({ success: false, error: "Only the club's owner, or staff they let set its tactics on MFL, can see or change its notes" }, { status: 403 });
   }
   return null;
 }

@@ -295,7 +295,7 @@ const ImportFromMfl: React.FC<{ onRefresh?: () => void }> = ({ onRefresh }) => {
         For each of your clubs it reads MFL&apos;s match reports for the last {40} matches and logs the team settings and player instructions you
         used, with each player&apos;s stats, so the AI can judge an instruction by how the player did. Matches imported before are skipped, so running
         it again only reads new ones, and a match you logged by hand differently is corrected. Your MFL login stays on MFL&apos;s site.
-        The bookmark is yours alone: it can only log tactics for your own clubs.
+        The bookmark is yours alone: it can only log tactics for clubs you own, or manage on MFL with the tactics permission.
       </span>
       {onRefresh && (
         <button type="button" onClick={onRefresh} className="self-start text-xs font-semibold text-accent-ink cursor-pointer bg-transparent border-0 p-0">
@@ -364,7 +364,7 @@ export const TacticsLogPanel: React.FC<{
           </span>
         </div>
         <span className="flex items-center gap-3">
-          {!canEdit && <span className="text-xs font-semibold text-muted-3">Connect the club owner&apos;s wallet to log</span>}
+          {!canEdit && <span className="text-xs font-semibold text-muted-3">Connect the club owner&apos;s or its manager&apos;s wallet to log</span>}
           <button
             type="button"
             onClick={() => setShowImport(!showImport)}

@@ -1,7 +1,7 @@
 /*
  * MFL Data tactics import. The "Import from MFL" bookmark loads this on app.playmfl.com, where you're logged in. MFL's
  * match reports show a club's tactics only to its owner, so it asks MFL for them as the app does, with the app's own
- * login, which never leaves the page. For each of your clubs it walks back through the last matches played, newest
+ * login, which never leaves the page. For each of your clubs, and those you manage on MFL with the tactics permission, it walks back through the last matches played, newest
  * first, and sends each match's tactics and players' stats to MFL Data's tactics log. A played match's report doesn't
  * change, so matches imported before are skipped, and so are those whose report shows no tactics (you didn't own the
  * club then), which this browser remembers.
@@ -170,8 +170,12 @@
     if (!wallet) throw new Stop('Log in to MFL first, then click the bookmark again.');
 
     say('Finding your clubs…', 'muted');
-    const owned = await mfl(`/clubs?walletAddress=${encodeURIComponent(wallet)}`);
-    const clubs = owned.map(item => item.club || item).filter(club => club && club.type !== 'ARENA' && !club.offChain);
+    // The clubs the wallet owns, and those whose owner made it staff with the tactics permission
+    const listed = await mfl(`/clubs?walletAddress=${encodeURIComponent(wallet)}`);
+    const clubs = listed
+      .filter(item => !item.permissions || item.permissions.tactics !== false)
+      .map(item => item.club || item)
+      .filter(club => club && club.type !== 'ARENA' && !club.offChain);
     if (!clubs.length) throw new Stop('No clubs found on this wallet.');
 
     const plans = [];
@@ -181,7 +185,13 @@
       if (!squadId) continue;
       const listed = await mfl(`/matches?squadId=${squadId}&past=true&limit=${MAX_PER_CLUB + 5}`);
       const played = listed.filter(match => match.status === 'ENDED').sort((a, b) => b.startDate - a.startDate).slice(0, MAX_PER_CLUB);
-      const known = await fetch(`${SITE}/api/tactics-import?clubId=${club.id}&key=${encodeURIComponent(KEY)}`).then(response => response.json()).catch(() => ({}));
+      const answer = await fetch(`${SITE}/api/tactics-import?clubId=${club.id}&key=${encodeURIComponent(KEY)}`).catch(() => null);
+      const known = answer ? await answer.json().catch(() => ({})) : {};
+      if (answer && answer.status === 403) {
+        // A club this wallet is staff at but may not log for: skip it, not the rest
+        say(`${club.name}: skipped · ${known.error || 'not yours to log'}`, 'muted');
+        continue;
+      }
       if (!known.success) throw new Stop(known.error || 'MFL Data is unreachable. Try again in a few minutes.');
       const imported = new Set(known.imported);
       const matches = played.filter(match => !imported.has(match.id) && !noTactics.has(match.id));
@@ -215,7 +225,7 @@
         const ours = home ? report.home : report.away;
         const theirs = home ? report.away : report.home;
         if (!ours || !ours.formation) {
-          // MFL shows tactics only to whoever owned the club for that match
+          // MFL shows tactics only to whoever owned (or managed) the club for that match
           counts.noTactics++;
           rememberNoTactics(match.id);
           continue;

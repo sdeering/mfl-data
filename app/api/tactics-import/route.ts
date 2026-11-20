@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { mflBlockedFor } from '@/src/services/formationResults';
 import { MflRateLimitError } from '@/src/services/playerProgressionCache';
-import { clubOwnership, importReportTactics, importedMatchIds } from '@/src/services/tacticsLog';
+import { importReportTactics, importedMatchIds, tacticsAccess } from '@/src/services/tacticsLog';
 import { describeWait, takeRateLimits, visitorKey } from '@/src/lib/rateLimit';
 import type { ReportFormation } from '@/src/utils/mflTactics';
 import { walletOfImportToken } from '@/src/lib/session';
 
+const NOT_YOURS = "Only the club's owner, or staff they let set its tactics on MFL, can import its tactics";
 const OUTDATED = 'This bookmark is out of date. Drag the new one from the tactics log on MFL Data, then click it again.';
 
 /*
@@ -35,7 +36,8 @@ export function OPTIONS() {
 /**
  * GET /api/tactics-import?clubId=&key=
  * The club's matches already imported from MFL, which the import skips: MFL's report of a played match doesn't
- * change. Only for the club's owner, by the bookmark's key.
+ * change. Only for the club's owner and their tactics
+ * staff (tacticsAccess), by the bookmark's key.
  */
 export async function GET(request: NextRequest) {
   const clubId = Number(request.nextUrl.searchParams.get('clubId'));
@@ -44,8 +46,8 @@ export async function GET(request: NextRequest) {
   const wallet = walletOfImportToken(request.nextUrl.searchParams.get('key'));
   if (!wallet) return reply({ success: false, error: OUTDATED }, 401);
   try {
-    const { owner } = await clubOwnership(clubId);
-    if (!owner || owner.toLowerCase() !== wallet) return reply({ success: false, error: 'Only the club owner can import its tactics' }, 403);
+    const { allowed } = await tacticsAccess(clubId, wallet);
+    if (!allowed) return reply({ success: false, error: NOT_YOURS }, 403);
     return reply({ success: true, imported: await importedMatchIds(clubId) });
   } catch (error) {
     if (error instanceof MflRateLimitError) return busy(error.retryAfterSeconds);
@@ -98,8 +100,8 @@ export async function POST(request: NextRequest) {
   try {
     const wait = (await mflBlockedFor()) || (await takeRateLimits([{ key: `tactics-import:${visitorKey(request)}`, limit: 200, windowMs: 10 * 60 * 1000 }]));
     if (wait) return busy(wait);
-    const { squadId, owner } = await clubOwnership(clubId);
-    if (!owner || owner.toLowerCase() !== walletAddress) return reply({ success: false, error: 'Only the club owner can log its tactics' }, 403);
+    const { squadId, allowed } = await tacticsAccess(clubId, walletAddress);
+    if (!allowed) return reply({ success: false, error: NOT_YOURS }, 403);
     if (!squadId) return reply({ success: false, error: 'MFL has no squad for this club' }, 404);
     const report = body?.report && typeof body.report === 'object' ? { ours: body.report.ours, theirs: body.report.theirs } : {};
     const outcome = await importReportTactics(clubId, squadId, matchId, formation, walletAddress, report);
