@@ -16,6 +16,7 @@ const WHITELIST = [
   '0x960e08852ea945d2', // bruce
   '0xf16d5fbca5a5ed4f', // rootcoors (Roots)
   '0x1bf514872695c603', // Kev
+  '0x17a55499564cd9d6', // TFBAMBI
 ]
 
 /** Fresh analyses a day for everyone else, per wallet and per connection; one asked for again within 6 hours is free */
